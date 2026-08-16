@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ClipboardCopy, Clock3, ExternalLink, Loader2, Undo2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ClipboardCopy, Clock3, Loader2, Undo2 } from 'lucide-react';
 import { supabase } from './supabase';
 import { DynamicLeadForm, PortalFormSection } from './DynamicLeadForm';
-import { addDays, buildExternalFormUrl, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
+import { addDays, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
@@ -141,6 +141,7 @@ interface Confirmation {
   end_time: string;
   qualification_status: string;
   qualification_reasons: string[];
+  qc_status?: string;
   form_mode: 'internal' | 'external' | 'internal_external';
   external_form_provider: string | null;
   external_form_url: string | null;
@@ -154,9 +155,10 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [portal, setPortal] = useState<PublicPortalData | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
-  const [agentName, setAgentName] = useState(() => window.localStorage.getItem('masters-ready-agent-name') || '');
+  const queryPrefill = useMemo(() => readReadyModePrefill(), []);
+  const [agentName, setAgentName] = useState(() => queryPrefill.agent_name || window.localStorage.getItem('masters-ready-agent-name') || '');
   const [reservation, setReservation] = useState<Reservation | null>(null);
-  const [formValues, setFormValues] = useState<Record<string, unknown>>({ contract: 'No', additional_properties: 'No' });
+  const [formValues, setFormValues] = useState<Record<string, unknown>>(() => ({ contract: 'No', additional_properties: 'No', ...queryPrefill.values }));
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [undoSeconds, setUndoSeconds] = useState(0);
@@ -318,23 +320,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     setBusy(false);
   }
 
-  async function openExternalForm() {
-    if (!confirmation?.external_form_url) return;
-    await supabase.rpc('mark_external_form_opened', { p_manage_token: confirmation.manage_token });
-    const url = buildExternalFormUrl(
-      confirmation.external_form_url,
-      confirmation.external_prefill_map || {},
-      confirmation.form_data || {},
-      {
-        lead_id: confirmation.lead_id,
-        lead_code: confirmation.lead_code,
-        appointment_id: confirmation.appointment_id,
-        appointment_date: confirmation.appointment_date,
-        appointment_time: confirmation.start_time,
-      },
-    );
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
 
   if (loading && !portal) return <FullPageMessage icon={<Loader2 className="animate-spin" />} title="Loading availability..." />;
   if (!portal) return <FullPageMessage icon={<AlertTriangle />} title="Booking portal unavailable" detail={error || 'This link may be disabled.'} />;
@@ -374,10 +359,10 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
         {confirmation && !rescheduleMode && (
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <div className="flex gap-3"><CheckCircle2 className="text-emerald-600" /><div className="flex-1"><h2 className="font-bold text-emerald-900">Appointment Confirmed</h2><p className="mt-1 text-sm text-emerald-800">{confirmation.lead_code} • {formatDateLong(confirmation.appointment_date)} at {formatTime(confirmation.start_time)}</p></div></div>
+            <div className="flex gap-3"><CheckCircle2 className="text-emerald-600" /><div className="flex-1"><h2 className="font-bold text-emerald-900">Appointment Submitted to QC</h2><p className="mt-1 text-sm text-emerald-800">{confirmation.lead_code} • {formatDateLong(confirmation.appointment_date)} at {formatTime(confirmation.start_time)}</p></div></div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={() => setRescheduleMode(true)} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-200">Reschedule</button>
-              {confirmation.form_mode !== 'internal' && confirmation.external_form_url && <button onClick={() => void openExternalForm()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><ExternalLink size={14} /> Continue to {confirmation.external_form_provider || 'Client Form'}</button>}
+              <span className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800">Pending QC — company will receive it after approval</span>
             </div>
             {leadTemplate && (
               <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
@@ -444,4 +429,17 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
 function FullPageMessage({ icon, title, detail }: { icon: React.ReactNode; title: string; detail?: string }) {
   return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6"><div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">{icon}</div><h1 className="font-bold text-slate-900">{title}</h1>{detail && <p className="mt-2 text-sm text-slate-500">{detail}</p>}</div></div>;
+}
+
+
+function readReadyModePrefill(): { agent_name: string; values: Record<string, unknown> } {
+  const q = new URLSearchParams(window.location.search);
+  const get = (...keys: string[]) => { for (const key of keys) { const value = q.get(key); if (value) return value; } return ''; };
+  const first = get('first_name','firstName'); const last = get('last_name','lastName');
+  const fullName = get('full_name','name') || [first,last].filter(Boolean).join(' ');
+  const street = get('address','street'); const city = get('city'); const state = get('state'); const zip = get('zip','zip_code');
+  const fullAddress = get('full_address') || [street,city,state,zip].filter(Boolean).join(', ');
+  const values: Record<string, unknown> = { full_name: fullName, phone_number: get('phone','phone_number'), address: fullAddress, city, state, zip_code: zip, email: get('email'), language: get('language'), service_needed: get('service_needed','services_needed'), last_checked_on: get('last_checked_on'), home_type: get('home_type'), roof_type: get('roof_type'), roof_age: get('roof_age'), stories: get('stories'), insurance: get('insurance'), insurance_name: get('insurance_name'), contract: get('contract') || 'No', home_value: get('home_value'), sq_ft: get('sq_ft'), web_url: get('web_url','web_link'), notes: get('notes'), hail_size: get('hail_size','size_of_hail'), claim_filed: get('claim_filed','file_claim'), visible_damage: get('visible_damage'), damage_type: get('damage_type'), additional_properties: get('additional_properties','add_properties') || 'No', second_address: get('second_address','2nd_address'), agent_token: get('agent_token'), _source: get('source') || (get('rm_lead_id','readymode_lead_id') ? 'readymode' : 'ready_ops'), _source_lead_id: get('rm_lead_id','readymode_lead_id','lead_id'), _source_disposition: get('disposition') };
+  Object.keys(values).forEach(key => { if (values[key] === '') delete values[key]; });
+  return { agent_name: get('agent','agent_name','user_name'), values };
 }

@@ -49,7 +49,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [cuEmail, setCuEmail] = useState('');
   const [cuPassword, setCuPassword] = useState('');
   const [cuName, setCuName] = useState('');
-  const [cuRole, setCuRole] = useState<'admin' | 'agent'>('agent');
+  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc'>('agent');
   const [cuAgent, setCuAgent] = useState('');
   const [cuLoading, setCuLoading] = useState(false);
   const [cuMsg, setCuMsg] = useState('');
@@ -495,7 +495,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                       <td className="py-2 px-4 font-medium text-gray-800">{p.display_name}</td>
                       <td className="py-2 px-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                          p.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                          p.role === 'admin' ? 'bg-amber-100 text-amber-700' : p.role === 'qc' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                         }`}>{p.role}</span>
                       </td>
                       <td className="py-2 px-3 text-xs">
@@ -659,9 +659,10 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
-                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent')}
+                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent' | 'qc')}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="agent">Agent</option>
+                    <option value="qc">QC - Quality Control</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
