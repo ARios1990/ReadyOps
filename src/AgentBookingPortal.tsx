@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ClipboardCopy, Clock3, ExternalLink, Loader2, Undo2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ClipboardCopy, Clock3, Loader2, Undo2 } from 'lucide-react';
 import { supabase } from './supabase';
 import { DynamicLeadForm, PortalFormSection } from './DynamicLeadForm';
-import { addDays, buildExternalFormUrl, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
+import { addDays, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
@@ -320,23 +320,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     setBusy(false);
   }
 
-  async function openExternalForm() {
-    if (!confirmation?.external_form_url) return;
-    await supabase.rpc('mark_external_form_opened', { p_manage_token: confirmation.manage_token });
-    const url = buildExternalFormUrl(
-      confirmation.external_form_url,
-      confirmation.external_prefill_map || {},
-      confirmation.form_data || {},
-      {
-        lead_id: confirmation.lead_id,
-        lead_code: confirmation.lead_code,
-        appointment_id: confirmation.appointment_id,
-        appointment_date: confirmation.appointment_date,
-        appointment_time: confirmation.start_time,
-      },
-    );
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
 
   if (loading && !portal) return <FullPageMessage icon={<Loader2 className="animate-spin" />} title="Loading availability..." />;
   if (!portal) return <FullPageMessage icon={<AlertTriangle />} title="Booking portal unavailable" detail={error || 'This link may be disabled.'} />;

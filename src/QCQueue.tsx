@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, ExternalLink, Filter, Loader2, RefreshCw, Save, Send, ShieldCheck, Shuffle, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ExternalLink, Filter, RefreshCw, Save, Send, ShieldCheck, Shuffle, XCircle } from 'lucide-react';
 import { supabase } from './supabase';
 import { buildExternalFormUrl, formatDateLong, formatTime, localDate, rpcError } from './portalUtils';
 
