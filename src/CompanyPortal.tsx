@@ -181,7 +181,7 @@ export function CompanyPortal({ companyId, token }: { companyId: string; token: 
   }
 
   async function updateLeadOutcome(appointment: Appointment, clientStatus: string) {
-    const note = window.prompt('Inspector / company notes (optional)', appointment.inspector_notes || '') ?? appointment.inspector_notes || '';
+    const note = window.prompt('Inspector / company notes (optional)', appointment.inspector_notes || '') ?? (appointment.inspector_notes || '');
     setBusy(true); setError('');
     const { error: rpcErr } = await supabase.rpc('company_update_lead_outcome', { p_company_id: companyId, p_access_token: token, p_appointment_id: appointment.id, p_client_status: clientStatus, p_notes: note });
     if (rpcErr) setError(rpcError(rpcErr)); else { notify('Lead outcome updated.'); await load(); }
