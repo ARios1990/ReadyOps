@@ -1,0 +1,26 @@
+name: QC Type Cleanup
+on:
+  push:
+    branches: [feature/qc-operations]
+    paths: [scripts/qc-type-cleanup.mjs]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/qc-operations
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/qc-type-cleanup.mjs
+      - run: |
+          git config user.name "Masters Ready Services"
+          git config user.email "mastersreadyservices2025@gmail.com"
+          git add src
+          git rm scripts/qc-type-cleanup.mjs .github/workflows/qc-type-cleanup.yml
+          git commit -m "Clean QC portal types and imports"
+          git push origin HEAD:feature/qc-operations
