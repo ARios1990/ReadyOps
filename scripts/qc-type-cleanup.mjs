@@ -13,3 +13,4 @@ rep('src/PortalAdmin.tsx','function Metric({icon,label,value}:{icon:React.ReactN
 rep('src/CompanyOnboarding.tsx',"import { FormEvent, useEffect, useState } from 'react';","import { FormEvent, ReactNode, useEffect, useState } from 'react';");
 rep('src/CompanyOnboarding.tsx','function Page({children}:{children:React.ReactNode})','function Page({children}:{children:ReactNode})');
 console.log('QC type cleanup done');
+// trigger cleanup
