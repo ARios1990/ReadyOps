@@ -126,7 +126,7 @@ export function Dashboard() {
               <Calendar className="text-white" size={18} />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 leading-tight">Time Slot Scheduler</h1>
+              <h1 className="text-lg font-bold text-gray-900 leading-tight">Ready Ops</h1>
               <p className="text-xs text-gray-500">
                 {isAdmin ? 'Admin Dashboard -- Full Access' : (
                   userTeam

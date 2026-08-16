@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clock3, ExternalLink, Loader2, Undo2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ClipboardCopy, Clock3, ExternalLink, Loader2, Undo2 } from 'lucide-react';
 import { supabase } from './supabase';
 import { DynamicLeadForm, PortalFormSection } from './DynamicLeadForm';
-import { addDays, buildExternalFormUrl, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
+import { addDays, buildExternalFormUrl, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
@@ -301,7 +301,8 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     if (!reservation) return;
     setBusy(true);
     setError('');
-    const payload = { ...formValues, appointment_date: reservation.appointment_date, appointment_time: reservation.start_time };
+    const basePayload = { ...formValues, appointment_date: reservation.appointment_date, appointment_time: reservation.start_time };
+    const payload = { ...basePayload, lead_template: buildLeadTemplate(basePayload) };
     const { data, error: rpcErr } = await supabase.rpc('submit_public_appointment', {
       p_reservation_token: reservation.reservation_token,
       p_session_id: sessionId,
@@ -348,7 +349,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Masters Ready Scheduler</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Ready Ops</p>
               <h1 className="mt-1 text-2xl font-bold">{company.name}</h1>
               {company.state && <p className="text-sm text-slate-500">{company.state}</p>}
             </div>
@@ -375,6 +376,15 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               <button onClick={() => setRescheduleMode(true)} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-200">Reschedule</button>
               {confirmation.form_mode !== 'internal' && confirmation.external_form_url && <button onClick={() => void openExternalForm()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><ExternalLink size={14} /> Continue to {confirmation.external_form_provider || 'Client Form'}</button>}
             </div>
+            {confirmation.form_data?.lead_template && (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Lead Template</p><p className="text-xs text-slate-500">Ready to copy into your CRM, notes, or client system.</p></div>
+                  <button type="button" onClick={() => void copyText(String(confirmation.form_data.lead_template))} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><ClipboardCopy size={14} /> Copy Template</button>
+                </div>
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">{String(confirmation.form_data.lead_template)}</pre>
+              </div>
+            )}
           </section>
         )}
 

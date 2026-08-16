@@ -88,3 +88,53 @@ export function buildExternalFormUrl(
 export async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
 }
+
+function leadTemplateValue(values: Record<string, unknown>, key: string): string {
+  const value = values[key];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(', ');
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
+/** Builds the standardized Ready Ops roofing lead template stored with each submitted appointment. */
+export function buildLeadTemplate(values: Record<string, unknown>): string {
+  const appointmentDate = leadTemplateValue(values, 'appointment_date');
+  const appointmentTime = leadTemplateValue(values, 'appointment_time');
+  const appointmentDateTime = [
+    appointmentDate ? formatDateLong(appointmentDate) : '',
+    appointmentTime ? formatTime(appointmentTime) : '',
+].filter(Boolean).join(' at ');
+
+  return [
+    '**Customer Information**',
+    'App Date & Time: ' + appointmentDateTime,
+    'Name: ' + leadTemplateValue(values, 'full_name'),
+    'Phone: ' + leadTemplateValue(values, 'phone_number'),
+    'Address: ' + leadTemplateValue(values, 'address'),
+    'Email: ' + leadTemplateValue(values, 'email').toLowerCase(),
+    'Language: ' + leadTemplateValue(values, 'language'),
+    'Services Need: ' + leadTemplateValue(values, 'service_needed'),
+    '',
+    '**Property Details**',
+    'Roof Age: ' + leadTemplateValue(values, 'roof_age'),
+    'Home Type: ' + leadTemplateValue(values, 'home_type'),
+    'Roof Type: ' + leadTemplateValue(values, 'roof_type'),
+    'Stories: ' + leadTemplateValue(values, 'stories'),
+    'Insurance: ' + leadTemplateValue(values, 'insurance'),
+    'Insurance Name: ' + leadTemplateValue(values, 'insurance_name'),
+    'Contract: ' + (leadTemplateValue(values, 'contract') || 'No'),
+    'Home Value: ' + leadTemplateValue(values, 'home_value'),
+    'SQ FT: ' + leadTemplateValue(values, 'sq_ft'),
+    'Web Link: ' + leadTemplateValue(values, 'web_url'),
+    '',
+    '**Additional Information**',
+    'Notes: ' + leadTemplateValue(values, 'notes'),
+    'Last Checked On: ' + leadTemplateValue(values, 'last_checked_on'),
+    'Size of Hail: ' + leadTemplateValue(values, 'hail_size'),
+    'Claim Filed: ' + leadTemplateValue(values, 'claim_filed'),
+    'Visible Damage: ' + leadTemplateValue(values, 'visible_damage'),
+    'Damage Type: ' + leadTemplateValue(values, 'damage_type'),
+    'Add. Properties: ' + leadTemplateValue(values, 'additional_properties'),
+    '2nd Address: ' + leadTemplateValue(values, 'second_address'),
+  ].join('\n');
+}
