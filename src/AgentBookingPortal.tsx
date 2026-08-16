@@ -342,6 +342,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const company = portal.company.company;
   const settings = portal.company.settings;
   const weekLabel = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
+  const leadTemplate = typeof confirmation?.form_data?.lead_template === 'string'
+    ? confirmation.form_data.lead_template
+    : '';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -376,13 +379,13 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               <button onClick={() => setRescheduleMode(true)} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-200">Reschedule</button>
               {confirmation.form_mode !== 'internal' && confirmation.external_form_url && <button onClick={() => void openExternalForm()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><ExternalLink size={14} /> Continue to {confirmation.external_form_provider || 'Client Form'}</button>}
             </div>
-            {confirmation.form_data?.lead_template && (
+            {leadTemplate && (
               <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Lead Template</p><p className="text-xs text-slate-500">Ready to copy into your CRM, notes, or client system.</p></div>
-                  <button type="button" onClick={() => void copyText(String(confirmation.form_data.lead_template))} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><ClipboardCopy size={14} /> Copy Template</button>
+                  <button type="button" onClick={() => void copyText(leadTemplate)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><ClipboardCopy size={14} /> Copy Template</button>
                 </div>
-                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">{String(confirmation.form_data.lead_template)}</pre>
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">{leadTemplate}</pre>
               </div>
             )}
           </section>
