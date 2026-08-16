@@ -6,6 +6,7 @@ interface ScheduleGridProps {
   rows: ScheduleRow[];
   companies: Company[];
   isBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
+  isPortalBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
   getCompanyTeams: (companyId: string) => Team[];
   onToggle: (companyId: string, locationId: string | null, day: string, timeSlot: string) => void;
   onStatusChange: (companyId: string, status: string) => void;
@@ -15,7 +16,7 @@ interface ScheduleGridProps {
 }
 
 export function ScheduleGrid({
-  rows, companies, isBooked, getCompanyTeams, onToggle, onStatusChange, canEdit, isAdmin, activeDay,
+  rows, companies, isBooked, isPortalBooked, getCompanyTeams, onToggle, onStatusChange, canEdit, isAdmin, activeDay,
 }: ScheduleGridProps) {
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
 
@@ -136,8 +137,10 @@ export function ScheduleGrid({
 
                 {/* Time Slots */}
                 {TIME_SLOTS.map(ts => {
-                  const booked = isBooked(row.companyId, row.locationId, activeDay, ts);
-                  const canToggleSlot = editable && (!booked || isAdmin);
+                  const legacyBooked = isBooked(row.companyId, row.locationId, activeDay, ts);
+                  const appointmentBooked = isPortalBooked(row.companyId, row.locationId, activeDay, ts);
+                  const booked = legacyBooked || appointmentBooked;
+                  const canToggleSlot = editable && !appointmentBooked && (!legacyBooked || isAdmin);
 
                   return (
                     <td key={ts} className="py-1 px-0.5 text-center border-b border-gray-100">
@@ -155,13 +158,15 @@ export function ScheduleGrid({
                         } ${canToggleSlot ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                         title={
                           booked
-                            ? `${formatTimeAmPm(ts)} is booked for ${row.companyName}${row.state ? ` - ${row.state}` : ''}${isAdmin ? ' (admin can unbook)' : ''}`
+                            ? appointmentBooked
+                              ? `${formatTimeAmPm(ts)} has a confirmed portal appointment for ${row.companyName}${row.state ? ` - ${row.state}` : ''}`
+                              : `${formatTimeAmPm(ts)} is blocked every ${activeDay} for ${row.companyName}${row.state ? ` - ${row.state}` : ''}${isAdmin ? ' (admin can clear the block)' : ''}`
                             : editable ? `${formatTimeAmPm(ts)} available` : 'View only'
                         }
                       >
                         <span>{formatTimeAmPm(ts)}</span>
                         <span className={booked ? 'text-[8px]' : 'text-[7px] font-semibold'}>
-                          {booked ? 'Booked' : 'Open'}
+                          {appointmentBooked ? 'Appointment' : legacyBooked ? 'Blocked' : 'Open'}
                         </span>
                       </button>
                     </td>
