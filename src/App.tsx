@@ -9,7 +9,7 @@ import { AgentPortal } from './AgentPortal';
 import { CompanyOnboarding } from './CompanyOnboarding';
 import { QCQueue } from './QCQueue';
 import { ResetPasswordPage } from './ResetPasswordPage';
-import { Loader2, ShieldCheck, Building2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 function pathParts(): string[] { return window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent); }
 function PublicRoute() {
@@ -39,7 +39,7 @@ function AppContent() {
     if (!['admin','qc'].includes(profile?.role || '')) return <AccessDenied />;
     return <QCQueue />;
   }
-  return <><Dashboard />{profile?.role === 'admin' && <div className="fixed bottom-5 right-5 z-40 flex flex-col gap-2"><button onClick={()=>{window.location.href='/qc'}} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-xl"><ShieldCheck size={16}/> QC Queue</button><button onClick={()=>{window.location.href='/admin/portals'}} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-xl"><Building2 size={16}/> Operations</button></div>}</>;
+  return <Dashboard />;
 }
 function AccessDenied(){return <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6"><div className="rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm"><h1 className="font-bold text-red-700">Access required</h1><button onClick={()=>{window.location.href='/'}} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Back</button></div></div>}
 function App(){const publicRoute=PublicRoute();if(publicRoute)return publicRoute;return <AuthProvider><AppContent/></AuthProvider>}

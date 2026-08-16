@@ -7,6 +7,7 @@ import { useAuth } from './AuthContext';
 import { useScheduleStore } from './useScheduleStore';
 import { ScheduleGrid } from './ScheduleGrid';
 import { AdminPanel } from './AdminPanel';
+import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
 import { addDays, formatDateShort, localDate, startOfWeek } from './portalUtils';
 
@@ -22,6 +23,7 @@ export function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<string | undefined>(undefined);
+  const [adminView, setAdminView] = useState<'overview' | 'slots'>('overview');
 
   // Quick add modals
   const [showAddLocation, setShowAddLocation] = useState(false);
@@ -203,6 +205,20 @@ export function Dashboard() {
           </div>
         )}
 
+        {isAdmin && (
+          <nav className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+            <button onClick={() => setAdminView('overview')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'overview' ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Overview</button>
+            <button onClick={() => { window.location.href = '/qc'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-50">QC Queue</button>
+            <button onClick={() => { window.location.href = '/admin/portals'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Companies & Packages</button>
+            <button onClick={() => setAdminView('slots')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'slots' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Time Slots</button>
+          </nav>
+        )}
+
+        {isAdmin && adminView === 'overview' && (
+          <AdminOperationsHome onOpenTimeSlots={() => setAdminView('slots')} />
+        )}
+
+        {(!isAdmin || adminView === 'slots') && (<>
         {/* Action Buttons (Admin) */}
         {isAdmin && (
           <div className="flex flex-wrap gap-2 mb-4">
@@ -436,9 +452,10 @@ export function Dashboard() {
 
         <div className="mt-4 text-center text-xs text-gray-400">
           {isAdmin
-            ? 'Admin -- full control. Click status badges to edit. Use toolbar to add companies/agents/locations.'
+            ? 'Time Slots -- manage weekly blocks and current-week appointment capacity.'
             : 'Agent -- book open slots for your team\'s companies. Changes sync live.'}
         </div>
+        </>)}
       </main>
     </div>
   );
