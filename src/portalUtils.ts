@@ -31,6 +31,19 @@ export function startOfWeek(date = new Date()): Date {
   return copy;
 }
 
+/**
+ * Returns the Monday used by the admin Time Slots board.
+ * Monday-Saturday stay on the current Monday; Sunday rolls forward to tomorrow's Monday.
+ */
+export function scheduleWeekStart(date = new Date()): Date {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = day === 0 ? 1 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
 export function formatDateLong(value: string): string {
   const date = new Date(`${value}T12:00:00`);
   return new Intl.DateTimeFormat(undefined, {
@@ -103,7 +116,7 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
   const appointmentDateTime = [
     appointmentDate ? formatDateLong(appointmentDate) : '',
     appointmentTime ? formatTime(appointmentTime) : '',
-].filter(Boolean).join(' at ');
+  ].filter(Boolean).join(' at ');
 
   return [
     '**Customer Information**',
