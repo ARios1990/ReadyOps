@@ -46,3 +46,7 @@ Send `source_lead_id`, `disposition`, and the latest profile fields. Authenticat
 Normal QC approvals are batched. At end of shift, QC/Admin uses **Day Complete / Notify** for one company-level email. Same-day appointments queue an immediate notification when approved.
 
 The `send-company-notifications` Edge Function requires `RESEND_API_KEY` to be configured in Supabase Edge Function secrets before real email delivery can occur.
+
+## Verification
+
+The QC branch is required to pass strict TypeScript validation and the production Vite build before merge to `main`.
