@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Calendar, LogOut, Building2, Users, RefreshCw, MapPin,
   Shield, User, ChevronDown, Loader2, Settings, Search, Filter, Plus, UserPlus
@@ -9,7 +9,7 @@ import { ScheduleGrid } from './ScheduleGrid';
 import { AdminPanel } from './AdminPanel';
 import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
-import { addDays, formatDateShort, localDate, startOfWeek } from './portalUtils';
+import { addDays, formatDateShort, localDate, scheduleWeekStart } from './portalUtils';
 
 export function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -24,6 +24,21 @@ export function Dashboard() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<string | undefined>(undefined);
   const [adminView, setAdminView] = useState<'overview' | 'slots'>('overview');
+  const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState(() => scheduleWeekStart());
+
+  useEffect(() => {
+    const refreshScheduleWeek = () => {
+      const next = scheduleWeekStart();
+      setScheduleWeekAnchor(current => localDate(current) === localDate(next) ? current : next);
+    };
+    refreshScheduleWeek();
+    const timer = window.setInterval(refreshScheduleWeek, 60_000);
+    window.addEventListener('focus', refreshScheduleWeek);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshScheduleWeek);
+    };
+  }, []);
 
   // Quick add modals
   const [showAddLocation, setShowAddLocation] = useState(false);
@@ -98,7 +113,7 @@ export function Dashboard() {
 
   const dayBookingCounts = DAYS.reduce((acc, day) => {
     const dayIndex = DAYS.indexOf(day);
-    const appointmentDate = localDate(addDays(startOfWeek(), dayIndex));
+    const appointmentDate = localDate(addDays(scheduleWeekAnchor, dayIndex));
     acc[day] = store.bookings.filter(b => b.day === day).length
       + store.portalAppointments.filter(a => a.appointment_date === appointmentDate).length;
     return acc;
@@ -403,7 +418,7 @@ export function Dashboard() {
               >
                 <span className="hidden sm:inline">{day}</span>
                 <span className="sm:hidden">{day.slice(0, 3)}</span>
-                <span className="ml-1 text-[10px] text-gray-400">{formatDateShort(localDate(addDays(startOfWeek(), DAYS.indexOf(day))))}</span>
+                <span className="ml-1 text-[10px] text-gray-400">{formatDateShort(localDate(addDays(scheduleWeekAnchor, DAYS.indexOf(day))))}</span>
                 {count > 0 && (
                   <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
                     isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'
