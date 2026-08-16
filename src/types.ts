@@ -58,6 +58,15 @@ export interface CompanyBooking {
   created_at: string;
 }
 
+export interface PortalAppointment {
+  id: string;
+  company_id: string;
+  location_id: string | null;
+  appointment_date: string;
+  start_time: string;
+  status: string;
+}
+
 export interface ScheduleRow {
   id: string;
   companyId: string;

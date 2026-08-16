@@ -8,6 +8,7 @@ import { useScheduleStore } from './useScheduleStore';
 import { ScheduleGrid } from './ScheduleGrid';
 import { AdminPanel } from './AdminPanel';
 import { DAYS, ScheduleRow } from './types';
+import { addDays, formatDateShort, localDate, startOfWeek } from './portalUtils';
 
 export function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -94,7 +95,10 @@ export function Dashboard() {
   };
 
   const dayBookingCounts = DAYS.reduce((acc, day) => {
-    acc[day] = store.bookings.filter(b => b.day === day).length;
+    const dayIndex = DAYS.indexOf(day);
+    const appointmentDate = localDate(addDays(startOfWeek(), dayIndex));
+    acc[day] = store.bookings.filter(b => b.day === day).length
+      + store.portalAppointments.filter(a => a.appointment_date === appointmentDate).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -362,7 +366,7 @@ export function Dashboard() {
 
           <div className="ml-auto flex items-center gap-4 text-sm text-gray-500">
             <span>{filteredRows.length} rows</span>
-            <span>{store.bookings.filter(b => b.day === activeDay).length} booked</span>
+            <span>{dayBookingCounts[activeDay] || 0} occupied</span>
           </div>
         </div>
 
@@ -383,6 +387,7 @@ export function Dashboard() {
               >
                 <span className="hidden sm:inline">{day}</span>
                 <span className="sm:hidden">{day.slice(0, 3)}</span>
+                <span className="ml-1 text-[10px] text-gray-400">{formatDateShort(localDate(addDays(startOfWeek(), DAYS.indexOf(day))))}</span>
                 {count > 0 && (
                   <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
                     isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'
@@ -409,7 +414,7 @@ export function Dashboard() {
             Green = Open
           </span>
           <span className="text-[10px] px-2 py-1 rounded bg-red-600 border border-red-700 text-white font-medium">
-            Red = Booked
+            Red = Weekly block or current-week appointment
           </span>
         </div>
 
@@ -419,6 +424,7 @@ export function Dashboard() {
             rows={filteredRows}
             companies={store.companies}
             isBooked={store.isBooked}
+            isPortalBooked={store.isPortalBooked}
             getCompanyTeams={store.getCompanyTeams}
             onToggle={store.toggleBooking}
             onStatusChange={store.updateCompanyStatus}

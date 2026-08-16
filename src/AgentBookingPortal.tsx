@@ -26,6 +26,100 @@ interface PublicPortalData {
   };
   week: DayAvailability[];
 }
+
+type JsonObject = Record<string, unknown>;
+
+function asObject(value: unknown): JsonObject {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function asNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function normalizePublicPortalData(value: unknown): PublicPortalData {
+  const root = asObject(value);
+
+  // Keep compatibility with the original nested response while accepting the
+  // flat, snake_case contract returned by the production RPC.
+  if (root.week && asObject(root.company).company) {
+    return value as PublicPortalData;
+  }
+
+  const company = asObject(root.company);
+  const settings = asObject(root.settings);
+  const rawLocations = Array.isArray(root.locations) ? root.locations : [];
+  const rawDays = Array.isArray(root.days) ? root.days : [];
+
+  if (!asString(company.id) || !asString(company.name)) {
+    throw new Error('The booking portal returned an invalid company record.');
+  }
+
+  return {
+    company: {
+      company: {
+        id: asString(company.id),
+        name: asString(company.name),
+        slug: asString(company.public_slug),
+        state: asNullableString(company.state),
+        website: asNullableString(company.website),
+      },
+      settings: {
+        timezone: asString(settings.timezone, 'America/Chicago'),
+        requirementsShort: asString(settings.requirements_short),
+        requirementsDetail: asString(settings.requirements_detail),
+        allowPublicBooking: settings.allow_public_booking !== false,
+        formMode: (['internal', 'external', 'internal_external'].includes(asString(settings.form_mode))
+          ? settings.form_mode
+          : 'internal') as 'internal' | 'external' | 'internal_external',
+        formSchema: Array.isArray(settings.form_schema) ? settings.form_schema as PortalFormSection[] : [],
+        externalFormProvider: asNullableString(settings.external_form_provider),
+        externalFormUrl: asNullableString(settings.external_form_url),
+        externalPrefillMap: asObject(settings.external_prefill_map) as Record<string, string>,
+        qualificationRules: asObject(settings.qualification_rules),
+      },
+      locations: rawLocations.map(item => {
+        const location = asObject(item);
+        return {
+          id: asString(location.id),
+          label: asString(location.label),
+          state: asNullableString(location.state),
+        };
+      }).filter(location => location.id && location.label),
+    },
+    week: rawDays.map(item => {
+      const day = asObject(item);
+      const rawSlots = Array.isArray(day.slots) ? day.slots : [];
+      return {
+        day: asString(day.day_name),
+        date: asString(day.date),
+        closed: day.closed === true,
+        booked: asNumber(day.booked),
+        openings: asNumber(day.openings),
+        slots: rawSlots.map(slotValue => {
+          const slot = asObject(slotValue);
+          const status = asString(slot.status, 'blocked');
+          const openings = asNumber(slot.openings);
+          return {
+            start: asString(slot.start_time),
+            end: asString(slot.end_time),
+            status,
+            capacity: openings,
+            bookedCount: status === 'available' ? 0 : 1,
+          };
+        }).filter(slot => slot.start && slot.end),
+      };
+    }).filter(day => day.date),
+  };
+}
 interface Reservation {
   id: string;
   reservation_token: string;
@@ -86,10 +180,15 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       setError(rpcError(rpcErr));
       setPortal(null);
     } else {
-      const result = data as PublicPortalData;
-      setPortal(result);
-      if (!nextLocationId && result.company.locations.length === 1) {
-        setLocationId(result.company.locations[0].id);
+      try {
+        const result = normalizePublicPortalData(data);
+        setPortal(result);
+        if (!nextLocationId && result.company.locations.length === 1) {
+          setLocationId(result.company.locations[0].id);
+        }
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'The booking portal returned invalid data.');
+        setPortal(null);
       }
     }
     setLoading(false);
