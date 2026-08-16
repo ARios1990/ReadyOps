@@ -83,7 +83,59 @@ replaceRequired('src/AgentBookingPortal.tsx', confirmationAnchor, confirmationRe
 const utilsPath = 'src/portalUtils.ts';
 const utils = read(utilsPath);
 if (!utils.includes('export function buildLeadTemplate(')) {
-  write(utilsPath, `${utils.trimEnd()}\n\nfunction leadTemplateValue(values: Record<string, unknown>, key: string): string {\n  const value = values[key];\n  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(', ');\n  if (value === undefined || value === null) return '';\n  return String(value).trim();\n}\n\n/** Builds the standardized Ready Ops roofing lead template stored with each submitted appointment. */\nexport function buildLeadTemplate(values: Record<string, unknown>): string {\n  const appointmentDate = leadTemplateValue(values, 'appointment_date');\n  const appointmentTime = leadTemplateValue(values, 'appointment_time');\n  const appointmentDateTime = [\n    appointmentDate ? formatDateLong(appointmentDate) : '',\n    appointmentTime ? formatTime(appointmentTime) : '',\n  ].filter(Boolean).join(' at ');\n\n  return [\n    '**Customer Information**',\n    \\`App Date & Time: \\${appointmentDateTime}\\`,\n    \\`Name: \\${leadTemplateValue(values, 'full_name')}\\`,\n    \\`Phone: \\${leadTemplateValue(values, 'phone_number')}\\`,\n    \\`Address: \\${leadTemplateValue(values, 'address')}\\`,\n    \\`Email: \\${leadTemplateValue(values, 'email').toLowerCase()}\\`,\n    \\`Language: \\${leadTemplateValue(values, 'language')}\\`,\n    \\`Services Need: \\${leadTemplateValue(values, 'service_needed')}\\`,\n    '',\n    '**Property Details**',\n    \\`Roof Age: \\${leadTemplateValue(values, 'roof_age')}\\`,\n    \\`Home Type: \\${leadTemplateValue(values, 'home_type')}\\`,\n    \\`Roof Type: \\${leadTemplateValue(values, 'roof_type')}\\`,\n    \\`Stories: \\${leadTemplateValue(values, 'stories')}\\`,\n    \\`Insurance: \\${leadTemplateValue(values, 'insurance')}\\`,\n    \\`Insurance Name: \\${leadTemplateValue(values, 'insurance_name')}\\`,\n    \\`Contract: \\${leadTemplateValue(values, 'contract') || 'No'}\\`,\n    \\`Home Value: \\${leadTemplateValue(values, 'home_value')}\\`,\n    \\`SQ FT: \\${leadTemplateValue(values, 'sq_ft')}\\`,\n    \\`Web Link: \\${leadTemplateValue(values, 'web_url')}\\`,\n    '',\n    '**Additional Information**',\n    \\`Notes: \\${leadTemplateValue(values, 'notes')}\\`,\n    \\`Last Checked On: \\${leadTemplateValue(values, 'last_checked_on')}\\`,\n    \\`Size of Hail: \\${leadTemplateValue(values, 'hail_size')}\\`,\n    \\`Claim Filed: \\${leadTemplateValue(values, 'claim_filed')}\\`,\n    \\`Visible Damage: \\${leadTemplateValue(values, 'visible_damage')}\\`,\n    \\`Damage Type: \\${leadTemplateValue(values, 'damage_type')}\\`,\n    \\`Add. Properties: \\${leadTemplateValue(values, 'additional_properties')}\\`,\n    \\`2nd Address: \\${leadTemplateValue(values, 'second_address')}\\`,\n  ].join('\\n');\n}\n`);
+  const helper = [
+    'function leadTemplateValue(values: Record<string, unknown>, key: string): string {',
+    '  const value = values[key];',
+    "  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(', ');",
+    "  if (value === undefined || value === null) return '';",
+    '  return String(value).trim();',
+    '}',
+    '',
+    '/** Builds the standardized Ready Ops roofing lead template stored with each submitted appointment. */',
+    'export function buildLeadTemplate(values: Record<string, unknown>): string {',
+    "  const appointmentDate = leadTemplateValue(values, 'appointment_date');",
+    "  const appointmentTime = leadTemplateValue(values, 'appointment_time');",
+    '  const appointmentDateTime = [',
+    "    appointmentDate ? formatDateLong(appointmentDate) : '',",
+    "    appointmentTime ? formatTime(appointmentTime) : '',",
+    "].filter(Boolean).join(' at ');",
+    '',
+    '  return [',
+    "    '**Customer Information**',",
+    "    'App Date & Time: ' + appointmentDateTime,",
+    "    'Name: ' + leadTemplateValue(values, 'full_name'),",
+    "    'Phone: ' + leadTemplateValue(values, 'phone_number'),",
+    "    'Address: ' + leadTemplateValue(values, 'address'),",
+    "    'Email: ' + leadTemplateValue(values, 'email').toLowerCase(),",
+    "    'Language: ' + leadTemplateValue(values, 'language'),",
+    "    'Services Need: ' + leadTemplateValue(values, 'service_needed'),",
+    "    '',",
+    "    '**Property Details**',",
+    "    'Roof Age: ' + leadTemplateValue(values, 'roof_age'),",
+    "    'Home Type: ' + leadTemplateValue(values, 'home_type'),",
+    "    'Roof Type: ' + leadTemplateValue(values, 'roof_type'),",
+    "    'Stories: ' + leadTemplateValue(values, 'stories'),",
+    "    'Insurance: ' + leadTemplateValue(values, 'insurance'),",
+    "    'Insurance Name: ' + leadTemplateValue(values, 'insurance_name'),",
+    "    'Contract: ' + (leadTemplateValue(values, 'contract') || 'No'),",
+    "    'Home Value: ' + leadTemplateValue(values, 'home_value'),",
+    "    'SQ FT: ' + leadTemplateValue(values, 'sq_ft'),",
+    "    'Web Link: ' + leadTemplateValue(values, 'web_url'),",
+    "    '',",
+    "    '**Additional Information**',",
+    "    'Notes: ' + leadTemplateValue(values, 'notes'),",
+    "    'Last Checked On: ' + leadTemplateValue(values, 'last_checked_on'),",
+    "    'Size of Hail: ' + leadTemplateValue(values, 'hail_size'),",
+    "    'Claim Filed: ' + leadTemplateValue(values, 'claim_filed'),",
+    "    'Visible Damage: ' + leadTemplateValue(values, 'visible_damage'),",
+    "    'Damage Type: ' + leadTemplateValue(values, 'damage_type'),",
+    "    'Add. Properties: ' + leadTemplateValue(values, 'additional_properties'),",
+    "    '2nd Address: ' + leadTemplateValue(values, 'second_address'),",
+    "  ].join('\\n');",
+    '}',
+  ].join('\n');
+
+  write(utilsPath, `${utils.trimEnd()}\n\n${helper}\n`);
 }
 
 console.log('Ready Ops form and branding updates applied.');
