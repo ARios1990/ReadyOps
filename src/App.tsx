@@ -6,6 +6,7 @@ import { CompanyPortalRoute } from './CompanyPortalRoute';
 import { RepresentativePortal } from './RepresentativePortal';
 import { PortalAdmin } from './PortalAdmin';
 import { AgentPortal } from './AgentPortal';
+import { ManagerDashboard } from './ManagerDashboard';
 import { CompanyOnboarding } from './CompanyOnboarding';
 import { QCQueue } from './QCQueue';
 import { ResetPasswordPage } from './ResetPasswordPage';
@@ -27,6 +28,7 @@ function AppContent() {
   const parts = pathParts();
   const portalAdminRequested = parts[0] === 'admin' && parts[1] === 'portals';
   const qcRequested = parts[0] === 'qc';
+  const managerRequested = parts[0] === 'manager';
   const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   if (isResetPasswordRoute) return <ResetPasswordPage />;
@@ -38,6 +40,10 @@ function AppContent() {
   if (qcRequested || profile?.role === 'qc') {
     if (!['admin','qc'].includes(profile?.role || '')) return <AccessDenied />;
     return <QCQueue />;
+  }
+  if (managerRequested || profile?.role === 'manager') {
+    if (profile?.role !== 'manager') return <AccessDenied />;
+    return <ManagerDashboard />;
   }
   return <Dashboard />;
 }
