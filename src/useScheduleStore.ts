@@ -3,6 +3,16 @@ import { supabase } from './supabase';
 import { Team, Agent, Company, CompanyLocation, CompanyBooking, CompanyTeam, PortalAppointment, ScheduleRow, DAYS } from './types';
 import { addDays, localDate, startOfWeek } from './portalUtils';
 
+type PortalReservation = {
+  id: string;
+  company_id: string;
+  location_id: string | null;
+  appointment_date: string;
+  start_time: string;
+  status: string;
+  expires_at: string;
+};
+
 interface ScheduleStoreResult {
   teams: Team[];
   agents: Agent[];
@@ -31,13 +41,15 @@ export function useScheduleStore(): ScheduleStoreResult {
   const [locations, setLocations] = useState<CompanyLocation[]>([]);
   const [bookings, setBookings] = useState<CompanyBooking[]>([]);
   const [portalAppointments, setPortalAppointments] = useState<PortalAppointment[]>([]);
+  const [portalReservations, setPortalReservations] = useState<PortalReservation[]>([]);
   const [companyTeams, setCompanyTeams] = useState<CompanyTeam[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     const weekStart = startOfWeek();
     const weekEnd = addDays(weekStart, 6);
-    const [teamsRes, agentsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, ctRes] = await Promise.all([
+    const nowIso = new Date().toISOString();
+    const [teamsRes, agentsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, reservationsRes, ctRes] = await Promise.all([
       supabase.from('teams').select('*'),
       supabase.from('agents').select('*'),
       supabase.from('roster_companies').select('*').order('name'),
@@ -46,6 +58,13 @@ export function useScheduleStore(): ScheduleStoreResult {
       supabase
         .from('portal_appointments')
         .select('id,company_id,location_id,appointment_date,start_time,status')
+        .gte('appointment_date', localDate(weekStart))
+        .lte('appointment_date', localDate(weekEnd)),
+      supabase
+        .from('appointment_reservations')
+        .select('id,company_id,location_id,appointment_date,start_time,status,expires_at')
+        .eq('status', 'active')
+        .gt('expires_at', nowIso)
         .gte('appointment_date', localDate(weekStart))
         .lte('appointment_date', localDate(weekEnd)),
       supabase.from('company_teams').select('*'),
@@ -61,6 +80,7 @@ export function useScheduleStore(): ScheduleStoreResult {
         appointment => !['cancelled', 'rescheduled'].includes(appointment.status),
       ));
     }
+    if (reservationsRes.data) setPortalReservations(reservationsRes.data as PortalReservation[]);
     if (ctRes.data) setCompanyTeams(ctRes.data);
     setLoading(false);
   }, []);
@@ -71,6 +91,7 @@ export function useScheduleStore(): ScheduleStoreResult {
       .channel('schedule-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_bookings' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_appointments' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointment_reservations' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_locations' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_companies' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_teams' }, () => fetchAll())
@@ -181,12 +202,20 @@ export function useScheduleStore(): ScheduleStoreResult {
     const hour24 = hour >= 8 && hour <= 11 ? hour : hour === 12 ? 12 : hour + 12;
     const startTime = `${String(hour24).padStart(2, '0')}:00`;
 
-    return portalAppointments.some(appointment =>
-      appointment.company_id === companyId
-      && appointment.appointment_date === appointmentDate
-      && appointment.start_time.slice(0, 5) === startTime
-      && (appointment.location_id === null || appointment.location_id === locationId)
+    const matchesSlot = (record: { company_id: string; location_id: string | null; appointment_date: string; start_time: string }) =>
+      record.company_id === companyId
+      && record.appointment_date === appointmentDate
+      && record.start_time.slice(0, 5) === startTime
+      && (record.location_id === null || record.location_id === locationId);
+
+    const confirmed = portalAppointments.some(matchesSlot);
+    const held = portalReservations.some(reservation =>
+      reservation.status === 'active'
+      && new Date(reservation.expires_at).getTime() > Date.now()
+      && matchesSlot(reservation)
     );
+
+    return confirmed || held;
   };
 
   const updateCompanyStatus = async (companyId: string, status: string) => {
@@ -210,7 +239,6 @@ export function useScheduleStore(): ScheduleStoreResult {
   };
 
   const setCompanyTeamsAction = async (companyId: string, teamIds: string[]) => {
-    // Delete all existing assignments
     await supabase.from('company_teams').delete().eq('company_id', companyId);
 
     if (teamIds.length > 0) {
@@ -226,7 +254,6 @@ export function useScheduleStore(): ScheduleStoreResult {
       setCompanyTeams(prev => prev.filter(ct => ct.company_id !== companyId));
     }
 
-    // Also update the legacy team_id to first team or null
     const primaryTeam = teamIds[0] || null;
     await supabase.from('roster_companies').update({ team_id: primaryTeam }).eq('id', companyId);
     setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, team_id: primaryTeam } : c));
