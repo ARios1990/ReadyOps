@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Plus, RefreshCw, WalletCards } from 'lucide-react';
 import { supabase } from './supabase';
 
@@ -26,4 +26,4 @@ export function AdminInvoices(){
   </div>
 }
 function Kpi({label,value}:{label:string;value:string|number}){return <div className="readyops-ref-card p-4"><p className="text-[10px] font-extrabold uppercase opacity-60">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>}
-function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="text-xs font-bold">{label}<div className="mt-1">{children}</div></label>}
+function Field({label,children}:{label:string;children:ReactNode}){return <label className="text-xs font-bold">{label}<div className="mt-1">{children}</div></label>}
