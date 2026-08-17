@@ -46,4 +46,12 @@ if invoice.exists():
     t = t.replace('children:React.ReactNode', 'children:ReactNode')
     invoice.write_text(t, encoding='utf-8')
 
-print('Patched ReadyOps sidebar, financial navigation, and invoice types.')
+reports = root / 'src/AdminReports.tsx'
+if reports.exists():
+    t = reports.read_text(encoding='utf-8')
+    old = "  const joined = useMemo(() => {\n    const leadMap = new Map(leads.map(l => [l.id, l]));\n    return appointments.map(ap => ({ ...ap, lead: leadMap.get(ap.lead_id) || null })).filter(row => row.lead);\n  }, [appointments, leads]);"
+    new = "  const joined = useMemo<Obj[]>(() => {\n    const leadMap = new Map(leads.map(l => [l.id, l]));\n    return appointments.map(ap => ({ ...ap, lead: leadMap.get(ap.lead_id) || null } as Obj)).filter(row => Boolean(row.lead));\n  }, [appointments, leads]);"
+    t = t.replace(old, new, 1)
+    reports.write_text(t, encoding='utf-8')
+
+print('Patched ReadyOps sidebar and financial modules.')
