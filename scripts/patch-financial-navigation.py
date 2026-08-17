@@ -1,6 +1,7 @@
 from pathlib import Path
 
-p = Path(__file__).resolve().parents[1] / 'src/AdminReferenceDashboard.tsx'
+root = Path(__file__).resolve().parents[1]
+p = root / 'src/AdminReferenceDashboard.tsx'
 s = p.read_text(encoding='utf-8')
 
 s = s.replace(
@@ -21,19 +22,28 @@ s = s.replace(old_nav, new_nav, 1)
 
 s = s.replace("  const currentSection = view === 'slots' ? 'slots' : 'overview';", "  const currentSection = view;", 1)
 
-s = s.replace(
-    '<button className="readyops-ref-wordmark" onClick={() => navigate(\'overview\')} aria-label="Ready Ops home">\n          <span>Ready</span><span>Ops</span>\n        </button>',
-    '<button className="readyops-ref-wordmark" onClick={() => navigate(\'overview\')} aria-label="Ready Ops home">\n          <span>Ready</span><span>Ops</span>\n        </button>\n        <button type="button" className="readyops-sidebar-edge-toggle" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? \'Expand sidebar\' : \'Collapse sidebar\'} aria-label={sidebarCollapsed ? \'Expand sidebar\' : \'Collapse sidebar\'}>{sidebarCollapsed ? <ChevronRight size={15}/> : <ChevronLeft size={15}/>}</button>',
-    1,
-)
+wordmark = '<button className="readyops-ref-wordmark" onClick={() => navigate(\'overview\')} aria-label="Ready Ops home">\n          <span>Ready</span><span>Ops</span>\n        </button>'
+if 'readyops-sidebar-edge-toggle' not in s:
+    s = s.replace(
+        wordmark,
+        wordmark + '\n        <button type="button" className="readyops-sidebar-edge-toggle" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? \'Expand sidebar\' : \'Collapse sidebar\'} aria-label={sidebarCollapsed ? \'Expand sidebar\' : \'Collapse sidebar\'}>{sidebarCollapsed ? <ChevronRight size={15}/> : <ChevronLeft size={15}/>}</button>',
+        1,
+    )
 
 s = s.replace("<SidebarGroup title=\"MANAGEMENT\" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active=\"\" onSelect={navigate} />", "<SidebarGroup title=\"MANAGEMENT\" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active={currentSection} onSelect={navigate} />", 1)
 
 needle = "          </> : (\n            <section className=\"readyops-ref-slots-view\">"
 replacement = "          </> : view === 'reports' ? (\n            <AdminReports />\n          ) : view === 'invoices' ? (\n            <AdminInvoices />\n          ) : view === 'payroll' ? (\n            <AdminPayroll />\n          ) : (\n            <section className=\"readyops-ref-slots-view\">"
-if needle not in s:
-    raise SystemExit('Could not find main view switch marker')
-s = s.replace(needle, replacement, 1)
+if needle in s:
+    s = s.replace(needle, replacement, 1)
 
 p.write_text(s, encoding='utf-8')
-print('Patched ReadyOps sidebar and financial navigation.')
+
+invoice = root / 'src/AdminInvoices.tsx'
+if invoice.exists():
+    t = invoice.read_text(encoding='utf-8')
+    t = t.replace("import { useEffect, useMemo, useState } from 'react';", "import { useEffect, useMemo, useState, type ReactNode } from 'react';", 1)
+    t = t.replace('children:React.ReactNode', 'children:ReactNode')
+    invoice.write_text(t, encoding='utf-8')
+
+print('Patched ReadyOps sidebar, financial navigation, and invoice types.')
