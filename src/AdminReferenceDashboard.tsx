@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign,
+  Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
   FileText, Filter, Home, Menu, Package, Pencil, Plus, Search, Settings,
   ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3,
 } from 'lucide-react';
@@ -9,10 +9,13 @@ import { ThemeToggle } from './ThemeContext';
 import { AdminPanel } from './AdminPanel';
 import type { Agent, Profile, Team } from './types';
 import { useScheduleStore } from './useScheduleStore';
+import { AdminReports } from './AdminReports';
+import { AdminInvoices } from './AdminInvoices';
+import { AdminPayroll } from './AdminPayroll';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
-type View = 'overview' | 'slots';
+type View = 'overview' | 'slots' | 'reports' | 'invoices' | 'payroll';
 type IconComponent = typeof Home;
 
 type CompanyOps = {
@@ -152,6 +155,9 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
     else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
     else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
+    else if (key === 'reports') setView('reports');
+    else if (key === 'invoices') setView('invoices');
+    else if (key === 'payroll') setView('payroll');
     else if (key === 'settings') openManage('companies');
     else if (key === 'leads') { setView('overview'); scrollStaff(); }
     else openManage();
@@ -180,7 +186,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
     else await store.refetch();
   }
 
-  const currentSection = view === 'slots' ? 'slots' : 'overview';
+  const currentSection = view;
   const shellClasses = [
     'readyops-ref-shell',
     sidebarCollapsed ? 'is-sidebar-collapsed' : '',
@@ -200,8 +206,9 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
         <button className="readyops-ref-wordmark" onClick={() => navigate('overview')} aria-label="Ready Ops home">
           <span>Ready</span><span>Ops</span>
         </button>
+        <button type="button" className="readyops-sidebar-edge-toggle" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{sidebarCollapsed ? <ChevronRight size={15}/> : <ChevronLeft size={15}/>}</button>
         <SidebarGroup title="MAIN" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MAIN} active={currentSection} onSelect={navigate} />
-        <SidebarGroup title="MANAGEMENT" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active="" onSelect={navigate} />
+        <SidebarGroup title="MANAGEMENT" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active={currentSection} onSelect={navigate} />
       </aside>
 
       <div className="readyops-ref-workspace">
@@ -287,7 +294,13 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
                 )}
               </div>
             </section>
-          </> : (
+          </> : view === 'reports' ? (
+            <AdminReports />
+          ) : view === 'invoices' ? (
+            <AdminInvoices />
+          ) : view === 'payroll' ? (
+            <AdminPayroll />
+          ) : (
             <section className="readyops-ref-slots-view">
               <PageHeader
                 title="Time Slots"
