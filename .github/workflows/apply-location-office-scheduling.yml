@@ -1,0 +1,41 @@
+name: Apply Location Office Scheduling
+
+on:
+  push:
+    branches: [feature/location-office-scheduling]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/location-office-scheduling
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply UI patch
+        run: node scripts/apply-location-office-scheduling.mjs
+      - name: Remove temporary patch workflow
+        run: rm scripts/apply-location-office-scheduling.mjs .github/workflows/apply-location-office-scheduling.yml
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Commit applied changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Wire location scheduling management into admin"
+          git push origin HEAD:feature/location-office-scheduling
