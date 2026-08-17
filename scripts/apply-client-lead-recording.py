@@ -63,6 +63,8 @@ lead_modal = '''function LeadModal({ appointment, companyId, token, onClose }: {
 company, count = re.subn(r"function LeadModal\(.*?\nfunction LinkCard", lead_modal + "function LinkCard", company, count=1, flags=re.S)
 if count != 1:
     raise SystemExit('Unable to replace CompanyPortal LeadModal')
+# The old raw-field modal helper is no longer used after switching to ClientLeadTemplate.
+company = re.sub(r"\nfunction Detail\([^\n]*", "", company, count=1)
 company_path.write_text(company, encoding='utf-8')
 
 # QC: replace URL-only recording card with real file upload + URL fallback.
