@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Loader2, Trash2, UserCog, Users, X } from 'lucide-react';
+import { ClipboardCopy, ExternalLink, Loader2, Trash2, UserCog, Users, X } from 'lucide-react';
 import { supabase } from './supabase';
 import type { Agent, Profile, Team } from './types';
-import { rpcError } from './portalUtils';
+import { copyText, rpcError } from './portalUtils';
 
 type Tab = 'agents' | 'managers';
+type ManagerLink = {
+  id: string;
+  name: string;
+  team_id: string;
+  portal_slug: string;
+  access_token: string;
+  active: boolean;
+};
 
 export function AdminQuickTools() {
   const [open, setOpen] = useState(false);
@@ -12,6 +20,7 @@ export function AdminQuickTools() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [managerLinks, setManagerLinks] = useState<ManagerLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -20,21 +29,24 @@ export function AdminQuickTools() {
   const [managerPassword, setManagerPassword] = useState('');
   const [managerTeam, setManagerTeam] = useState('');
   const [creatingManager, setCreatingManager] = useState(false);
+  const [creatingLink, setCreatingLink] = useState(false);
 
   async function loadStaff() {
     setLoading(true);
     setMessage('');
-    const [agentsRes, teamsRes, profilesRes] = await Promise.all([
+    const [agentsRes, teamsRes, profilesRes, managerLinksRes] = await Promise.all([
       supabase.from('agents').select('*').order('name'),
       supabase.from('teams').select('*').order('name'),
       supabase.from('profiles').select('*').order('display_name'),
+      supabase.from('manager_portal_links').select('*').order('name'),
     ]);
-    if (agentsRes.error || teamsRes.error || profilesRes.error) {
-      setMessage(rpcError(agentsRes.error || teamsRes.error || profilesRes.error));
+    if (agentsRes.error || teamsRes.error || profilesRes.error || managerLinksRes.error) {
+      setMessage(rpcError(agentsRes.error || teamsRes.error || profilesRes.error || managerLinksRes.error));
     }
     setAgents((agentsRes.data || []) as Agent[]);
     setTeams((teamsRes.data || []) as Team[]);
     setProfiles((profilesRes.data || []) as Profile[]);
+    setManagerLinks((managerLinksRes.data || []) as ManagerLink[]);
     setLoading(false);
   }
 
@@ -55,9 +67,33 @@ export function AdminQuickTools() {
     window.setTimeout(() => window.location.reload(), 700);
   }
 
+  async function createPrivateManagerLink() {
+    if (!managerName.trim() || !managerTeam) {
+      setMessage('Manager name and team are required for a private manager link.');
+      return;
+    }
+    setCreatingLink(true);
+    setMessage('');
+    const team = teams.find(item => item.id === managerTeam);
+    const slugBase = managerName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'manager';
+    const suffix = Math.random().toString(36).slice(2, 6);
+    const portalSlug = `${slugBase}-${team?.abbreviation.toLowerCase() || 'team'}-manager-${suffix}`;
+    const { error } = await supabase.from('manager_portal_links').insert({
+      name: managerName.trim(),
+      team_id: managerTeam,
+      portal_slug: portalSlug,
+    });
+    if (error) setMessage(rpcError(error));
+    else {
+      setMessage('Private manager link created.');
+      await loadStaff();
+    }
+    setCreatingLink(false);
+  }
+
   async function createManager() {
     if (!managerName.trim() || !managerEmail.trim() || !managerPassword || !managerTeam) {
-      setMessage('Manager name, email, password and team are required.');
+      setMessage('Manager name, email, password and team are required for a login account.');
       return;
     }
     setCreatingManager(true);
@@ -90,11 +126,9 @@ export function AdminQuickTools() {
     if (!response.ok) {
       setMessage(result.error || 'Unable to create manager.');
     } else {
-      setManagerName('');
       setManagerEmail('');
       setManagerPassword('');
-      setManagerTeam('');
-      setMessage('Manager created successfully.');
+      setMessage('Manager login created successfully.');
       await loadStaff();
     }
     setCreatingManager(false);
@@ -132,28 +166,37 @@ export function AdminQuickTools() {
                       {agents.map(agent => {
                         const team = teams.find(item => item.id === agent.team_id);
                         const leadUrl = agent.portal_slug && agent.access_token ? `${window.location.origin}/agent/${agent.portal_slug}/${agent.access_token}` : '';
-                        return <tr key={agent.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-bold text-slate-900">{agent.name}</td><td className="px-3 py-3 text-slate-500">{agent.email || '—'}</td><td className="px-3 py-3">{team ? <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{team.abbreviation} — {team.name}</span> : <span className="text-xs text-slate-400">No team</span>}</td><td className="px-4 py-3 text-right">{leadUrl ? <a href={leadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Check Leads <ExternalLink size={13} /></a> : <span className="text-xs text-slate-400">No portal link</span>}</td></tr>;
+                        return <tr key={agent.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-bold text-slate-900">{agent.name}</td><td className="px-3 py-3 text-slate-500">{agent.email || '—'}</td><td className="px-3 py-3">{team ? <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{team.abbreviation} — {team.name}</span> : <span className="text-xs text-slate-400">No team</span>}</td><td className="px-4 py-3 text-right">{leadUrl ? <div className="flex justify-end gap-1"><button title="Copy agent lead link" onClick={() => void copyText(leadUrl)} className="rounded-lg border border-slate-200 p-2 text-slate-600"><ClipboardCopy size={13} /></button><a href={leadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Check Leads <ExternalLink size={13} /></a></div> : <span className="text-xs text-slate-400">No portal link</span>}</td></tr>;
                       })}
                     </tbody>
                   </table>
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <section className="rounded-xl border border-slate-200 p-4">
-                    <h3 className="font-bold text-slate-900">Create Manager</h3>
-                    <p className="mt-1 text-xs text-slate-500">Managers are assigned to one team and automatically see that team's agents and lead links.</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <input value={managerName} onChange={e => setManagerName(e.target.value)} placeholder="Manager full name" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
-                      <input value={managerEmail} onChange={e => setManagerEmail(e.target.value)} placeholder="manager@email.com" type="email" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
-                      <input value={managerPassword} onChange={e => setManagerPassword(e.target.value)} placeholder="Temporary password" type="text" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
-                      <select value={managerTeam} onChange={e => setManagerTeam(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Select team...</option>{teams.map(team => <option key={team.id} value={team.id}>{team.abbreviation} — {team.name}</option>)}</select>
-                    </div>
-                    <button disabled={creatingManager} onClick={() => void createManager()} className="mt-3 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{creatingManager ? 'Creating...' : 'Create Manager'}</button>
+                  <section className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div className="border-b border-slate-100 p-4"><h3 className="font-bold text-slate-900">Private Manager Links</h3><p className="mt-1 text-xs text-slate-500">No login is required. Keep these links private; each manager sees only their assigned team's agents and company links.</p></div>
+                    <table className="w-full min-w-[720px] text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Manager</th><th className="px-3 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Private Dashboard</th></tr></thead><tbody className="divide-y divide-slate-100">{managerLinks.map(manager => { const team = teams.find(item => item.id === manager.team_id); const url = `${window.location.origin}/manager/${manager.portal_slug}/${manager.access_token}`; return <tr key={manager.id}><td className="px-4 py-3 font-bold">{manager.name}</td><td className="px-3 py-3">{team ? <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{team.abbreviation} — {team.name}</span> : <span className="text-xs text-red-500">Team unavailable</span>}</td><td className="px-4 py-3 text-right"><div className="flex justify-end gap-1"><button onClick={() => void copyText(url)} title="Copy manager link" className="rounded-lg border border-slate-200 p-2 text-slate-600"><ClipboardCopy size={13} /></button><a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Open Manager <ExternalLink size={13} /></a></div></td></tr>; })}</tbody></table>
                   </section>
 
-                  <section className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[700px] text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Manager</th><th className="px-3 py-3 text-left">Email</th><th className="px-3 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Dashboard</th></tr></thead><tbody className="divide-y divide-slate-100">{managers.map(manager => { const team = teams.find(item => item.id === manager.team_id); return <tr key={manager.id}><td className="px-4 py-3 font-bold">{manager.display_name}</td><td className="px-3 py-3 text-slate-500">{manager.email || '—'}</td><td className="px-3 py-3">{team ? <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{team.abbreviation} — {team.name}</span> : <span className="text-xs text-red-500">Team not assigned</span>}</td><td className="px-4 py-3 text-right"><span className="text-xs text-slate-400">Manager sees /manager after login</span></td></tr>; })}</tbody></table>
+                  <section className="rounded-xl border border-slate-200 p-4">
+                    <h3 className="font-bold text-slate-900">Create Manager</h3>
+                    <p className="mt-1 text-xs text-slate-500">A private link needs only a name and team. Email/password are only needed if you also want a normal login account.</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <input value={managerName} onChange={e => setManagerName(e.target.value)} placeholder="Manager full name" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                      <select value={managerTeam} onChange={e => setManagerTeam(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Select team...</option>{teams.map(team => <option key={team.id} value={team.id}>{team.abbreviation} — {team.name}</option>)}</select>
+                      <input value={managerEmail} onChange={e => setManagerEmail(e.target.value)} placeholder="Optional login email" type="email" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                      <input value={managerPassword} onChange={e => setManagerPassword(e.target.value)} placeholder="Optional temporary password" type="text" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button disabled={creatingLink} onClick={() => void createPrivateManagerLink()} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{creatingLink ? 'Creating...' : 'Create Private Link'}</button>
+                      <button disabled={creatingManager} onClick={() => void createManager()} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{creatingManager ? 'Creating...' : 'Create Login Account'}</button>
+                    </div>
                   </section>
+
+                  {managers.length > 0 && <section className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div className="border-b border-slate-100 p-4"><h3 className="font-bold text-slate-900">Manager Login Accounts</h3></div>
+                    <table className="w-full min-w-[700px] text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Manager</th><th className="px-3 py-3 text-left">Email</th><th className="px-3 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Access</th></tr></thead><tbody className="divide-y divide-slate-100">{managers.map(manager => { const team = teams.find(item => item.id === manager.team_id); return <tr key={manager.id}><td className="px-4 py-3 font-bold">{manager.display_name}</td><td className="px-3 py-3 text-slate-500">{manager.email || '—'}</td><td className="px-3 py-3">{team ? <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{team.abbreviation} — {team.name}</span> : <span className="text-xs text-red-500">Team not assigned</span>}</td><td className="px-4 py-3 text-right"><span className="text-xs text-slate-400">Logs in normally → /manager</span></td></tr>; })}</tbody></table>
+                  </section>}
                 </div>
               )}
             </div>
