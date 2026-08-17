@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign,
   FileText, Filter, Home, Menu, Package, Pencil,
   Plus, Search, Settings, ShieldCheck, Trash2, UsersRound,
-  WalletCards, ChartNoAxesCombined
+  WalletCards, BarChart3
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -43,7 +43,7 @@ const SIDEBAR_MAIN = [
 const SIDEBAR_MANAGEMENT = [
   ['staff', 'Agents & Managers', UsersRound],
   ['teams', 'Teams', UsersRound],
-  ['reports', 'Reports', ChartNoAxesCombined],
+  ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
   ['settings', 'Settings', Settings],
@@ -257,11 +257,11 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   );
 }
 
-function SidebarGroup({ title, items, active, onSelect, collapsed }: { title: string; items: ReadonlyArray<readonly [string, string, ComponentType<{size?: number}>]>; active: string; onSelect: (key: string) => void; collapsed: boolean }) {
+function SidebarGroup({ title, items, active, onSelect, collapsed }: { title: string; items: ReadonlyArray<readonly [string, string, any]>; active: string; onSelect: (key: string) => void; collapsed: boolean }) {
   return <div className="readyops-ref-nav-group"><p>{collapsed ? '•' : title}</p>{items.map(([key, label, Icon]) => <button key={key} className={active === key ? 'active' : ''} onClick={() => onSelect(key)} title={collapsed ? label : undefined}><Icon size={16}/>{!collapsed && <span>{label}</span>}</button>)}</div>;
 }
 
-function MetricCard({ label, value, note, icon: Icon, tone, loading }: { label: string; value: number; note: string; icon: ComponentType<{size?: number}>; tone: string; loading: boolean }) {
+function MetricCard({ label, value, note, icon: Icon, tone, loading }: { label: string; value: number; note: string; icon: any; tone: string; loading: boolean }) {
   return <article className={`readyops-ref-metric tone-${tone}`}><div><p>{label}</p><strong>{loading ? '—' : value}</strong><span>{note}</span></div><div className="readyops-ref-metric-icon"><Icon size={21}/></div></article>;
 }
 
