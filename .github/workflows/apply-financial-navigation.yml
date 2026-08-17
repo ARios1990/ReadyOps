@@ -23,6 +23,6 @@ jobs:
         run: |
           git config user.name "Masters Ready Services"
           git config user.email "mastersreadyservices2025@gmail.com"
-          git add src/AdminReferenceDashboard.tsx src/AdminInvoices.tsx
+          git add src/AdminReferenceDashboard.tsx src/AdminInvoices.tsx src/AdminReports.tsx
           git diff --cached --quiet || git commit -m "Wire Reports Invoices Payroll and sidebar toggle"
           git push origin HEAD:main
