@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/apply-recording-branding.py'
+      - 'scripts/apply-recording-branding-v2.py'
       - '.github/workflows/apply-recording-branding.yml'
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply recording and branding changes
-        run: python scripts/apply-recording-branding.py
+        run: python scripts/apply-recording-branding-v2.py
       - name: Commit generated changes
         run: |
           git config user.name "Masters Ready Services"
