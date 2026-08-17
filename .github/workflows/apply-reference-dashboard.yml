@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/apply-reference-dashboard.py'
       - 'scripts/apply-reference-dashboard-css.py'
+      - 'scripts/fix-reference-dashboard-types.py'
       - '.github/workflows/apply-reference-dashboard.yml'
       - '.github/reference-dashboard-trigger'
 permissions:
@@ -23,10 +24,12 @@ jobs:
         run: python scripts/apply-reference-dashboard.py
       - name: Apply dashboard styles
         run: python scripts/apply-reference-dashboard-css.py
+      - name: Apply TypeScript fixes
+        run: python scripts/fix-reference-dashboard-types.py
       - name: Commit generated changes
         run: |
           git config user.name "Masters Ready Services"
           git config user.email "mastersreadyservices2025@gmail.com"
-          git add src/Dashboard.tsx src/index.css
+          git add src/Dashboard.tsx src/index.css src/AdminReferenceDashboard.tsx
           git diff --cached --quiet || git commit -m "Match ReadyOps dashboard reference design"
           git push origin HEAD:main
