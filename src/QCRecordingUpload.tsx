@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ClipboardCopy, ExternalLink, FileText, Headphones, Loader2, RefreshCw, Save, UploadCloud } from 'lucide-react';
 import { supabase } from './supabase';
+import { transcribeWithLocalWhisper } from './localWhisperClient';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -245,14 +246,31 @@ export function QCRecordingUpload({
       return;
     }
 
+    setTranscribing(true);
+    try {
+      setTranscriptStatus('Starting free local Whisper AI — no paid API...');
+      const localTranscript = await transcribeWithLocalWhisper(playbackUrl, setTranscriptStatus);
+      if (!localTranscript) throw new Error('Local Whisper did not return transcript text.');
+      const localSummary = buildRuleBasedSummary(localTranscript);
+      setTranscript(localTranscript);
+      setSummary(localSummary);
+      setTranscriptStatus('Local Whisper transcription complete. Saving to QC...');
+      await saveTranscript(localTranscript, localSummary, 'local_whisper');
+      setTranscribing(false);
+      return;
+    } catch (localError) {
+      const detail = localError instanceof Error ? localError.message : 'Local Whisper failed.';
+      setTranscriptStatus(`Local Whisper unavailable (${detail}). Trying browser speech fallback...`);
+    }
+
     const speechWindow = window as SpeechWindow;
     const SpeechCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechCtor) {
-      setError('This browser does not support recording transcription. Use current desktop Chrome/Edge or paste the transcript manually.');
+      setError('Free local Whisper could not run and this browser has no speech-recognition fallback. You can still paste the transcript manually.');
+      setTranscribing(false);
       return;
     }
 
-    setTranscribing(true);
     const lang = speechLanguage(language);
     try {
       await ensureLocalSpeechPack(SpeechCtor, lang);
@@ -367,10 +385,10 @@ export function QCRecordingUpload({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2"><FileText size={16} className="text-slate-700"/><div><h4 className="text-sm font-black text-slate-900">Call Transcript</h4><p className="text-[11px] text-slate-500">QC/Admin only • {speechLanguage(language)}</p></div></div>
           <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-            {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Transcribe Call'}
+            {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">Uses supported browser/on-device speech recognition when available. No external LLM is used to summarize the call.</p>
+        <p className="mt-2 text-[11px] text-slate-500">Uses free local Whisper AI in your browser first (no per-minute API charge), then browser speech recognition as a fallback. The summary remains rule-based and does not use an LLM.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Build Rule Summary</button>

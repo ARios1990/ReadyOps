@@ -7,7 +7,7 @@ import { READYOPS_LOGO_DATA_URI } from './brand';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
-interface Location { id: string; label: string; state: string | null; }
+interface Location { id: string; label: string; state: string | null; timezone?: string | null; }
 interface PublicPortalData {
   company: {
     company: { id: string; name: string; slug: string; state: string | null; website: string | null };
@@ -173,18 +173,22 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   async function loadPortal(nextLocationId = locationId) {
     setLoading(true);
     setError('');
-    const { data, error: rpcErr } = await supabase.rpc('get_public_booking_portal', {
-      p_slug: slug,
-      p_location_id: nextLocationId,
-      p_start_date: startDate,
-      p_end_date: endDate,
-    });
+    const [{ data, error: rpcErr }, { data: locationTimezone }] = await Promise.all([
+      supabase.rpc('get_public_booking_portal', {
+        p_slug: slug,
+        p_location_id: nextLocationId,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      }),
+      supabase.rpc('get_public_location_timezone', { p_slug: slug, p_location_id: nextLocationId }),
+    ]);
     if (rpcErr) {
       setError(rpcError(rpcErr));
       setPortal(null);
     } else {
       try {
         const result = normalizePublicPortalData(data);
+        if (typeof locationTimezone === 'string' && locationTimezone) result.company.settings.timezone = locationTimezone;
         setPortal(result);
         if (!nextLocationId && result.company.locations.length === 1) {
           setLocationId(result.company.locations[0].id);
