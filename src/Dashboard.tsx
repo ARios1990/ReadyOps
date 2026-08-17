@@ -11,6 +11,7 @@ import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
 import { addDays, formatDateShort, localDate, scheduleWeekStart } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
+import { ThemeToggle } from './ThemeContext';
 
 export function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -182,6 +183,8 @@ export function Dashboard() {
                 <Settings size={14} /> Manage
               </button>
             )}
+
+            <ThemeToggle />
 
             <button
               onClick={signOut}
