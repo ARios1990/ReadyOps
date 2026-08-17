@@ -11,6 +11,7 @@ import { ManagerDashboard } from './ManagerDashboard';
 import { CompanyOnboarding } from './CompanyOnboarding';
 import { QCQueue } from './QCQueue';
 import { ResetPasswordPage } from './ResetPasswordPage';
+import { ThemeProvider, ThemeToggle } from './ThemeContext';
 import { Loader2 } from 'lucide-react';
 
 function pathParts(): string[] { return window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent); }
@@ -25,6 +26,10 @@ function PublicRoute() {
   return null;
 }
 
+function FloatingThemeControl() {
+  return <div className="readyops-theme-floating"><ThemeToggle /></div>;
+}
+
 function AppContent() {
   const { session, profile, loading } = useAuth();
   const parts = pathParts();
@@ -32,23 +37,38 @@ function AppContent() {
   const qcRequested = parts[0] === 'qc';
   const managerRequested = parts[0] === 'manager';
   const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
-  if (isResetPasswordRoute) return <ResetPasswordPage />;
-  if (!session) return <LoginPage />;
+
+  if (loading) return <><FloatingThemeControl /><div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={32} /></div></>;
+  if (isResetPasswordRoute) return <><FloatingThemeControl /><ResetPasswordPage /></>;
+  if (!session) return <><FloatingThemeControl /><LoginPage /></>;
+
   if (portalAdminRequested) {
     if (profile?.role !== 'admin') return <AccessDenied />;
-    return <PortalAdmin />;
+    return <><FloatingThemeControl /><PortalAdmin /></>;
   }
   if (qcRequested || profile?.role === 'qc') {
     if (!['admin','qc'].includes(profile?.role || '')) return <AccessDenied />;
-    return <QCQueue />;
+    return <><FloatingThemeControl /><QCQueue /></>;
   }
   if (managerRequested || profile?.role === 'manager') {
     if (profile?.role !== 'manager') return <AccessDenied />;
-    return <ManagerDashboard profile={profile} />;
+    return <><FloatingThemeControl /><ManagerDashboard profile={profile} /></>;
   }
+
   return <><Dashboard />{profile?.role === 'admin' && <AdminQuickTools />}</>;
 }
-function AccessDenied(){return <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6"><div className="rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm"><h1 className="font-bold text-red-700">Access required</h1><button onClick={()=>{window.location.href='/'}} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Back</button></div></div>}
-function App(){const publicRoute=PublicRoute();if(publicRoute)return publicRoute;return <AuthProvider><AppContent/></AuthProvider>}
+
+function AccessDenied(){return <><FloatingThemeControl /><div className="min-h-screen flex items-center justify-center bg-slate-50 p-6"><div className="rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm"><h1 className="font-bold text-red-700">Access required</h1><button onClick={()=>{window.location.href='/'}} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Back</button></div></div></>}
+
+function App(){
+  const publicRoute = PublicRoute();
+  return (
+    <ThemeProvider>
+      {publicRoute
+        ? <><FloatingThemeControl />{publicRoute}</>
+        : <AuthProvider><AppContent /></AuthProvider>}
+    </ThemeProvider>
+  );
+}
+
 export default App;
