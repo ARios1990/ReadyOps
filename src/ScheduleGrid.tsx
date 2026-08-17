@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { ChevronDown, MapPin } from 'lucide-react';
-import { ScheduleRow, Team, Company, TIME_SLOTS, formatTimeAmPm, ACCOUNT_STATUSES } from './types';
+import { ScheduleRow, Team, Company, CompanyLocation, TIME_SLOTS, formatTimeAmPm, ACCOUNT_STATUSES } from './types';
 
 interface ScheduleGridProps {
   rows: ScheduleRow[];
   companies: Company[];
+  locations: CompanyLocation[];
   isBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
+  isCompanyWideBooked: (companyId: string, day: string, timeSlot: string) => boolean;
+  isScheduleExceptionBlocked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
+  isPortalBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
   getCompanyTeams: (companyId: string) => Team[];
   onToggle: (companyId: string, locationId: string | null, day: string, timeSlot: string) => void;
   onStatusChange: (companyId: string, status: string) => void;
@@ -15,7 +19,7 @@ interface ScheduleGridProps {
 }
 
 export function ScheduleGrid({
-  rows, companies, isBooked, getCompanyTeams, onToggle, onStatusChange, canEdit, isAdmin, activeDay,
+  rows, companies, locations, isBooked, isCompanyWideBooked, isScheduleExceptionBlocked, isPortalBooked, getCompanyTeams, onToggle, onStatusChange, canEdit, isAdmin, activeDay,
 }: ScheduleGridProps) {
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
 
@@ -136,8 +140,14 @@ export function ScheduleGrid({
 
                 {/* Time Slots */}
                 {TIME_SLOTS.map(ts => {
-                  const booked = isBooked(row.companyId, row.locationId, activeDay, ts);
-                  const canToggleSlot = editable && (!booked || isAdmin);
+                  const legacyBooked = isBooked(row.companyId, row.locationId, activeDay, ts);
+                  const inheritedCompanyBlock = row.locationId !== null && isCompanyWideBooked(row.companyId, activeDay, ts);
+                  const appointmentBooked = isPortalBooked(row.companyId, row.locationId, activeDay, ts);
+                  const exceptionBlocked = isScheduleExceptionBlocked(row.companyId, row.locationId, activeDay, ts);
+                  const booked = legacyBooked || appointmentBooked;
+                  const location = row.locationId ? locations.find(item => item.id === row.locationId) : null;
+                  const outsideLocationHours = location ? isOutsideLocationHours(location, activeDay, ts) : false;
+                  const canToggleSlot = editable && !appointmentBooked && !exceptionBlocked && !inheritedCompanyBlock && !outsideLocationHours && (!legacyBooked || isAdmin);
 
                   return (
                     <td key={ts} className="py-1 px-0.5 text-center border-b border-gray-100">
@@ -145,23 +155,33 @@ export function ScheduleGrid({
                         onClick={() => canToggleSlot && onToggle(row.companyId, row.locationId, activeDay, ts)}
                         disabled={!canToggleSlot}
                         className={`w-full h-10 rounded border text-[9px] font-bold inline-flex flex-col items-center justify-center transition-all leading-tight px-0.5 ${
-                          booked
+                          booked || exceptionBlocked
                             ? isAdmin
                               ? 'bg-red-600 border-red-700 text-white shadow-sm hover:bg-red-700'
                               : 'bg-red-600 border-red-700 text-white shadow-sm opacity-95'
+                            : outsideLocationHours
+                              ? 'bg-slate-100 border-slate-200 text-slate-400'
                             : editable
                               ? 'bg-emerald-50 border border-emerald-200 text-emerald-400 hover:bg-emerald-100 hover:scale-[1.03]'
                               : 'bg-gray-50 border border-gray-150 text-gray-300'
                         } ${canToggleSlot ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                         title={
-                          booked
-                            ? `${formatTimeAmPm(ts)} is booked for ${row.companyName}${row.state ? ` - ${row.state}` : ''}${isAdmin ? ' (admin can unbook)' : ''}`
+                          booked || exceptionBlocked
+                            ? appointmentBooked
+                              ? `${formatTimeAmPm(ts)} has a confirmed portal appointment for ${row.companyName}${row.state ? ` - ${row.state}` : ''}`
+                              : exceptionBlocked
+                                ? `${formatTimeAmPm(ts)} is blocked by a company or location schedule exception`
+                              : inheritedCompanyBlock
+                                ? `${formatTimeAmPm(ts)} is inherited from a legacy company-wide block and remains unchanged for backward compatibility`
+                                : `${formatTimeAmPm(ts)} is blocked every ${activeDay} for ${row.companyName}${row.state ? ` - ${row.state}` : ''}${isAdmin ? ' (admin can clear the block)' : ''}`
+                            : outsideLocationHours
+                              ? `${row.locationLabel || 'Location'} is closed at ${formatTimeAmPm(ts)} on ${activeDay}`
                             : editable ? `${formatTimeAmPm(ts)} available` : 'View only'
                         }
                       >
                         <span>{formatTimeAmPm(ts)}</span>
                         <span className={booked ? 'text-[8px]' : 'text-[7px] font-semibold'}>
-                          {booked ? 'Booked' : 'Open'}
+                          {appointmentBooked ? 'Appointment' : exceptionBlocked ? 'Exception' : inheritedCompanyBlock ? 'Company block' : legacyBooked ? 'Blocked' : outsideLocationHours ? 'Closed' : 'Open'}
                         </span>
                       </button>
                     </td>
@@ -174,6 +194,22 @@ export function ScheduleGrid({
       </table>
     </div>
   );
+}
+
+function isOutsideLocationHours(location: CompanyLocation, day: string, slot: string): boolean {
+  if (location.available_days?.length && !location.available_days.includes(day)) return true;
+  const value = Number(slot);
+  const hour = value >= 8 && value <= 11 ? value : value === 12 ? 12 : value + 12;
+  const startMinutes = hour * 60;
+  const locationStart = timeMinutes(location.start_time, 0);
+  const locationEnd = timeMinutes(location.end_time, 24 * 60);
+  return startMinutes < locationStart || startMinutes + 60 > locationEnd;
+}
+
+function timeMinutes(value: string | null | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const [hours, minutes] = value.split(':').map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : fallback;
 }
 
 function getTeamColor(abbr: string): string {

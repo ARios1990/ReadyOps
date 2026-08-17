@@ -1,65 +1,103 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { Calendar, LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, KeyRound, LogIn, Mail, UserPlus } from 'lucide-react';
+import { READYOPS_LOGO_DATA_URI } from './brand';
+
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
 export function LoginPage() {
-  const { signIn, signUp } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { signIn, signUp, requestPasswordReset } = useAuth();
+  const [mode, setMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<'admin' | 'agent'>('agent');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isSignUp = mode === 'sign-up';
+  const isForgotPassword = mode === 'forgot-password';
+
+  function changeMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setError('');
+    setMessage('');
+    setPassword('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setMessage('');
     setLoading(true);
 
-    if (isSignUp) {
-      const { error } = await signUp(email, password, role, displayName || email);
-      if (error) setError(error);
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) setError(error);
+    try {
+      if (isForgotPassword) {
+        const { error } = await requestPasswordReset(email.trim());
+        if (error) {
+          setError('We could not send a reset email. Please wait a moment and try again.');
+        } else {
+          setMessage('If an account exists for that email, a secure password reset link is on the way.');
+        }
+      } else if (isSignUp) {
+        const { error } = await signUp(email.trim(), password, displayName.trim() || email.trim());
+        if (error) setError(error);
+      } else {
+        const { error } = await signIn(email.trim(), password);
+        if (error) setError(error);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/20">
-            <Calendar className="text-white" size={32} />
-          </div>
-          <h1 className="text-3xl font-bold text-white">Time Slot Scheduler</h1>
+          <div className="mx-auto mb-5 flex justify-center"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="h-auto w-[260px] max-w-full" /></div>
+          <h1 className="sr-only">Ready Ops</h1>
           <p className="text-slate-400 mt-2">
-            {isSignUp ? 'Create your account to get started' : 'Sign in to manage your schedule'}
+            {isForgotPassword
+              ? 'Recover access to your account'
+              : isSignUp
+                ? 'Create your agent account'
+                : 'Sign in to manage your schedule'}
           </p>
         </div>
 
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-          <div className="flex bg-white/5 rounded-lg p-1 mb-6">
+          {isForgotPassword ? (
             <button
-              onClick={() => { setIsSignUp(false); setError(''); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                !isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
+              type="button"
+              onClick={() => changeMode('sign-in')}
+              className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white"
             >
-              Sign In
+              <ArrowLeft size={16} /> Back to sign in
             </button>
-            <button
-              onClick={() => { setIsSignUp(true); setError(''); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          ) : (
+            <div className="flex bg-white/5 rounded-lg p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => changeMode('sign-in')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                  !isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => changeMode('sign-up')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                  isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
@@ -73,17 +111,6 @@ export function LoginPage() {
                     placeholder="Your name"
                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Role</label>
-                  <select
-                    value={role}
-                    onChange={e => setRole(e.target.value as 'admin' | 'agent')}
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="agent" className="bg-slate-800">Agent</option>
-                    <option value="admin" className="bg-slate-800">Admin</option>
-                  </select>
                 </div>
               </>
             )}
@@ -100,7 +127,7 @@ export function LoginPage() {
               />
             </div>
 
-            <div>
+            {!isForgotPassword && <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
               <div className="relative">
                 <input
@@ -115,16 +142,32 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPw(!showPw)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-            </div>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => changeMode('forgot-password')}
+                  className="mt-2 text-sm font-medium text-blue-300 hover:text-blue-200"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>}
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-300 text-sm">
                 {error}
+              </div>
+            )}
+
+            {message && (
+              <div role="status" className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-300 text-sm">
+                {message}
               </div>
             )}
 
@@ -135,6 +178,8 @@ export function LoginPage() {
             >
               {loading ? (
                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : isForgotPassword ? (
+                <><Mail size={18} /> Send Reset Link</>
               ) : isSignUp ? (
                 <><UserPlus size={18} /> Create Account</>
               ) : (
@@ -145,7 +190,9 @@ export function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-500 mt-4">
-          Open to everyone -- create an account and start scheduling.
+          {isForgotPassword
+            ? <><KeyRound size={13} className="inline mr-1" />Reset links expire and can only be used once.</>
+            : 'New accounts are created as agents. An admin assigns access and teams.'}
         </p>
       </div>
     </div>

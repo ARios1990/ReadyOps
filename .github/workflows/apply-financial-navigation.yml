@@ -1,0 +1,28 @@
+name: Apply Financial Navigation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-financial-navigation.py'
+      - '.github/workflows/apply-financial-navigation.yml'
+permissions:
+  contents: write
+jobs:
+  transform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch dashboard navigation
+        run: python scripts/patch-financial-navigation.py
+      - name: Commit dashboard patch
+        run: |
+          git config user.name "Masters Ready Services"
+          git config user.email "mastersreadyservices2025@gmail.com"
+          git add src/AdminReferenceDashboard.tsx src/AdminInvoices.tsx src/AdminReports.tsx
+          git diff --cached --quiet || git commit -m "Wire Reports Invoices Payroll and sidebar toggle"
+          git push origin HEAD:main
