@@ -3,7 +3,7 @@ export interface Company { id:string; name:string; state:string|null; contact_na
 export interface CompanyLocation { id:string; company_id:string; location_label:string; state:string|null; metro_tag:string|null; sort_order:number; }
 export interface CompanyTeam { id:string; company_id:string; team_id:string; }
 export interface Agent { id:string; name:string; team_id:string; email?:string|null; portal_slug?:string|null; access_token?:string|null; active?:boolean; }
-export interface Profile { id:string; role:'admin'|'agent'|'qc'; agent_id:string|null; display_name:string; email?:string|null; }
+export interface Profile { id:string; role:'admin'|'agent'|'qc'|'manager'; agent_id:string|null; team_id?:string|null; display_name:string; email?:string|null; }
 export interface CompanyBooking { id:string; company_id:string; location_id:string|null; day:string; time_slot:string; booked_by:string|null; created_at:string; }
 export interface PortalAppointment { id:string; company_id:string; location_id:string|null; appointment_date:string; start_time:string; status:string; }
 export interface ScheduleRow { id:string; companyId:string; companyName:string; locationId:string|null; locationLabel:string|null; state:string|null; teamId:string|null; }
