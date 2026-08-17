@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Calendar, LogOut, Building2, Users, RefreshCw, MapPin,
+  LogOut, Building2, Users, RefreshCw, MapPin,
   Shield, User, ChevronDown, Loader2, Settings, Search, Filter, Plus, UserPlus
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
