@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/apply-recording-branding.py'
       - 'scripts/apply-recording-branding-v2.py'
+      - 'scripts/fix-recording-branding-types.py'
       - '.github/workflows/apply-recording-branding.yml'
 
 permissions:
@@ -23,12 +24,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply recording and branding changes
-        run: python scripts/apply-recording-branding-v2.py
+      - name: Apply recording and branding TypeScript fixes
+        run: python scripts/fix-recording-branding-types.py
       - name: Commit generated changes
         run: |
           git config user.name "Masters Ready Services"
           git config user.email "mastersreadyservices2025@gmail.com"
-          git add src/portalUtils.ts src/AgentBookingPortal.tsx src/QCQueue.tsx src/CompanyPortal.tsx src/Dashboard.tsx src/ManagerDashboard.tsx src/LoginPage.tsx
-          git diff --cached --quiet || git commit -m "Add QC recording privacy and ReadyOps branding"
+          git add src/AgentBookingPortal.tsx src/Dashboard.tsx
+          git diff --cached --quiet || git commit -m "Fix recording branding TypeScript"
           git push origin HEAD:main
