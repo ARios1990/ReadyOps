@@ -12,6 +12,7 @@ import { useScheduleStore } from './useScheduleStore';
 import { AdminReports } from './AdminReports';
 import { AdminInvoices } from './AdminInvoices';
 import { AdminPayroll } from './AdminPayroll';
+import { AdminSchedulingManager } from './AdminSchedulingManager';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
@@ -75,6 +76,8 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   const [ops, setOps] = useState<CompanyOps[]>([]);
   const [loadingOps, setLoadingOps] = useState(true);
   const [userMenu, setUserMenu] = useState(false);
+  const [showSchedulingManager, setShowSchedulingManager] = useState(false);
+  const [schedulingManagerMode, setSchedulingManagerMode] = useState<'company' | 'locations'>('locations');
 
   async function refreshDashboard() {
     setLoadingOps(true);
@@ -141,6 +144,11 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   function openManage(tab?: string) {
     setManageTab(tab);
     setShowManage(true);
+  }
+
+  function openSchedulingManager(mode: 'company' | 'locations') {
+    setSchedulingManagerMode(mode);
+    setShowSchedulingManager(true);
   }
 
   function closeMobileSidebar() {
@@ -249,7 +257,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
                 <>
                   <button className="readyops-ref-primary" onClick={() => openManage('add-company')}><Plus size={14}/> Add Company</button>
                   <button className="readyops-ref-green" onClick={() => openManage('agents')}><Plus size={14}/> Add Agent</button>
-                  <button className="readyops-ref-purple" onClick={() => setView('slots')}><Plus size={14}/> Add Location</button>
+                  <button className="readyops-ref-purple" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
                   <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
                 </>
               )}
@@ -307,8 +315,10 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
                 subtitle="Scheduling"
                 actions={(
                   <>
-                    <button className="readyops-ref-primary" onClick={() => setView('overview')}>Overview</button>
-                    <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
+                    <button className="readyops-ref-primary" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
+                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('company')}><Pencil size={14}/> Edit Company</button>
+                    <button className="readyops-ref-secondary" onClick={() => { window.location.href = '/admin/portals'; }}><Package size={14}/> Packages</button>
+                    <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Full Setup</button>
                   </>
                 )}
               />
@@ -318,6 +328,13 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
         </main>
       </div>
 
+      {showSchedulingManager && (
+        <AdminSchedulingManager
+          store={store}
+          initialMode={schedulingManagerMode}
+          onClose={() => setShowSchedulingManager(false)}
+        />
+      )}
       {showManage && <AdminPanel store={store} onClose={() => setShowManage(false)} initialTab={manageTab}/>} 
     </div>
   );
