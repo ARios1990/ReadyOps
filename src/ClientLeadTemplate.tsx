@@ -30,7 +30,7 @@ function isBlank(value: unknown): boolean {
 }
 
 function asText(value: unknown): string {
-  if (Array.isArray(value)) return value.map(String).map(value => value.trim()).filter(Boolean).join(', ');
+  if (Array.isArray(value)) return value.map(String).map(item => item.trim()).filter(Boolean).join(', ');
   return isBlank(value) ? '' : String(value).trim();
 }
 
@@ -52,7 +52,7 @@ function leadValue(lead: LeadLike, topLevel: keyof LeadLike, ...formKeys: string
 function formatClientDate(value: string): string {
   const parsed = new Date(`${value}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
 }
 
 function formatAddress(lead: LeadLike): string {
@@ -89,29 +89,29 @@ function normalizeLastChecked(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
   const parsed = new Date(`${value.slice(0, 10)}T12:00:00`);
   if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() < 1980) return '';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
 }
 
-function Field({ label, value, href }: { label: string; value: string; href?: string }) {
+function Row({ label, value, href }: { label: string; value: string; href?: string }) {
   return (
-    <div className="grid gap-1 border-b border-slate-100 py-2.5 last:border-b-0 sm:grid-cols-[180px_1fr] sm:gap-4">
-      <dt className="text-xs font-bold text-slate-500">{label}</dt>
-      <dd className="break-words text-sm font-medium text-slate-900">
+    <div className="grid min-h-10 border-b border-slate-200 last:border-b-0 sm:grid-cols-[165px_1fr]">
+      <div className="bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 sm:border-r sm:border-slate-200">{label}</div>
+      <div className="break-words px-3 py-2.5 text-sm font-medium text-slate-900">
         {href && value ? (
-          <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-blue-700 hover:underline">
+          <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 break-all text-blue-700 hover:underline">
             {value}<ExternalLink size={12} />
           </a>
         ) : value || EMPTY}
-      </dd>
+      </div>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><h3 className="text-sm font-black text-slate-900">{title}</h3></div>
-      <dl className="px-4">{children}</dl>
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="bg-blue-600 px-3 py-2 text-sm font-black text-white">{title}</div>
+      <div>{children}</div>
     </section>
   );
 }
@@ -124,44 +124,44 @@ export function ClientLeadTemplate({ lead, appointment }: { lead: LeadLike; appo
   const notes = leadValue(lead, 'notes', 'notes');
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div className="space-y-3">
+      <div className="border-b border-slate-200 pb-3">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Lead Template</p>
         <h2 className="mt-1 text-xl font-black text-slate-950">Roof Inspection</h2>
       </div>
 
       <Section title="Customer Information">
-        <Field label="App Date & Time:" value={`${formatClientDate(appointment.appointment_date)} & ${formatTime(appointment.start_time)}`} />
-        <Field label="Name:" value={leadValue(lead, 'full_name', 'full_name', 'name')} />
-        <Field label="Phone:" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} />
-        <Field label="Address:" value={formatAddress(lead)} />
-        <Field label="Email:" value={leadValue(lead, 'email', 'email').toLowerCase()} />
-        <Field label="Language:" value={leadValue(lead, 'language', 'language')} />
+        <Row label="App Date & Time:" value={`${formatClientDate(appointment.appointment_date)} & ${formatTime(appointment.start_time)}`} />
+        <Row label="Name:" value={leadValue(lead, 'full_name', 'full_name', 'name')} />
+        <Row label="Phone:" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} />
+        <Row label="Address:" value={formatAddress(lead)} />
+        <Row label="Email:" value={leadValue(lead, 'email', 'email').toLowerCase()} />
+        <Row label="Language:" value={leadValue(lead, 'language', 'language')} />
       </Section>
 
       <Section title="Property Details">
-        <Field label="Services Needed:" value={serviceNeeded} />
-        <Field label="Last Checked On:" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} />
-        <Field label="Home Type:" value={formValue(lead, 'home_type')} />
-        <Field label="Roof Type:" value={formValue(lead, 'roof_type')} />
-        <Field label="Roof Age:" value={formValue(lead, 'roof_age')} />
-        <Field label="Stories:" value={formValue(lead, 'stories')} />
-        <Field label="Insurance:" value={formValue(lead, 'insurance')} />
-        <Field label="Insurance Name:" value={formValue(lead, 'insurance_name')} />
-        <Field label="Contract:" value={formValue(lead, 'contract') || 'No'} />
-        <Field label="Home Value:" value={homeValue} />
-        <Field label="SQ FT:" value={squareFeet} />
-        <Field label="Web Link:" value={webLink} href={webLink || undefined} />
+        <Row label="Services Needed:" value={serviceNeeded} />
+        <Row label="Last Checked On:" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} />
+        <Row label="Home Type:" value={formValue(lead, 'home_type')} />
+        <Row label="Roof Type:" value={formValue(lead, 'roof_type')} />
+        <Row label="Roof Age:" value={formValue(lead, 'roof_age')} />
+        <Row label="Stories:" value={formValue(lead, 'stories')} />
+        <Row label="Insurance:" value={formValue(lead, 'insurance')} />
+        <Row label="Insurance Name:" value={formValue(lead, 'insurance_name')} />
+        <Row label="Contract:" value={formValue(lead, 'contract') || 'No'} />
+        <Row label="Home Value:" value={homeValue} />
+        <Row label="SQ FT:" value={squareFeet} />
+        <Row label="Web Link:" value={webLink} href={webLink || undefined} />
       </Section>
 
       <Section title="Additional Information">
-        <Field label="Notes:" value={notes} />
-        <Field label="Size of Hail:" value={formValue(lead, 'hail_size', 'size_of_hail')} />
-        <Field label="Claim Filed:" value={formValue(lead, 'claim_filed', 'file_claim')} />
-        <Field label="Visible Damage:" value={formValue(lead, 'visible_damage')} />
-        <Field label="Damage Type:" value={formValue(lead, 'damage_type', 'type_of_damage')} />
-        <Field label="Add. Properties:" value={formValue(lead, 'additional_properties', 'add_properties')} />
-        <Field label="2nd Address:" value={formValue(lead, 'second_address', 'other_address')} />
+        <Row label="Notes:" value={notes} />
+        <Row label="Size of Hail:" value={formValue(lead, 'hail_size', 'size_of_hail')} />
+        <Row label="Claim Filed:" value={formValue(lead, 'claim_filed', 'file_claim')} />
+        <Row label="Visible Damage:" value={formValue(lead, 'visible_damage')} />
+        <Row label="Damage Type:" value={formValue(lead, 'damage_type', 'type_of_damage')} />
+        <Row label="Add. Properties:" value={formValue(lead, 'additional_properties', 'add_properties')} />
+        <Row label="2nd Address:" value={formValue(lead, 'second_address', 'other_address')} />
       </Section>
     </div>
   );
