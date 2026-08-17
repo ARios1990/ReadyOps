@@ -22,6 +22,21 @@ company = replace_once(
     "{selectedLead && <LeadModal appointment={selectedLead} companyId={companyId} token={token} onClose={() => setSelectedLead(null)} />}",
     'LeadModal call',
 )
+
+# Add desktop column headings above the weekly schedule rows.
+schedule_marker = '<div className="space-y-2">{DAY_NAMES.map((name, day) => <ScheduleRuleRow'
+schedule_header = '''<div className="mb-2 hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[110px_90px_repeat(5,1fr)_70px] md:items-center md:gap-2">
+  <span>Day</span>
+  <span>Open</span>
+  <span>Start Time</span>
+  <span>End Time</span>
+  <span>Appointment Length (min)</span>
+  <span>Appointments per Time Slot</span>
+  <span>Max Appointments per Day</span>
+  <span className="text-center">Save</span>
+</div><div className="space-y-2">{DAY_NAMES.map((name, day) => <ScheduleRuleRow'''
+company = replace_once(company, schedule_marker, schedule_header, 'weekly schedule header')
+
 lead_modal = '''function LeadModal({ appointment, companyId, token, onClose }: { appointment: Appointment; companyId: string; token: string; onClose: () => void }) {
   const lead = appointment.lead;
   return (
@@ -143,4 +158,4 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
 utils = utils[:start] + new_builder
 utils_path.write_text(utils, encoding='utf-8')
 
-print('Applied client lead template and recording upload patch.')
+print('Applied client lead template, schedule headings, and recording upload patch.')
