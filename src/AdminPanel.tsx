@@ -30,19 +30,6 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   useEffect(() => {
     if (initialTab) setTab(initialTab as Tab);
   }, [initialTab]);
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [onClose]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [search, setSearch] = useState('');
 
@@ -62,7 +49,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [cuEmail, setCuEmail] = useState('');
   const [cuPassword, setCuPassword] = useState('');
   const [cuName, setCuName] = useState('');
-  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc'>('agent');
+  const [cuRole, setCuRole] = useState<'admin' | 'agent'>('agent');
   const [cuAgent, setCuAgent] = useState('');
   const [cuLoading, setCuLoading] = useState(false);
   const [cuMsg, setCuMsg] = useState('');
@@ -221,26 +208,15 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   );
 
   return (
-    <div
-      className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-[2px]"
-      onMouseDown={onClose}
-      role="presentation"
-    >
-      <aside
-        className="absolute right-0 top-0 h-full w-full max-w-[1180px] overflow-y-auto border-l border-gray-200 bg-gray-50 shadow-2xl"
-        onMouseDown={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="ReadyOps management"
-      >
-        <div className="px-4 py-4 sm:px-6">
+    <div className="border-b border-gray-200 bg-gray-50">
+      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4">
         {/* Header + Tabs */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
-            <div><h2 className="text-base font-bold text-gray-800">Manage ReadyOps</h2><p className="text-[11px] text-gray-500">Company setup, staff, users, and account configuration</p></div>
+            <h2 className="text-base font-bold text-gray-800">Admin Panel</h2>
             <div className="flex gap-0.5 bg-gray-200 p-0.5 rounded-lg overflow-x-auto">
               {([
-                { key: 'companies', icon: Building2, label: 'Company Setup' },
+                { key: 'companies', icon: Building2, label: 'Companies' },
                 { key: 'agents', icon: Users, label: 'Agents' },
                 { key: 'users', icon: UserPlus, label: 'Agent Names' },
                 { key: 'add-company', icon: Plus, label: 'Add Company' },
@@ -307,7 +283,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
 
         {/* === COMPANIES TAB === */}
         {tab === 'companies' && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-220px)] overflow-y-auto">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[360px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -453,7 +429,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
 
         {/* === AGENTS TAB === */}
         {tab === 'agents' && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-220px)] overflow-y-auto">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[360px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -499,7 +475,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
 
         {/* === USERS / AGENT NAMES TAB === */}
         {tab === 'users' && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-220px)] overflow-y-auto">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[360px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -519,7 +495,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                       <td className="py-2 px-4 font-medium text-gray-800">{p.display_name}</td>
                       <td className="py-2 px-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                          p.role === 'admin' ? 'bg-amber-100 text-amber-700' : p.role === 'qc' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                          p.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                         }`}>{p.role}</span>
                       </td>
                       <td className="py-2 px-3 text-xs">
@@ -683,10 +659,9 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
-                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent' | 'qc')}
+                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent')}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="agent">Agent</option>
-                    <option value="qc">QC - Quality Control</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -710,8 +685,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
             </form>
           </div>
         )}
-        </div>
-      </aside>
+      </div>
     </div>
   );
 }
