@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import { supabase } from './supabase';
-import { addDays, formatDateLong, formatTime, localDate, startOfWeek } from './portalUtils';
+import { addDays, calendarWeekStart, formatDateLong, formatTime, localDate } from './portalUtils';
 
 type Obj=Record<string,any>;
 type RangeMode='this'|'previous'|'all';
 
 export function AgentPortal({slug,token}:{slug:string;token:string}){
  const [data,setData]=useState<Obj|null>(null);const [mode,setMode]=useState<RangeMode>('this');const [payDate,setPayDate]=useState('');const [loading,setLoading]=useState(true);const [error,setError]=useState('');
- const range=useMemo(()=>{const monday=startOfWeek(); const sunday=addDays(monday,-1); if(mode==='previous'){return {start:localDate(addDays(sunday,-7)),end:localDate(addDays(sunday,-1))};} if(mode==='all')return {start:localDate(addDays(sunday,-90)),end:localDate(addDays(sunday,45))};return {start:localDate(sunday),end:localDate(addDays(sunday,6))};},[mode]);
+ const range=useMemo(()=>{const monday=calendarWeekStart(); const sunday=addDays(monday,-1); if(mode==='previous'){return {start:localDate(addDays(sunday,-7)),end:localDate(addDays(sunday,-1))};} if(mode==='all')return {start:localDate(addDays(sunday,-90)),end:localDate(addDays(sunday,45))};return {start:localDate(sunday),end:localDate(addDays(sunday,6))};},[mode]);
  async function load(){setLoading(true);setError('');const {data:d,error:e}=await supabase.rpc('get_agent_portal',{p_access_token:token,p_start_date:range.start,p_end_date:range.end});if(e){setError(e.message);setData(null)}else if((d as Obj)?.agent?.portal_slug!==slug){setError('Agent link name does not match this access token.');setData(null)}else setData(d as Obj);setLoading(false)}
  useEffect(()=>{void load()},[token,range.start,range.end]);
  const appointments=(data?.appointments||[]) as Obj[]; const payDates=useMemo(()=>[...new Set(appointments.map(a=>a.pay_date).filter(Boolean))].sort().reverse(),[appointments]);
