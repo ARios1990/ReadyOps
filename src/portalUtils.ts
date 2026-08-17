@@ -161,12 +161,27 @@ function leadTemplateValue(values: Record<string, unknown>, key: string): string
 export function buildLeadTemplate(values: Record<string, unknown>): string {
   const appointmentDate = leadTemplateValue(values, 'appointment_date');
   const appointmentTime = leadTemplateValue(values, 'appointment_time');
-  const appointmentDateTime = [
-    appointmentDate ? formatDateLong(appointmentDate) : '',
-    appointmentTime ? formatTime(appointmentTime) : '',
-  ].filter(Boolean).join(' at ');
+  let dateLabel = appointmentDate;
+  if (appointmentDate) {
+    const parsed = new Date(`${appointmentDate}T12:00:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+    }
+  }
+  const appointmentDateTime = [dateLabel, appointmentTime ? formatTime(appointmentTime) : ''].filter(Boolean).join(' & ');
+  const rawHomeValue = leadTemplateValue(values, 'home_value');
+  const homeValueNumber = Number(rawHomeValue.replace(/[$,\s]/g, ''));
+  const homeValue = rawHomeValue && Number.isFinite(homeValueNumber)
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(homeValueNumber)
+    : rawHomeValue;
+  const rawSqFt = leadTemplateValue(values, 'sq_ft');
+  const sqFtNumber = Number(rawSqFt.replace(/[,\s]/g, ''));
+  const sqFt = rawSqFt && Number.isFinite(sqFtNumber)
+    ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(sqFtNumber)
+    : rawSqFt;
 
   return [
+    '**Roof Inspection**',
     '**Customer Information**',
     'App Date & Time: ' + appointmentDateTime,
     'Name: ' + leadTemplateValue(values, 'full_name'),
@@ -174,23 +189,23 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
     'Address: ' + leadTemplateValue(values, 'address'),
     'Email: ' + leadTemplateValue(values, 'email').toLowerCase(),
     'Language: ' + leadTemplateValue(values, 'language'),
-    'Services Need: ' + leadTemplateValue(values, 'service_needed'),
     '',
     '**Property Details**',
-    'Roof Age: ' + leadTemplateValue(values, 'roof_age'),
+    'Services Needed: ' + leadTemplateValue(values, 'service_needed'),
+    'Last Checked On: ' + leadTemplateValue(values, 'last_checked_on'),
     'Home Type: ' + leadTemplateValue(values, 'home_type'),
     'Roof Type: ' + leadTemplateValue(values, 'roof_type'),
+    'Roof Age: ' + leadTemplateValue(values, 'roof_age'),
     'Stories: ' + leadTemplateValue(values, 'stories'),
     'Insurance: ' + leadTemplateValue(values, 'insurance'),
     'Insurance Name: ' + leadTemplateValue(values, 'insurance_name'),
     'Contract: ' + (leadTemplateValue(values, 'contract') || 'No'),
-    'Home Value: ' + leadTemplateValue(values, 'home_value'),
-    'SQ FT: ' + leadTemplateValue(values, 'sq_ft'),
+    'Home Value: ' + homeValue,
+    'SQ FT: ' + sqFt,
     'Web Link: ' + leadTemplateValue(values, 'web_url'),
     '',
     '**Additional Information**',
     'Notes: ' + leadTemplateValue(values, 'notes'),
-    'Last Checked On: ' + leadTemplateValue(values, 'last_checked_on'),
     'Size of Hail: ' + leadTemplateValue(values, 'hail_size'),
     'Claim Filed: ' + leadTemplateValue(values, 'claim_filed'),
     'Visible Damage: ' + leadTemplateValue(values, 'visible_damage'),
