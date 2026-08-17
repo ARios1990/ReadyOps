@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ClipboardCopy, ExternalLink, Loader2, RefreshCw, Users } from 'lucide-react';
 import { supabase } from './supabase';
 import { buildReadyModeBookingLink, copyText, rpcError } from './portalUtils';
+import { READYOPS_LOGO_DATA_URI } from './brand';
 
 type TeamInfo = { id: string; name: string; abbreviation: string };
 type AgentSummary = {
@@ -108,13 +109,9 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+      <header className="readyops-brand-header sticky top-0 z-30 border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Ready Ops Manager</p>
-            <h1 className="text-xl font-bold">{data.manager?.name || data.team.name}</h1>
-            <p className="text-xs text-slate-500">Team: {data.team.abbreviation} — {data.team.name}</p>
-          </div>
+          <div className="flex items-center gap-4"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="readyops-brand-logo-sm"/><div className="border-l border-white/15 pl-4"><p className="readyops-brand-subtitle text-xs font-bold uppercase tracking-[0.18em]">Manager Dashboard</p><h1 className="text-xl font-bold text-white">{data.manager?.name || data.team.name}</h1><p className="readyops-brand-subtitle text-xs">Team: {data.team.abbreviation} — {data.team.name}</p></div></div>
           <div className="flex gap-2">
             <button onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"><RefreshCw size={14} /> Refresh</button>
             <button onClick={() => void exitPortal()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white">{privateLinkMode ? 'Close' : 'Sign Out'}</button>

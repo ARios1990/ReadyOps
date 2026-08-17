@@ -135,6 +135,9 @@ const READYMODE_PREFILL_QUERY = [
   'damage_type=(Profile.Damage Type)',
   'additional_properties=(Profile.Add. Properties)',
   'second_address=(Profile.2nd Address)',
+  // Create this as a ReadyMode custom CRM field and populate it once the call recording is finalized.
+  'recording_url=(Profile.Recording URL)',
+  'rm_lead_id=(Lead.id)',
 ].join('&');
 
 /** Builds the exact ReadyMode popup URL for a Ready Ops company booking page. */

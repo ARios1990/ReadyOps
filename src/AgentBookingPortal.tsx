@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clipb
 import { supabase } from './supabase';
 import { DynamicLeadForm, PortalFormSection } from './DynamicLeadForm';
 import { addDays, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
+import { READYOPS_LOGO_DATA_URI } from './brand';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
@@ -333,15 +334,17 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Ready Ops</p>
-              <h1 className="mt-1 text-2xl font-bold">{company.name}</h1>
-              {company.state && <p className="text-sm text-slate-500">{company.state}</p>}
+      <header className="readyops-brand-header border-b">
+        <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="readyops-brand-logo" />
+              <div className="border-l border-white/15 pl-4">
+                <h1 className="text-xl font-bold text-white">{company.name}</h1>
+                {company.state && <p className="readyops-brand-subtitle text-sm">{company.state}</p>}
+              </div>
             </div>
-            <div className="rounded-xl bg-blue-50 px-3 py-2 text-right text-xs text-blue-700"><span className="font-bold">Live availability</span><br />{settings.timezone}</div>
+            <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-right text-xs text-blue-100"><span className="font-bold text-white">Live availability</span><br />{settings.timezone}</div>
           </div>
         </div>
       </header>
@@ -356,6 +359,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
         )}
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {formValues.recording_url && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-800">ReadyMode recording attached for QC. The company will not receive the audio unless QC explicitly shares it.</div>}
 
         {confirmation && !rescheduleMode && (
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
@@ -439,7 +443,7 @@ function readReadyModePrefill(): { agent_name: string; values: Record<string, un
   const fullName = get('full_name','name') || [first,last].filter(Boolean).join(' ');
   const street = get('address','street'); const city = get('city'); const state = get('state'); const zip = get('zip','zip_code');
   const fullAddress = get('full_address') || [street,city,state,zip].filter(Boolean).join(', ');
-  const values: Record<string, unknown> = { full_name: fullName, phone_number: get('phone','phone_number'), address: fullAddress, city, state, zip_code: zip, email: get('email'), language: get('language'), service_needed: get('service_needed','services_needed'), last_checked_on: get('last_checked_on'), home_type: get('home_type'), roof_type: get('roof_type'), roof_age: get('roof_age'), stories: get('stories'), insurance: get('insurance'), insurance_name: get('insurance_name'), contract: get('contract') || 'No', home_value: get('home_value'), sq_ft: get('sq_ft'), web_url: get('web_url','web_link'), notes: get('notes'), hail_size: get('hail_size','size_of_hail'), claim_filed: get('claim_filed','file_claim'), visible_damage: get('visible_damage'), damage_type: get('damage_type'), additional_properties: get('additional_properties','add_properties') || 'No', second_address: get('second_address','2nd_address'), agent_token: get('agent_token'), _source: get('source') || (get('rm_lead_id','readymode_lead_id') ? 'readymode' : 'ready_ops'), _source_lead_id: get('rm_lead_id','readymode_lead_id','lead_id'), _source_disposition: get('disposition') };
+  const values: Record<string, unknown> = { full_name: fullName, phone_number: get('phone','phone_number'), address: fullAddress, city, state, zip_code: zip, email: get('email'), language: get('language'), service_needed: get('service_needed','services_needed'), last_checked_on: get('last_checked_on'), home_type: get('home_type'), roof_type: get('roof_type'), roof_age: get('roof_age'), stories: get('stories'), insurance: get('insurance'), insurance_name: get('insurance_name'), contract: get('contract') || 'No', home_value: get('home_value'), sq_ft: get('sq_ft'), web_url: get('web_url','web_link'), notes: get('notes'), hail_size: get('hail_size','size_of_hail'), claim_filed: get('claim_filed','file_claim'), visible_damage: get('visible_damage'), damage_type: get('damage_type'), additional_properties: get('additional_properties','add_properties') || 'No', second_address: get('second_address','2nd_address'), recording_url: get('recording_url','recording','recording_link','audio_url','call_recording'), readymode_call_log_id: get('rm_call_log_id','readymode_call_log_id','call_log_id'), agent_token: get('agent_token'), _source: get('source') || (get('rm_lead_id','readymode_lead_id') ? 'readymode' : 'ready_ops'), _source_lead_id: get('rm_lead_id','readymode_lead_id','lead_id'), _source_disposition: get('disposition') };
   Object.keys(values).forEach(key => { if (values[key] === '') delete values[key]; });
   return { agent_name: get('agent','agent_name','user_name'), values };
 }

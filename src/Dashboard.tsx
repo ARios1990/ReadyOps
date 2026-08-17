@@ -10,6 +10,7 @@ import { AdminPanel } from './AdminPanel';
 import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
 import { addDays, formatDateShort, localDate, scheduleWeekStart } from './portalUtils';
+import { READYOPS_LOGO_DATA_URI } from './brand';
 
 export function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -136,15 +137,13 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+      <header className="readyops-brand-header border-b shadow-sm sticky top-0 z-30">
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center">
-              <Calendar className="text-white" size={18} />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900 leading-tight">Ready Ops</h1>
-              <p className="text-xs text-gray-500">
+            <img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="readyops-brand-logo-sm" />
+            <div className="border-l border-white/15 pl-3">
+              <h1 className="text-sm font-bold text-white leading-tight">Operations Dashboard</h1>
+              <p className="readyops-brand-subtitle text-xs">
                 {isAdmin ? 'Admin Dashboard -- Full Access' : (
                   userTeam
                     ? `Team: ${userTeam.name} (${userTeam.abbreviation})`

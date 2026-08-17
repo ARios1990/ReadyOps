@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { ArrowLeft, Calendar, Eye, EyeOff, KeyRound, LogIn, Mail, UserPlus } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, KeyRound, LogIn, Mail, UserPlus } from 'lucide-react';
+import { READYOPS_LOGO_DATA_URI } from './brand';
 
 type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
@@ -55,10 +56,8 @@ export function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/20">
-            <Calendar className="text-white" size={32} />
-          </div>
-          <h1 className="text-3xl font-bold text-white">Ready Ops</h1>
+          <div className="mx-auto mb-5 flex justify-center"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="h-auto w-[260px] max-w-full" /></div>
+          <h1 className="sr-only">Ready Ops</h1>
           <p className="text-slate-400 mt-2">
             {isForgotPassword
               ? 'Recover access to your account'
