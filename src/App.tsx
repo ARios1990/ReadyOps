@@ -18,6 +18,7 @@ function PublicRoute() {
   const parts = pathParts();
   if (parts[0] === 'book' && parts[1]) return <AgentBookingPortal slug={parts[1]} />;
   if (parts[0] === 'agent' && parts[1] && parts[2]) return <AgentPortal slug={parts[1]} token={parts[2]} />;
+  if (parts[0] === 'manager' && parts[1] && parts[2]) return <ManagerDashboard slug={parts[1]} token={parts[2]} />;
   if (parts[0] === 'join' && parts[1] && parts[2]) return <CompanyOnboarding slug={parts[1]} token={parts[2]} />;
   if (parts[0] === 'rep' && parts[1]) return <RepresentativePortal token={parts[1]} />;
   if (parts[0] === 'company' && parts[1] && parts[2] === 'manage' && parts[3]) return <CompanyPortalRoute identifier={parts[1]} token={parts[3]} />;
@@ -44,7 +45,7 @@ function AppContent() {
   }
   if (managerRequested || profile?.role === 'manager') {
     if (profile?.role !== 'manager') return <AccessDenied />;
-    return <ManagerDashboard />;
+    return <ManagerDashboard profile={profile} />;
   }
   return <><Dashboard />{profile?.role === 'admin' && <AdminQuickTools />}</>;
 }
