@@ -1,0 +1,32 @@
+name: Apply Reference Dashboard
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply-reference-dashboard.py'
+      - 'scripts/apply-reference-dashboard-css.py'
+      - '.github/workflows/apply-reference-dashboard.yml'
+      - '.github/reference-dashboard-trigger'
+permissions:
+  contents: write
+jobs:
+  transform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply dashboard integration
+        run: python scripts/apply-reference-dashboard.py
+      - name: Apply dashboard styles
+        run: python scripts/apply-reference-dashboard-css.py
+      - name: Commit generated changes
+        run: |
+          git config user.name "Masters Ready Services"
+          git config user.email "mastersreadyservices2025@gmail.com"
+          git add src/Dashboard.tsx src/index.css
+          git diff --cached --quiet || git commit -m "Match ReadyOps dashboard reference design"
+          git push origin HEAD:main
