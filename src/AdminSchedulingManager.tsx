@@ -3,6 +3,7 @@ import { Building2, MapPin, Package, Plus, Save, UsersRound, X } from 'lucide-re
 import { supabase } from './supabase';
 import type { Company, CompanyLocation } from './types';
 import { useScheduleStore } from './useScheduleStore';
+import { inferUsTimeZone, READYOPS_TIME_ZONES } from './timeZoneUtils';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type ManagerMode = 'company' | 'locations';
@@ -72,7 +73,7 @@ function blankLocation(): LocationDraft {
     phone: '',
     email: '',
     manager_name: '',
-    timezone: 'America/Chicago',
+    timezone: '',
     available_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     start_time: '09:00',
     end_time: '18:00',
@@ -107,6 +108,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
   const [locationDraft, setLocationDraft] = useState<LocationDraft>(blankLocation);
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([]);
+  const [timezoneAuto, setTimezoneAuto] = useState(true);
   const [savedAgentIds, setSavedAgentIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -160,6 +162,15 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
     setLocationDraft(current => ({ ...current, [key]: value }));
   }
 
+  function setLocationGeoField(key: 'city' | 'state' | 'zip_code', value: string) {
+    setTimezoneAuto(true);
+    setLocationDraft(current => {
+      const next = { ...current, [key]: value };
+      const inferred = inferUsTimeZone(next.city, next.state, next.zip_code);
+      return inferred ? { ...next, timezone: inferred } : next;
+    });
+  }
+
   async function saveCompany() {
     if (!companyId || !companyForm.name?.trim()) return;
     setSaving(true);
@@ -191,6 +202,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
 
   async function beginEditLocation(location: ManagedLocation) {
     setEditingLocationId(location.id);
+    setTimezoneAuto(false);
     setLocationDraft({
       location_label: location.location_label || '',
       office_name: location.office_name || '',
@@ -235,6 +247,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
 
   function startNewLocation() {
     setEditingLocationId(null);
+    setTimezoneAuto(true);
     setLocationDraft(blankLocation());
     setAssignedAgentIds([]);
     setSavedAgentIds([]);
@@ -281,7 +294,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
       phone: locationDraft.phone.trim() || null,
       email: locationDraft.email.trim() || null,
       manager_name: locationDraft.manager_name.trim() || null,
-      timezone: locationDraft.timezone.trim() || 'America/Chicago',
+      timezone: locationDraft.timezone.trim() || inferUsTimeZone(locationDraft.city, locationDraft.state, locationDraft.zip_code) || 'America/Chicago',
       available_days: locationDraft.available_days,
       start_time: locationDraft.start_time || '09:00',
       end_time: locationDraft.end_time || '18:00',
@@ -515,27 +528,25 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
                   <Field label="Location / Service Area Name *" value={locationDraft.location_label} onChange={value => setLocationField('location_label', value)} placeholder="Austin / Central Texas" />
                   <Field label="Office Name" value={locationDraft.office_name} onChange={value => setLocationField('office_name', value)} placeholder="Austin Office" />
                   <Field label="Street Address" value={locationDraft.address} onChange={value => setLocationField('address', value)} />
-                  <Field label="City" value={locationDraft.city} onChange={value => setLocationField('city', value)} />
-                  <Field label="State" value={locationDraft.state} onChange={value => setLocationField('state', value)} placeholder="TX" />
-                  <Field label="ZIP" value={locationDraft.zip_code} onChange={value => setLocationField('zip_code', value)} />
+                  <Field label="City" value={locationDraft.city} onChange={value => setLocationGeoField('city', value)} />
+                  <Field label="State" value={locationDraft.state} onChange={value => setLocationGeoField('state', value)} placeholder="TX" />
+                  <Field label="ZIP" value={locationDraft.zip_code} onChange={value => setLocationGeoField('zip_code', value)} />
                   <TextArea label="Service Cities" value={locationDraft.service_cities} onChange={value => setLocationField('service_cities', value)} placeholder="Austin, Buda, Kyle" />
                   <TextArea label="Service ZIP Codes" value={locationDraft.service_zips} onChange={value => setLocationField('service_zips', value)} placeholder="78610, 78633, 78640" />
                   <Field label="Office Phone" value={locationDraft.phone} onChange={value => setLocationField('phone', value)} />
                   <Field label="Office Email" type="email" value={locationDraft.email} onChange={value => setLocationField('email', value)} />
                   <Field label="Manager / Office Contact" value={locationDraft.manager_name} onChange={value => setLocationField('manager_name', value)} />
                   <label className="text-xs font-bold text-slate-600">
-                    Time Zone
+                    Time Zone {timezoneAuto ? <span className="font-semibold text-emerald-600">• Auto-detected</span> : <span className="font-semibold text-amber-600">• Manual override</span>}
                     <select
                       value={locationDraft.timezone}
-                      onChange={event => setLocationField('timezone', event.target.value)}
+                      onChange={event => { setTimezoneAuto(false); setLocationField('timezone', event.target.value); }}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                     >
-                      <option value="America/New_York">Eastern</option>
-                      <option value="America/Chicago">Central</option>
-                      <option value="America/Denver">Mountain</option>
-                      <option value="America/Phoenix">Arizona</option>
-                      <option value="America/Los_Angeles">Pacific</option>
+                      {!locationDraft.timezone && <option value="">Enter City / State / ZIP to auto-detect</option>}
+                      {READYOPS_TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
                     </select>
+                    <span className="mt-1 block text-[10px] font-normal text-slate-400">ReadyOps fills this from the location. You can change it anytime if the service area crosses a time-zone boundary.</span>
                   </label>
                 </div>
 
