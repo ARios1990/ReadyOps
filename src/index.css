@@ -7,7 +7,13 @@
 :root {
   --color-available: #10b981;
   --color-booked: #dc2626;
-  --color-bg: #f8fafc;
+  --color-bg: #f5f8fc;
+  --readyops-navy: #071525;
+  --readyops-navy-2: #0b2038;
+  --readyops-blue: #006cff;
+  --readyops-blue-deep: #0048b8;
+  --readyops-silver: #dce4ee;
+  --readyops-muted: #9fb7d5;
 }
 
 body {
@@ -17,6 +23,43 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+.readyops-brand-header {
+  background: linear-gradient(115deg, var(--readyops-navy) 0%, var(--readyops-navy-2) 58%, #003f9c 100%) !important;
+  color: white;
+  border-color: rgba(94, 148, 220, 0.28) !important;
+  box-shadow: 0 8px 28px rgba(2, 12, 28, 0.16);
+}
+
+.readyops-brand-logo {
+  display: block;
+  width: auto;
+  height: 46px;
+  max-width: 220px;
+  object-fit: contain;
+}
+
+.readyops-brand-logo-sm {
+  display: block;
+  width: auto;
+  height: 36px;
+  max-width: 175px;
+  object-fit: contain;
+}
+
+.readyops-brand-subtitle {
+  color: var(--readyops-muted) !important;
+}
+
+.readyops-brand-panel {
+  background: linear-gradient(145deg, #071525 0%, #0b2038 65%, #003f9c 100%);
+  border: 1px solid rgba(79, 139, 222, 0.28);
+  color: white;
+}
+
+.readyops-brand-accent {
+  color: var(--readyops-blue) !important;
 }
 
 .grid-cell {
