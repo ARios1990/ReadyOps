@@ -33,6 +33,8 @@ type Props = {
   profile: Profile | null;
   signOut: () => Promise<void> | void;
   renderSlots: () => ReactNode;
+  selectedCompanyId?: string;
+  selectedLocationId?: string;
 };
 
 type SidebarItem = readonly [string, string, IconComponent];
@@ -62,7 +64,7 @@ function getInitialSidebarCollapsed(): boolean {
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
 }
 
-export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }: Props) {
+export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, selectedCompanyId, selectedLocationId }: Props) {
   const [view, setView] = useState<View>('overview');
   const [staffTab, setStaffTab] = useState<StaffTab>('agents');
   const [search, setSearch] = useState('');
@@ -78,6 +80,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   const [userMenu, setUserMenu] = useState(false);
   const [showSchedulingManager, setShowSchedulingManager] = useState(false);
   const [schedulingManagerMode, setSchedulingManagerMode] = useState<'company' | 'locations'>('locations');
+  const [schedulingLocationId, setSchedulingLocationId] = useState<string | undefined>();
 
   async function refreshDashboard() {
     setLoadingOps(true);
@@ -146,8 +149,9 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
     setShowManage(true);
   }
 
-  function openSchedulingManager(mode: 'company' | 'locations') {
+  function openSchedulingManager(mode: 'company' | 'locations', locationId?: string) {
     setSchedulingManagerMode(mode);
+    setSchedulingLocationId(locationId);
     setShowSchedulingManager(true);
   }
 
@@ -316,6 +320,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
                 actions={(
                   <>
                     <button className="readyops-ref-primary" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
+                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('locations', selectedLocationId)}><Pencil size={14}/> Edit Location</button>
                     <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('company')}><Pencil size={14}/> Edit Company</button>
                     <button className="readyops-ref-secondary" onClick={() => { window.location.href = '/admin/portals'; }}><Package size={14}/> Packages</button>
                     <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Full Setup</button>
@@ -332,6 +337,8 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
         <AdminSchedulingManager
           store={store}
           initialMode={schedulingManagerMode}
+          initialCompanyId={selectedCompanyId}
+          initialLocationId={schedulingLocationId}
           onClose={() => setShowSchedulingManager(false)}
         />
       )}

@@ -30,6 +30,8 @@ type ManagedLocation = CompanyLocation & {
 type Props = {
   store: ScheduleStore;
   initialMode?: ManagerMode;
+  initialCompanyId?: string;
+  initialLocationId?: string;
   onClose: () => void;
 };
 
@@ -93,16 +95,19 @@ function timeValue(value: string | null | undefined, fallback: string): string {
   return value.slice(0, 5);
 }
 
-export function AdminSchedulingManager({ store, initialMode = 'locations', onClose }: Props) {
-  const defaultCompanyId = store.companies.find(company => company.account_status === 'Active')?.id
+export function AdminSchedulingManager({ store, initialMode = 'locations', initialCompanyId, initialLocationId, onClose }: Props) {
+  const defaultCompanyId = initialCompanyId
+    || store.companies.find(company => company.account_status === 'Active')?.id
     || store.companies[0]?.id
     || '';
   const [mode, setMode] = useState<ManagerMode>(initialMode);
   const [companyId, setCompanyId] = useState(defaultCompanyId);
   const [companyForm, setCompanyForm] = useState<Partial<Company>>({});
+  const [companyTeamIds, setCompanyTeamIds] = useState<string[]>([]);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>(blankLocation);
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([]);
+  const [savedAgentIds, setSavedAgentIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -127,16 +132,25 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
       website: company.website,
       requirements_note: company.requirements_note,
       notes: company.notes,
+      account_status: company.account_status,
     });
+    setCompanyTeamIds(store.getCompanyTeams(company.id).map(team => team.id));
   }, [companyId, company]);
 
   useEffect(() => {
     setEditingLocationId(null);
     setLocationDraft(blankLocation());
     setAssignedAgentIds([]);
+    setSavedAgentIds([]);
     setMessage('');
     setError('');
   }, [companyId]);
+
+  useEffect(() => {
+    if (!initialLocationId) return;
+    const location = companyLocations.find(item => item.id === initialLocationId);
+    if (location) void beginEditLocation(location);
+  }, [initialLocationId, companyLocations]);
 
   function setCompanyField<K extends keyof Company>(key: K, value: Company[K]) {
     setCompanyForm(current => ({ ...current, [key]: value }));
@@ -162,11 +176,13 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
         website: companyForm.website?.trim() || null,
         requirements_note: companyForm.requirements_note?.trim() || null,
         notes: companyForm.notes?.trim() || null,
+        account_status: companyForm.account_status || 'Active',
       })
       .eq('id', companyId);
 
     if (updateError) setError(updateError.message);
     else {
+      await store.setCompanyTeams(companyId, companyTeamIds);
       setMessage('Company information saved.');
       await store.refetch();
     }
@@ -208,9 +224,12 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
 
     if (assignmentError) {
       setAssignedAgentIds([]);
+      setSavedAgentIds([]);
       setError(assignmentError.message);
     } else {
-      setAssignedAgentIds((data || []).map(item => item.agent_id));
+      const agentIds = (data || []).map(item => item.agent_id);
+      setAssignedAgentIds(agentIds);
+      setSavedAgentIds(agentIds);
     }
   }
 
@@ -218,6 +237,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
     setEditingLocationId(null);
     setLocationDraft(blankLocation());
     setAssignedAgentIds([]);
+    setSavedAgentIds([]);
     setMessage('');
     setError('');
   }
@@ -298,34 +318,15 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
 
       locationId = data.id;
 
-      if (companyLocations.length === 0) {
-        const { error: inheritError } = await supabase
-          .from('company_bookings')
-          .update({ location_id: locationId })
-          .eq('company_id', companyId)
-          .is('location_id', null);
-        if (inheritError) {
-          setError(`Location created, but existing weekly slots could not be moved: ${inheritError.message}`);
-        }
-      }
     }
 
     if (locationId) {
-      const { error: deleteAssignmentError } = await supabase
-        .from('company_location_agents')
-        .delete()
-        .eq('location_id', locationId);
-
-      if (deleteAssignmentError) {
-        setError(deleteAssignmentError.message);
-        setSaving(false);
-        return;
-      }
-
-      if (assignedAgentIds.length > 0) {
+      const agentIdsToAdd = assignedAgentIds.filter(agentId => !savedAgentIds.includes(agentId));
+      const agentIdsToRemove = savedAgentIds.filter(agentId => !assignedAgentIds.includes(agentId));
+      if (agentIdsToAdd.length > 0) {
         const { error: insertAssignmentError } = await supabase
           .from('company_location_agents')
-          .insert(assignedAgentIds.map(agentId => ({ location_id: locationId, agent_id: agentId })));
+          .insert(agentIdsToAdd.map(agentId => ({ location_id: locationId, agent_id: agentId })));
 
         if (insertAssignmentError) {
           setError(insertAssignmentError.message);
@@ -333,6 +334,19 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
           return;
         }
       }
+      if (agentIdsToRemove.length > 0) {
+        const { error: deleteAssignmentError } = await supabase
+          .from('company_location_agents')
+          .delete()
+          .eq('location_id', locationId)
+          .in('agent_id', agentIdsToRemove);
+        if (deleteAssignmentError) {
+          setError(deleteAssignmentError.message);
+          setSaving(false);
+          return;
+        }
+      }
+      setSavedAgentIds(assignedAgentIds);
     }
 
     await store.refetch();
@@ -415,8 +429,21 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
                 <Field label="Phone" value={companyForm.phone || ''} onChange={value => setCompanyField('phone', value)} />
                 <Field label="Email" type="email" value={companyForm.email || ''} onChange={value => setCompanyField('email', value)} />
                 <Field label="Website" value={companyForm.website || ''} onChange={value => setCompanyField('website', value)} />
+                <label className="text-xs font-bold text-slate-600">
+                  Status
+                  <select value={companyForm.account_status || 'Active'} onChange={event => setCompanyField('account_status', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal">
+                    <option value="Active">Active</option><option value="Pause">Pause</option><option value="Prospect">Prospect</option><option value="Hidden">Hidden</option><option value="No Longer Working">No Longer Working</option>
+                  </select>
+                </label>
                 <TextArea label="Requirements / Time-Slot Note" value={companyForm.requirements_note || ''} onChange={value => setCompanyField('requirements_note', value)} />
                 <TextArea label="Internal Notes" value={companyForm.notes || ''} onChange={value => setCompanyField('notes', value)} />
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                <h4 className="text-xs font-black uppercase tracking-wide text-slate-600">Assigned Teams</h4>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {store.teams.map(team => <label key={team.id} className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-bold ${companyTeamIds.includes(team.id) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}><input type="checkbox" className="mr-2" checked={companyTeamIds.includes(team.id)} onChange={() => setCompanyTeamIds(current => current.includes(team.id) ? current.filter(id => id !== team.id) : [...current, team.id])}/>{team.abbreviation} — {team.name}</label>)}
+                </div>
               </div>
 
               <div className="mt-4 flex justify-end">
@@ -448,7 +475,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', onClo
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   {companyLocations.length === 0 ? (
                     <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                      No locations yet. Add the first location below. Existing weekly blocked slots will be attached to the first location automatically.
+                      No locations yet. Add the first location below. Existing company-wide blocked slots stay intact and apply as inherited legacy blocks.
                     </div>
                   ) : companyLocations.map(location => (
                     <button

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabase';
-import { Team, Agent, Company, CompanyLocation, CompanyBooking, CompanyTeam, PortalAppointment, ScheduleRow, DAYS } from './types';
+import { Team, Agent, Company, CompanyLocation, CompanyLocationAgent, CompanyBooking, CompanyTeam, CompanyScheduleException, PortalAppointment, ScheduleRow, DAYS } from './types';
 import { addDays, localDate, startOfWeek } from './portalUtils';
 
 type PortalReservation = {
@@ -21,11 +21,15 @@ interface ScheduleStoreResult {
   bookings: CompanyBooking[];
   portalAppointments: PortalAppointment[];
   companyTeams: CompanyTeam[];
+  locationAgents: CompanyLocationAgent[];
+  scheduleExceptions: CompanyScheduleException[];
   scheduleRows: ScheduleRow[];
   loading: boolean;
   toggleBooking: (companyId: string, locationId: string | null, day: string, timeSlot: string) => Promise<void>;
   getCompanyTeams: (companyId: string) => Team[];
   isBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
+  isCompanyWideBooked: (companyId: string, day: string, timeSlot: string) => boolean;
+  isScheduleExceptionBlocked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
   isPortalBooked: (companyId: string, locationId: string | null, day: string, timeSlot: string) => boolean;
   updateCompanyStatus: (companyId: string, status: string) => Promise<void>;
   addLocation: (companyId: string, label: string, state: string | null) => Promise<void>;
@@ -43,13 +47,15 @@ export function useScheduleStore(): ScheduleStoreResult {
   const [portalAppointments, setPortalAppointments] = useState<PortalAppointment[]>([]);
   const [portalReservations, setPortalReservations] = useState<PortalReservation[]>([]);
   const [companyTeams, setCompanyTeams] = useState<CompanyTeam[]>([]);
+  const [locationAgents, setLocationAgents] = useState<CompanyLocationAgent[]>([]);
+  const [scheduleExceptions, setScheduleExceptions] = useState<CompanyScheduleException[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     const weekStart = startOfWeek();
     const weekEnd = addDays(weekStart, 6);
     const nowIso = new Date().toISOString();
-    const [teamsRes, agentsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, reservationsRes, ctRes] = await Promise.all([
+    const [teamsRes, agentsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, reservationsRes, ctRes, laRes, exceptionsRes] = await Promise.all([
       supabase.from('teams').select('*'),
       supabase.from('agents').select('*'),
       supabase.from('roster_companies').select('*').order('name'),
@@ -68,6 +74,8 @@ export function useScheduleStore(): ScheduleStoreResult {
         .gte('appointment_date', localDate(weekStart))
         .lte('appointment_date', localDate(weekEnd)),
       supabase.from('company_teams').select('*'),
+      supabase.from('company_location_agents').select('*'),
+      supabase.from('company_schedule_exceptions').select('*').gte('exception_date', localDate(weekStart)).lte('exception_date', localDate(weekEnd)),
     ]);
 
     if (teamsRes.data) setTeams(teamsRes.data);
@@ -82,6 +90,8 @@ export function useScheduleStore(): ScheduleStoreResult {
     }
     if (reservationsRes.data) setPortalReservations(reservationsRes.data as PortalReservation[]);
     if (ctRes.data) setCompanyTeams(ctRes.data);
+    if (laRes.data) setLocationAgents(laRes.data as CompanyLocationAgent[]);
+    if (exceptionsRes.data) setScheduleExceptions(exceptionsRes.data as CompanyScheduleException[]);
     setLoading(false);
   }, []);
 
@@ -95,6 +105,8 @@ export function useScheduleStore(): ScheduleStoreResult {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_locations' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_companies' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_teams' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_location_agents' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_schedule_exceptions' }, () => fetchAll())
       .subscribe();
     return () => { channel.unsubscribe(); };
   }, [fetchAll]);
@@ -117,7 +129,7 @@ export function useScheduleStore(): ScheduleStoreResult {
   const scheduleRows: ScheduleRow[] = useMemo(() => {
     const rows: ScheduleRow[] = [];
     for (const company of companies) {
-      const companyLocations = locations.filter(l => l.company_id === company.id);
+      const companyLocations = locations.filter(l => l.company_id === company.id && l.active !== false);
       if (companyLocations.length > 0) {
         for (const loc of companyLocations) {
           rows.push({
@@ -128,6 +140,7 @@ export function useScheduleStore(): ScheduleStoreResult {
             locationLabel: loc.location_label,
             state: loc.state || company.state,
             teamId: company.team_id,
+            assignedAgentIds: locationAgents.filter(item => item.location_id === loc.id).map(item => item.agent_id),
           });
         }
       } else {
@@ -139,11 +152,12 @@ export function useScheduleStore(): ScheduleStoreResult {
           locationLabel: null,
           state: company.state,
           teamId: company.team_id,
+          assignedAgentIds: [],
         });
       }
     }
     return rows;
-  }, [companies, locations]);
+  }, [companies, locations, locationAgents]);
 
   const toggleBooking = async (companyId: string, locationId: string | null, day: string, timeSlot: string) => {
     const existing = bookings.find(
@@ -189,8 +203,36 @@ export function useScheduleStore(): ScheduleStoreResult {
 
   const isBooked = (companyId: string, locationId: string | null, day: string, timeSlot: string): boolean => {
     return bookings.some(
-      b => b.company_id === companyId && b.location_id === locationId && b.day === day && b.time_slot === timeSlot
+      b => b.company_id === companyId
+        && b.day === day
+        && b.time_slot === timeSlot
+        && (b.location_id === locationId || (locationId !== null && b.location_id === null))
     );
+  };
+
+  const isCompanyWideBooked = (companyId: string, day: string, timeSlot: string): boolean => bookings.some(
+    booking => booking.company_id === companyId
+      && booking.location_id === null
+      && booking.day === day
+      && booking.time_slot === timeSlot,
+  );
+
+  const isScheduleExceptionBlocked = (companyId: string, locationId: string | null, day: string, timeSlot: string): boolean => {
+    const dayIndex = DAYS.findIndex(value => value === day);
+    if (dayIndex < 0) return false;
+    const exceptionDate = localDate(addDays(startOfWeek(), dayIndex));
+    const value = Number(timeSlot);
+    const hour = value >= 8 && value <= 11 ? value : value === 12 ? 12 : value + 12;
+    const slotStart = hour * 60;
+    const slotEnd = slotStart + 60;
+    return scheduleExceptions.some(exception => {
+      if (exception.company_id !== companyId || exception.exception_date !== exceptionDate) return false;
+      if (exception.location_id !== null && exception.location_id !== locationId) return false;
+      if (exception.is_closed) return true;
+      const exceptionStart = timeToMinutes(exception.start_time, 0);
+      const exceptionEnd = timeToMinutes(exception.end_time, 24 * 60);
+      return slotStart < exceptionEnd && slotEnd > exceptionStart;
+    });
   };
 
   const isPortalBooked = (companyId: string, locationId: string | null, day: string, timeSlot: string): boolean => {
@@ -267,11 +309,15 @@ export function useScheduleStore(): ScheduleStoreResult {
     bookings,
     portalAppointments,
     companyTeams,
+    locationAgents,
+    scheduleExceptions,
     scheduleRows,
     loading,
     toggleBooking,
     getCompanyTeams,
     isBooked,
+    isCompanyWideBooked,
+    isScheduleExceptionBlocked,
     isPortalBooked,
     updateCompanyStatus,
     addLocation,
@@ -279,4 +325,10 @@ export function useScheduleStore(): ScheduleStoreResult {
     setCompanyTeams: setCompanyTeamsAction,
     refetch: fetchAll,
   };
+}
+
+function timeToMinutes(value: string | null | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const [hours, minutes] = value.split(':').map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : fallback;
 }

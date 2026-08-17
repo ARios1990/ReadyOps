@@ -52,7 +52,7 @@ export function ResetPasswordPage() {
             <Calendar className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-bold text-white">Set a New Password</h1>
-          <p className="text-slate-400 mt-2">Time Slot Scheduler</p>
+          <p className="text-slate-400 mt-2">Ready Ops</p>
         </div>
 
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
