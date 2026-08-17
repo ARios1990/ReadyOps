@@ -52,9 +52,9 @@ export function AdminReports() {
 
   useEffect(() => { void load(); }, [startDate, endDate]);
 
-  const joined = useMemo(() => {
+  const joined = useMemo<Obj[]>(() => {
     const leadMap = new Map(leads.map(l => [l.id, l]));
-    return appointments.map(ap => ({ ...ap, lead: leadMap.get(ap.lead_id) || null })).filter(row => row.lead);
+    return appointments.map(ap => ({ ...ap, lead: leadMap.get(ap.lead_id) || null } as Obj)).filter(row => Boolean(row.lead));
   }, [appointments, leads]);
 
   const filtered = useMemo(() => joined.filter(row => {
