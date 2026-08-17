@@ -1,7 +1,6 @@
 import { AuthProvider, useAuth } from './AuthContext';
 import { LoginPage } from './LoginPage';
 import { Dashboard } from './Dashboard';
-import { AdminQuickTools } from './AdminQuickTools';
 import { AgentBookingPortal } from './AgentBookingPortal';
 import { CompanyPortalRoute } from './CompanyPortalRoute';
 import { RepresentativePortal } from './RepresentativePortal';
@@ -55,7 +54,7 @@ function AppContent() {
     return <><FloatingThemeControl /><ManagerDashboard profile={profile} /></>;
   }
 
-  return <><Dashboard />{profile?.role === 'admin' && <AdminQuickTools />}</>;
+  return <Dashboard />;
 }
 
 function AccessDenied(){return <><FloatingThemeControl /><div className="min-h-screen flex items-center justify-center bg-slate-50 p-6"><div className="rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm"><h1 className="font-bold text-red-700">Access required</h1><button onClick={()=>{window.location.href='/'}} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Back</button></div></div></>}
