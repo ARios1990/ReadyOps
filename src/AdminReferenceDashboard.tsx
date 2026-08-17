@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign,
-  FileText, Filter, Home, Menu, Package, Pencil,
-  Plus, Search, Settings, ShieldCheck, Trash2, UsersRound,
-  WalletCards, BarChart3
+  FileText, Filter, Home, Menu, Package, Pencil, Plus, Search, Settings,
+  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -14,6 +13,7 @@ import { useScheduleStore } from './useScheduleStore';
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
 type View = 'overview' | 'slots';
+type IconComponent = typeof Home;
 
 type CompanyOps = {
   account_status: string;
@@ -31,7 +31,11 @@ type Props = {
   renderSlots: () => ReactNode;
 };
 
-const SIDEBAR_MAIN = [
+type SidebarItem = readonly [string, string, IconComponent];
+
+const SIDEBAR_STORAGE_KEY = 'readyops-sidebar-collapsed';
+
+const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['overview', 'Overview', Home],
   ['qc', 'QC Queue', ShieldCheck],
   ['companies', 'Companies & Packages', Building2],
@@ -40,7 +44,7 @@ const SIDEBAR_MAIN = [
   ['appointments', 'Appointments', CalendarDays],
 ] as const;
 
-const SIDEBAR_MANAGEMENT = [
+const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Managers', UsersRound],
   ['teams', 'Teams', UsersRound],
   ['reports', 'Reports', BarChart3],
@@ -49,12 +53,19 @@ const SIDEBAR_MANAGEMENT = [
   ['settings', 'Settings', Settings],
 ] as const;
 
+function getInitialSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+}
+
 export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }: Props) {
   const [view, setView] = useState<View>('overview');
   const [staffTab, setStaffTab] = useState<StaffTab>('agents');
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 900);
   const [showManage, setShowManage] = useState(false);
   const [manageTab, setManageTab] = useState<string | undefined>();
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -74,6 +85,21 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   }
 
   useEffect(() => { void refreshDashboard(); }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 900;
+      setIsMobile(mobile);
+      if (!mobile) setMobileSidebarOpen(false);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const metrics = useMemo(() => ({
     companies: store.companies.filter(c => c.account_status === 'Active').length,
@@ -114,7 +140,12 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
     setShowManage(true);
   }
 
+  function closeMobileSidebar() {
+    setMobileSidebarOpen(false);
+  }
+
   function navigate(key: string) {
+    closeMobileSidebar();
     if (key === 'overview') setView('overview');
     else if (key === 'qc') window.location.href = '/qc';
     else if (key === 'companies') window.location.href = '/admin/portals';
@@ -124,6 +155,11 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
     else if (key === 'settings') openManage('companies');
     else if (key === 'leads') { setView('overview'); scrollStaff(); }
     else openManage();
+  }
+
+  function toggleSidebar() {
+    if (isMobile) setMobileSidebarOpen(open => !open);
+    else setSidebarCollapsed(collapsed => !collapsed);
   }
 
   async function addTeam() {
@@ -145,15 +181,27 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   }
 
   const currentSection = view === 'slots' ? 'slots' : 'overview';
+  const shellClasses = [
+    'readyops-ref-shell',
+    sidebarCollapsed ? 'is-sidebar-collapsed' : '',
+    mobileSidebarOpen ? 'is-mobile-sidebar-open' : '',
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className={`readyops-ref-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+    <div className={shellClasses}>
+      <button
+        type="button"
+        className="readyops-ref-sidebar-backdrop"
+        aria-label="Close navigation"
+        onClick={closeMobileSidebar}
+      />
+
       <aside className="readyops-ref-sidebar">
-        <button className="readyops-ref-wordmark" onClick={() => setView('overview')} aria-label="Ready Ops home">
+        <button className="readyops-ref-wordmark" onClick={() => navigate('overview')} aria-label="Ready Ops home">
           <span>Ready</span><span>Ops</span>
         </button>
-        <SidebarGroup title="MAIN" collapsed={sidebarCollapsed} items={SIDEBAR_MAIN} active={currentSection} onSelect={navigate} />
-        <SidebarGroup title="MANAGEMENT" collapsed={sidebarCollapsed} items={SIDEBAR_MANAGEMENT} active="" onSelect={navigate} />
+        <SidebarGroup title="MAIN" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MAIN} active={currentSection} onSelect={navigate} />
+        <SidebarGroup title="MANAGEMENT" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active="" onSelect={navigate} />
       </aside>
 
       <div className="readyops-ref-workspace">
@@ -164,7 +212,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
 
         <header className="readyops-ref-topbar">
           <div className="flex min-w-0 items-center gap-3">
-            <button className="readyops-ref-icon-button" onClick={() => setSidebarCollapsed(v => !v)} title="Toggle sidebar"><Menu size={17}/></button>
+            <button className="readyops-ref-icon-button" onClick={toggleSidebar} title={isMobile ? 'Open navigation' : 'Collapse / expand sidebar'}><Menu size={17}/></button>
             <div className="min-w-0">
               <h1 className="truncate text-base font-extrabold">Ready Ops</h1>
               <p className="truncate text-[11px] opacity-70">Admin Dashboard — Full Access</p>
@@ -187,7 +235,18 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
 
         <main className="readyops-ref-main">
           {view === 'overview' ? <>
-            <div className="readyops-ref-title-row"><h2>Overview</h2><span>Command Center</span></div>
+            <PageHeader
+              title="Overview"
+              subtitle="Command Center"
+              actions={(
+                <>
+                  <button className="readyops-ref-primary" onClick={() => openManage('add-company')}><Plus size={14}/> Add Company</button>
+                  <button className="readyops-ref-green" onClick={() => openManage('agents')}><Plus size={14}/> Add Agent</button>
+                  <button className="readyops-ref-purple" onClick={() => setView('slots')}><Plus size={14}/> Add Location</button>
+                  <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
+                </>
+              )}
+            />
 
             <section className="readyops-ref-metrics">
               <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note="+2 this week" icon={Building2} tone="blue" loading={loadingOps}/>
@@ -228,24 +287,18 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
                 )}
               </div>
             </section>
-
-            <section className="readyops-ref-card readyops-ref-quick-card">
-              <div className="readyops-ref-tabs readyops-ref-tabs-large">
-                <button className="active">Overview</button>
-                <button onClick={() => window.location.href = '/qc'}>QC Queue</button>
-                <button onClick={() => window.location.href = '/admin/portals'}>Companies & Packages</button>
-                <button onClick={() => setView('slots')}>Time Slots</button>
-              </div>
-              <div className="readyops-ref-quick-actions">
-                <button className="readyops-ref-primary" onClick={() => openManage('add-company')}><Plus size={14}/> Add Company</button>
-                <button className="readyops-ref-green" onClick={() => openManage('agents')}><Plus size={14}/> Add Agent</button>
-                <button className="readyops-ref-purple" onClick={() => setView('slots')}><Plus size={14}/> Add Location Row</button>
-                <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
-              </div>
-            </section>
           </> : (
             <section className="readyops-ref-slots-view">
-              <div className="readyops-ref-title-row"><h2>Time Slots</h2><button onClick={() => setView('overview')}>← Back to Overview</button></div>
+              <PageHeader
+                title="Time Slots"
+                subtitle="Scheduling"
+                actions={(
+                  <>
+                    <button className="readyops-ref-primary" onClick={() => setView('overview')}>Overview</button>
+                    <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
+                  </>
+                )}
+              />
               {renderSlots()}
             </section>
           )}
@@ -257,11 +310,35 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots }
   );
 }
 
-function SidebarGroup({ title, items, active, onSelect, collapsed }: { title: string; items: ReadonlyArray<readonly [string, string, any]>; active: string; onSelect: (key: string) => void; collapsed: boolean }) {
-  return <div className="readyops-ref-nav-group"><p>{collapsed ? '•' : title}</p>{items.map(([key, label, Icon]) => <button key={key} className={active === key ? 'active' : ''} onClick={() => onSelect(key)} title={collapsed ? label : undefined}><Icon size={16}/>{!collapsed && <span>{label}</span>}</button>)}</div>;
+function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  return (
+    <div className="readyops-ref-page-header">
+      <div className="readyops-ref-title-row"><h2>{title}</h2>{subtitle && <span>{subtitle}</span>}</div>
+      {actions && <div className="readyops-ref-page-actions">{actions}</div>}
+    </div>
+  );
 }
 
-function MetricCard({ label, value, note, icon: Icon, tone, loading }: { label: string; value: number; note: string; icon: any; tone: string; loading: boolean }) {
+function SidebarGroup({ title, items, active, onSelect, collapsed }: { title: string; items: readonly SidebarItem[]; active: string; onSelect: (key: string) => void; collapsed: boolean }) {
+  return (
+    <div className="readyops-ref-nav-group">
+      <p>{collapsed ? '•' : title}</p>
+      {items.map(([key, label, Icon]) => (
+        <button
+          key={key}
+          className={active === key ? 'active' : ''}
+          onClick={() => onSelect(key)}
+          title={collapsed ? label : undefined}
+          data-tooltip={collapsed ? label : undefined}
+        >
+          <Icon size={16}/>{!collapsed && <span>{label}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, note, icon: Icon, tone, loading }: { label: string; value: number; note: string; icon: IconComponent; tone: string; loading: boolean }) {
   return <article className={`readyops-ref-metric tone-${tone}`}><div><p>{label}</p><strong>{loading ? '—' : value}</strong><span>{note}</span></div><div className="readyops-ref-metric-icon"><Icon size={21}/></div></article>;
 }
 
