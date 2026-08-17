@@ -1,0 +1,48 @@
+name: Apply Free Local AI + Timezone
+
+on:
+  push:
+    branches: [feature/free-local-ai-timezone]
+    paths:
+      - 'package.json'
+      - 'src/localWhisperWorker.ts'
+      - 'src/localWhisperClient.ts'
+      - 'src/timeZoneUtils.ts'
+      - 'scripts/apply-free-local-ai-timezone.py'
+      - 'supabase/migrations/20260817234500_public_location_timezone.sql'
+      - '.github/workflows/apply-free-local-ai-timezone.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/free-local-ai-timezone
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and update lockfile
+        run: npm install
+      - name: Apply app patch
+        run: python scripts/apply-free-local-ai-timezone.py
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Commit generated changes
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json src/QCRecordingUpload.tsx src/AdminSchedulingManager.tsx src/AgentBookingPortal.tsx
+          git commit -m "Wire free local Whisper and automatic timezones"
+          git push origin HEAD:feature/free-local-ai-timezone
