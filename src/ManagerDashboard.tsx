@@ -99,6 +99,26 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
     window.location.href = '/';
   }
 
+  async function regenerateAgentPortalLink(agent: AgentSummary) {
+    if (privateLinkMode) return;
+    const existing = Boolean(agent.portal_slug && agent.access_token);
+    if (!window.confirm(existing
+      ? `Generate a new private lead link for ${agent.name}? The old link will stop working immediately.`
+      : `Generate a private lead link for ${agent.name}?`)) return;
+    setError('');
+    const { data: result, error: rpcErr } = await supabase.rpc('regenerate_agent_portal_link', { p_agent_id: agent.id });
+    if (rpcErr) {
+      setError(rpcError(rpcErr));
+      return;
+    }
+    const generated = result as { portal_slug?: string; access_token?: string } | null;
+    if (generated?.portal_slug && generated?.access_token) {
+      const link = `${window.location.origin}/agent/${generated.portal_slug}/${generated.access_token}`;
+      try { await copyText(link); } catch { /* optional clipboard */ }
+    }
+    await load();
+  }
+
   if (loading && !data) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -136,7 +156,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Leads</th></tr></thead>
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAgents.map(agent => {
                   const agentLink = agent.portal_slug && agent.access_token
@@ -149,7 +169,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
                     <td className="px-3 py-3 text-center font-bold text-amber-700">{agent.qc_pending}</td>
                     <td className="px-3 py-3 text-center font-bold text-emerald-700">{agent.approved}</td>
                     <td className="px-3 py-3 text-center font-bold text-red-700">{agent.denied}</td>
-                    <td className="px-4 py-3 text-right">{agentLink ? <a href={agentLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Agent Leads <ExternalLink size={13} /></a> : <span className="text-xs text-slate-400">Link unavailable</span>}</td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{agentLink && <><button onClick={() => void copyText(agentLink)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><ClipboardCopy size={13}/> Copy Link</button><button onClick={() => window.open(agentLink, '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Open <ExternalLink size={13}/></button></>}{!privateLinkMode && <button onClick={() => void regenerateAgentPortalLink(agent)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700"><RefreshCw size={13}/> {agentLink ? 'New Link' : 'Generate Link'}</button>}{!agentLink && privateLinkMode && <span className="text-xs text-slate-400">Link unavailable</span>}</div></td>
                   </tr>;
                 })}
               </tbody>

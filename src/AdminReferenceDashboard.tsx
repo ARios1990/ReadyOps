@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
-  FileText, Filter, Home, Menu, Package, Pencil, Plus, Search, Settings,
+  ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
   ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3,
 } from 'lucide-react';
 import { supabase } from './supabase';
@@ -198,6 +198,30 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     else await store.refetch();
   }
 
+  function agentPortalLink(agent: Agent): string {
+    if (!agent.portal_slug || !agent.access_token) return '';
+    return `${window.location.origin}/agent/${agent.portal_slug}/${agent.access_token}`;
+  }
+
+  async function regenerateAgentPortalLink(agent: Agent) {
+    const existing = Boolean(agent.portal_slug && agent.access_token);
+    if (!window.confirm(existing
+      ? `Generate a new private lead link for ${agent.name}? The old link will stop working immediately.`
+      : `Generate a private lead link for ${agent.name}?`)) return;
+    const { data, error } = await supabase.rpc('regenerate_agent_portal_link', { p_agent_id: agent.id });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    await store.refetch();
+    const result = data as { portal_slug?: string; access_token?: string } | null;
+    if (result?.portal_slug && result?.access_token) {
+      const link = `${window.location.origin}/agent/${result.portal_slug}/${result.access_token}`;
+      try { await navigator.clipboard.writeText(link); } catch { /* copy is optional */ }
+      window.alert(`New agent portal link created for ${agent.name}. The link was copied when browser permissions allowed it.`);
+    }
+  }
+
   const currentSection = view;
   const shellClasses = [
     'readyops-ref-shell',
@@ -301,7 +325,8 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
                   <table className="readyops-ref-table"><thead><tr><th>AGENT NAME</th><th>TEAM</th><th>LINKED USER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{agentRows.map(agent => {
                     const team = store.teams.find(t => t.id === agent.team_id);
                     const linked = profiles.find(p => p.agent_id === agent.id);
-                    return <tr key={agent.id}><td>{agent.name}</td><td><TeamBadge team={team}/></td><td>{linked?.display_name || agent.email || '—'}</td><td><StatusBadge active={agent.active !== false}/></td><td><div className="readyops-ref-actions"><button onClick={() => openManage('agents')}><Pencil size={14}/></button><button className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></div></td></tr>;
+                    const portalLink = agentPortalLink(agent);
+                    return <tr key={agent.id}><td>{agent.name}</td><td><TeamBadge team={team}/></td><td>{linked?.display_name || agent.email || '—'}</td><td><StatusBadge active={agent.active !== false}/></td><td><div className="readyops-ref-actions">{portalLink && <><button title="Copy Agent Portal Link" onClick={() => void navigator.clipboard.writeText(portalLink)}><ClipboardCopy size={14}/></button><button title="Open Agent Lead Portal" onClick={() => window.open(portalLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={14}/></button></>}<button title={portalLink ? 'Generate New Agent Link' : 'Generate Agent Link'} onClick={() => void regenerateAgentPortalLink(agent)}>{portalLink ? <RefreshCw size={14}/> : <Link2 size={14}/>}</button><button title="Edit Agent" onClick={() => openManage('agents')}><Pencil size={14}/></button><button title="Delete Agent" className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></div></td></tr>;
                   })}</tbody></table>
                 )}
               </div>
