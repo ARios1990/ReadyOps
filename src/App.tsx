@@ -2,6 +2,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { LoginPage } from './LoginPage';
 import { Dashboard } from './Dashboard';
 import { AgentBookingPortal } from './AgentBookingPortal';
+import { ReadyModeCampaignRouter } from './ReadyModeCampaignRouter';
 import { CompanyPortalRoute } from './CompanyPortalRoute';
 import { RepresentativePortal } from './RepresentativePortal';
 import { PortalAdmin } from './PortalAdmin';
@@ -16,6 +17,7 @@ import { Loader2 } from 'lucide-react';
 function pathParts(): string[] { return window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent); }
 function PublicRoute() {
   const parts = pathParts();
+  if (parts[0] === 'readymode') return <ReadyModeCampaignRouter />;
   if (parts[0] === 'book' && parts[1]) return <AgentBookingPortal slug={parts[1]} />;
   if (parts[0] === 'agent' && parts[1] && parts[2]) return <AgentPortal slug={parts[1]} token={parts[2]} />;
   if (parts[0] === 'manager' && parts[1] && parts[2]) return <ManagerDashboard slug={parts[1]} token={parts[2]} />;
