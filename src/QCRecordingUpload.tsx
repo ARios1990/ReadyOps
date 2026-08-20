@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ClipboardCopy, ExternalLink, FileText, Headphones, Loader2, RefreshCw, Save, UploadCloud } from 'lucide-react';
+import { ClipboardCopy, ExternalLink, FileText, Headphones, Loader2, RefreshCw, Save, Sparkles, UploadCloud } from 'lucide-react';
 import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
 
@@ -12,6 +12,17 @@ type TranscriptRow = {
   summary: string | null;
   language: string | null;
   method: string | null;
+};
+
+type QualifyVerdict = 'qualified' | 'not-qualified' | 'needs-review';
+
+type QualifyResult = {
+  transcript?: string;
+  summary?: string;
+  qualified?: QualifyVerdict;
+  confidence?: number;
+  reasons?: string[];
+  error?: string;
 };
 
 type SpeechAlternativeLike = { transcript: string; confidence?: number };
@@ -146,6 +157,9 @@ export function QCRecordingUpload({
   const [transcribing, setTranscribing] = useState(false);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [transcriptStatus, setTranscriptStatus] = useState('');
+  const [aiQualifying, setAiQualifying] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiResult, setAiResult] = useState<QualifyResult | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -343,6 +357,27 @@ export function QCRecordingUpload({
     }
   }
 
+  async function transcribeAndQualify() {
+    setAiError('');
+    setAiResult(null);
+    setAiQualifying(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('transcribe-and-qualify', {
+        body: { lead_id: leadId },
+      });
+      const result = data as QualifyResult | null;
+      if (invokeError) throw new Error(result?.error || invokeError.message);
+      if (result?.error) throw new Error(result.error);
+      if (result?.transcript) setTranscript(result.transcript);
+      if (result?.summary) setSummary(result.summary);
+      setAiResult(result);
+    } catch (qualifyError) {
+      setAiError(qualifyError instanceof Error ? qualifyError.message : 'Unable to transcribe and qualify this call.');
+    } finally {
+      setAiQualifying(false);
+    }
+  }
+
   function rebuildSummary() {
     const nextSummary = buildRuleBasedSummary(transcript);
     setSummary(nextSummary);
@@ -384,10 +419,35 @@ export function QCRecordingUpload({
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2"><FileText size={16} className="text-slate-700"/><div><h4 className="text-sm font-black text-slate-900">Call Transcript</h4><p className="text-[11px] text-slate-500">QC/Admin only • {speechLanguage(language)}</p></div></div>
-          <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-            {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+              {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
+            </button>
+            <button type="button" disabled={aiQualifying} onClick={() => void transcribeAndQualify()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+              {aiQualifying ? <Loader2 size={13} className="animate-spin"/> : <Sparkles size={13}/>} {aiQualifying ? 'Transcribing & Qualifying…' : 'AI Transcribe & Qualify'}
+            </button>
+          </div>
         </div>
+        {aiError && <p className="mt-2 text-xs font-semibold text-red-700">{aiError}</p>}
+        {aiResult?.qualified && (
+          <div className="mt-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
+              aiResult.qualified === 'qualified'
+                ? 'bg-green-100 text-green-800'
+                : aiResult.qualified === 'not-qualified'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-amber-100 text-amber-800'
+            }`}>
+              {aiResult.qualified.replace('-', ' ')}
+              {typeof aiResult.confidence === 'number' && <span className="font-bold">• {Math.round(aiResult.confidence * 100)}%</span>}
+            </span>
+            {aiResult.reasons && aiResult.reasons.length > 0 && (
+              <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-slate-600">
+                {aiResult.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
         <p className="mt-2 text-[11px] text-slate-500">Uses free local Whisper AI in your browser first (no per-minute API charge), then browser speech recognition as a fallback. The summary remains rule-based and does not use an LLM.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
