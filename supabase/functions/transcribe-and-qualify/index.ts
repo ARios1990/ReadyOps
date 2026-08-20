@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const STORAGE_PREFIX = "storage://qc-recordings/";
+const TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
 const QUALIFICATION_MODEL = "gpt-4o-mini";
 
 type QualificationStatus = "qualified" | "not_qualified" | "needs_review";
@@ -47,9 +48,11 @@ Deno.serve(async (req: Request) => {
     // 2. Resolve a fetchable audio URL.
     const recordingUrl = String(lead.recording_url);
     let audioUrl = recordingUrl;
+    let recordingName = fileNameFromUrl(recordingUrl);
     if (recordingUrl.startsWith(STORAGE_PREFIX)) {
       const path = recordingUrl.slice(STORAGE_PREFIX.length);
       if (!path || path.includes("..")) return json({ error: "Invalid recording path" }, 400);
+      recordingName = fileNameFromPath(path);
       const { data: signed, error: signError } = await admin.storage
         .from("qc-recordings")
         .createSignedUrl(path, 60 * 10);
@@ -77,22 +80,25 @@ Deno.serve(async (req: Request) => {
     if (!audioResp.ok) return json({ error: `Unable to download recording (status ${audioResp.status})` }, 502);
     const audioBlob = await audioResp.blob();
     if (audioBlob.size === 0) return json({ error: "Recording is empty or unavailable" }, 502);
+    const contentType = (audioResp.headers.get("content-type") || audioBlob.type || "").split(";", 1)[0].trim().toLowerCase();
+    if (contentType === "text/html" || contentType === "application/json") {
+      return json({ error: "The recording link returned a web page instead of an audio file. Upload the MP3 directly and try again." }, 502);
+    }
+    recordingName = supportedAudioName(recordingName, contentType);
 
-    // 5. Transcribe with OpenAI Whisper.
+    // 5. Transcribe with OpenAI.
     const form = new FormData();
-    form.append("file", audioBlob, "recording.mp3");
-    form.append("model", "whisper-1");
-    const whisperResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    form.append("file", audioBlob, recordingName);
+    form.append("model", TRANSCRIPTION_MODEL);
+    form.append("response_format", "json");
+    const transcriptionResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${openaiKey}` },
       body: form,
     });
-    if (!whisperResp.ok) {
-      const errText = await whisperResp.text();
-      return json({ error: `Transcription failed: ${errText.slice(0, 300)}` }, 502);
-    }
-    const whisperJson = await whisperResp.json();
-    const transcript = String(whisperJson.text || "").trim();
+    if (!transcriptionResp.ok) return await openAIErrorResponse("Transcription", transcriptionResp);
+    const transcriptionJson = await transcriptionResp.json();
+    const transcript = String(transcriptionJson.text || "").trim();
     if (!transcript) return json({ error: "Transcription returned no text" }, 502);
 
     // 6. Qualify and summarize with OpenAI Structured Outputs.
@@ -155,10 +161,7 @@ ${transcript}`;
         store: false,
       }),
     });
-    if (!qualificationResp.ok) {
-      const errText = await qualificationResp.text();
-      return json({ error: `Qualification failed: ${errText.slice(0, 300)}` }, 502);
-    }
+    if (!qualificationResp.ok) return await openAIErrorResponse("Qualification", qualificationResp);
 
     const qualificationJson = await qualificationResp.json();
     const rawText = extractOutputText(qualificationJson);
@@ -212,9 +215,82 @@ ${transcript}`;
       qualification_status: qualificationStatus,
     });
   } catch (error) {
+    console.error("transcribe-and-qualify failed", error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 });
+
+function fileNameFromUrl(value: string): string {
+  try {
+    return fileNameFromPath(new URL(value).pathname);
+  } catch {
+    return fileNameFromPath(value);
+  }
+}
+
+function fileNameFromPath(value: string): string {
+  const name = value.split("/").pop()?.split("?")[0] || "recording";
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "-") || "recording";
+}
+
+function supportedAudioName(name: string, contentType: string): string {
+  if (/\.(flac|mp3|mp4|mpeg|mpga|m4a|ogg|wav|webm)$/i.test(name)) return name;
+  const extensionByType: Record<string, string> = {
+    "audio/flac": "flac",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/mpga": "mpga",
+    "audio/x-m4a": "m4a",
+    "audio/ogg": "ogg",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/webm": "webm",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+  };
+  return `${name.replace(/\.[^.]+$/, "") || "recording"}.${extensionByType[contentType] || "mp3"}`;
+}
+
+async function openAIErrorResponse(stage: "Transcription" | "Qualification", response: Response): Promise<Response> {
+  const requestId = response.headers.get("x-request-id") || undefined;
+  const raw = await response.text();
+  let code = "";
+  let message = "";
+  try {
+    const parsed = JSON.parse(raw);
+    code = String(parsed?.error?.code || parsed?.error?.type || "");
+    message = String(parsed?.error?.message || "");
+  } catch {
+    message = raw;
+  }
+
+  console.error(JSON.stringify({
+    stage: stage.toLowerCase(),
+    status: response.status,
+    code: code || undefined,
+    request_id: requestId,
+    message: message.slice(0, 500) || undefined,
+  }));
+
+  let friendly = message.trim() || `OpenAI returned status ${response.status}.`;
+  if (response.status === 401) {
+    friendly = "OpenAI rejected the API key. Replace the OPENAI_API_KEY Supabase secret with a valid OpenAI API key.";
+  } else if (response.status === 429 && (/quota|billing|credit/i.test(message) || code === "insufficient_quota")) {
+    friendly = "OpenAI API billing or credits are not active for this key. Add API billing/credits in the OpenAI Platform, then try again.";
+  } else if (response.status === 429) {
+    friendly = "OpenAI is rate-limiting requests. Wait a moment and try again.";
+  } else if (response.status === 403) {
+    friendly = "This OpenAI API key does not have permission to use the requested model.";
+  } else if (response.status === 404) {
+    friendly = "The requested OpenAI model is not available to this API project.";
+  }
+
+  return json({
+    error: `${stage} failed: ${friendly.slice(0, 500)}`,
+    code: code || `openai_${response.status}`,
+    request_id: requestId,
+  }, 502);
+}
 
 function extractOutputText(response: any): string {
   if (!Array.isArray(response?.output)) return "";
