@@ -8,7 +8,7 @@ import { AgentWeatherPreview, useWeeklyWeather } from './AgentWeatherPreview';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
-interface Location { id: string; label: string; state: string | null; timezone?: string | null; }
+interface Location { id: string; label: string; city: string | null; state: string | null; zip: string | null; timezone?: string | null; }
 interface PublicPortalData {
   company: {
     company: { id: string; name: string; slug: string; state: string | null; website: string | null };
@@ -93,7 +93,9 @@ function normalizePublicPortalData(value: unknown): PublicPortalData {
         return {
           id: asString(location.id),
           label: asString(location.label),
+          city: asNullableString(location.city),
           state: asNullableString(location.state),
+          zip: asNullableString(location.zip_code),
         };
       }).filter(location => location.id && location.label),
     },
@@ -179,8 +181,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     city: asString(formValues.city),
     state: asString(formValues.state),
     zip: asString(formValues.zip_code),
-    serviceArea: selectedServiceArea?.label,
+    serviceArea: selectedServiceArea?.city || selectedServiceArea?.label,
     serviceAreaState: selectedServiceArea?.state,
+    serviceAreaZip: selectedServiceArea?.zip,
   });
 
   async function loadPortal(nextLocationId = locationId) {
@@ -425,9 +428,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               const isFull = !day.closed && day.openings <= 0;
               return (
                 <div key={day.date} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <button onClick={() => setExpandedDate(expanded ? null : day.date)} className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 py-4 text-left sm:grid-cols-[1fr_minmax(190px,250px)_auto]">
+                  <button onClick={() => setExpandedDate(expanded ? null : day.date)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-left sm:grid-cols-[1fr_minmax(190px,250px)_auto]">
                     <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2"><CalendarDays size={18} className="text-slate-600" /></div><div><p className="font-bold">{day.day}</p><p className="text-xs text-slate-500">{formatDateShort(day.date)}</p></div></div>
-                    <AgentWeatherPreview weather={weeklyWeather.daily[day.date]} loading={weeklyWeather.loading} hasLocation={weeklyWeather.hasLocation} />
+                    <div className="col-span-2 row-start-2 rounded-xl bg-sky-50/70 px-3 py-2 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:bg-transparent sm:p-0"><AgentWeatherPreview weather={weeklyWeather.daily[day.date]} loading={weeklyWeather.loading} hasLocation={weeklyWeather.hasLocation} /></div>
                     <div className="text-right">{day.closed ? <span className="text-xs font-bold text-slate-400">CLOSED</span> : isFull ? <span className="text-xs font-bold text-red-600">FULL</span> : <><p className="text-sm font-bold text-emerald-600">{day.openings} Opening{day.openings === 1 ? '' : 's'}</p><p className="text-[11px] text-slate-400">{day.booked} booked</p></>}</div>
                   </button>
                   {expanded && !day.closed && <div className="border-t border-slate-100 bg-slate-50 p-3"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">{day.slots.map(slot => <button key={`${day.date}-${slot.start}`} disabled={slot.status !== 'available' || busy || (!settings.allowPublicBooking && !rescheduleMode)} onClick={() => void selectSlot(day, slot)} className={`rounded-xl border px-3 py-3 text-sm font-bold transition ${slot.status === 'available' ? 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'}`}><Clock3 size={14} className="mx-auto mb-1" />{formatTime(slot.start)}<span className="mt-1 block text-[10px] uppercase">{slot.status === 'available' ? 'Available' : slot.status}</span></button>)}</div></div>}

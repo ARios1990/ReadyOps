@@ -11,9 +11,23 @@ import { AdminSchedulingManager } from './AdminSchedulingManager';
 import { useScheduleStore } from './useScheduleStore';
 import type { CompanyLocation } from './types';
 
+// Admin RPC payloads are intentionally flexible because several legacy and
+// current database response shapes are rendered on this operations screen.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = Record<string, any>;
 type PackageDraft = { lead_target: string; amount_per_lead: string; package_total: string; payment_date: string; payment_status: string };
+type SlugEditorState = { companyId: string; companyName: string; value: string };
 const EMPTY_PACKAGE: PackageDraft = { lead_target: '', amount_per_lead: '', package_total: '', payment_date: '', payment_status: 'pending' };
+
+function normalizeSlug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
 
 export function PortalAdmin() {
   const store = useScheduleStore();
@@ -36,6 +50,8 @@ export function PortalAdmin() {
   const [inviteName, setInviteName] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [manager, setManager] = useState<{ companyId: string; mode: 'company' | 'locations'; locationId?: string } | null>(null);
+  const [slugEditor, setSlugEditor] = useState<SlugEditorState | null>(null);
+  const [slugSaving, setSlugSaving] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -122,6 +138,44 @@ export function PortalAdmin() {
     }
   }
 
+  function openSlugEditor(company: Obj) {
+    setError('');
+    setMessage('');
+    setSlugEditor({
+      companyId: String(company.company_id),
+      companyName: String(company.company_name || 'Company'),
+      value: String(company.public_slug || normalizeSlug(String(company.company_name || 'company'))),
+    });
+  }
+
+  async function saveCompanySlug() {
+    if (!slugEditor || slugSaving) return;
+    const publicSlug = normalizeSlug(slugEditor.value);
+    if (publicSlug.length < 2) {
+      setError('The company slug must contain at least two letters or numbers.');
+      return;
+    }
+
+    setSlugSaving(true);
+    setError('');
+    const { error: updateError } = await supabase.from('company_portal_settings').upsert({
+      company_id: slugEditor.companyId,
+      public_slug: publicSlug,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'company_id' });
+
+    if (updateError) {
+      setError(updateError.code === '23505'
+        ? `The slug “${publicSlug}” is already assigned to another company.`
+        : updateError.message);
+    } else {
+      setMessage(`Booking slug saved for ${slugEditor.companyName}: ${publicSlug}`);
+      setSlugEditor(null);
+      await load();
+    }
+    setSlugSaving(false);
+  }
+
   async function duplicateLocation(item: CompanyLocation) {
     const label = `${item.location_label} Copy ${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`;
     const source = Object.fromEntries(Object.entries(item).filter(([key]) => !['id', 'created_at', 'updated_at'].includes(key)));
@@ -155,29 +209,31 @@ export function PortalAdmin() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<Building2 />} label="Active / Incomplete Companies" value={totals.companies} /><Metric icon={<ShieldCheck />} label="QC Pending" value={totals.qc} /><Metric icon={<PackageCheck />} label="Package Leads Remaining" value={totals.remaining} /><Metric icon={<WalletCards />} label="Pending Payments" value={totals.pendingPayments} /></section>
       <section className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="flex-1"><h2 className="font-bold">New Company Signup Link</h2><p className="text-xs text-slate-500">Send this secure onboarding link to a new client. Their submission creates the company, portal links, default schedule, and optional package.</p></div><input value={inviteName} onChange={event => setInviteName(event.target.value)} placeholder="Company name (optional)" className="rounded-lg border px-3 py-2 text-sm" /><button onClick={() => void createInvite()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Link2 size={14} /> Create Signup Link</button></div>{inviteLink && <div className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3"><input readOnly value={inviteLink} className="min-w-0 flex-1 bg-transparent text-xs" /><button onClick={() => void copyText(inviteLink)} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"><Clipboard size={13} className="mr-1 inline" />Copy</button></div>}</section>
       <section className="rounded-2xl border bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-bold">Companies</h2><p className="text-xs text-slate-500">Expand a company for locations, packages, scheduling, reps, and qualifications.</p></div><select value={filter} onChange={event => setFilter(event.target.value as typeof filter)} className="rounded-lg border px-3 py-2 text-sm"><option value="active">Active / Package Incomplete</option><option value="pending-payment">Pending Payment</option><option value="all">All Returned Companies</option></select></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-sm"><thead><tr className="text-left text-[10px] uppercase text-slate-400"><th className="p-3">Company</th><th>Total Leads</th><th>QC Pending</th><th>Approved</th><th>Scheduled</th><th>Locations</th><th>Package</th><th>Remaining</th><th>Payment</th><th>Links</th></tr></thead><tbody>{visible.map(company => {
+        <div className="overflow-x-auto"><table className="w-full min-w-[1350px] text-sm"><thead><tr className="text-left text-[10px] uppercase text-slate-400"><th className="p-3">Company</th><th>Total Leads</th><th>QC Pending</th><th>Approved</th><th>Scheduled</th><th>Locations</th><th>Package</th><th>Remaining</th><th>Payment</th><th>Links & Slug</th></tr></thead><tbody>{visible.map(company => {
           const companyLocations = locations.filter(item => item.company_id === company.company_id);
           const activeScopeIds = packageScopes.filter(scope => scope.package_id === company.package?.id).map(scope => scope.location_id);
-          return <CompanyRow key={company.company_id} company={company} locations={companyLocations} expanded={expanded === company.company_id} onToggle={() => void toggleCompany(company)} detail={detail} agents={agents} locationAgents={locationAgents} representatives={representatives.filter(rep => rep.company_id === company.company_id)} settings={settings.find(item => item.company_id === company.company_id)} activeScopeIds={activeScopeIds} pkg={pkg} setPkg={setPkg} packageAllLocations={packageAllLocations} setPackageAllLocations={setPackageAllLocations} packageLocationIds={packageLocationIds} setPackageLocationIds={setPackageLocationIds} onCreatePackage={() => void createPackage(company.company_id)} onEditLocation={locationId => setManager({ companyId: company.company_id, mode: 'locations', locationId: locationId || undefined })} onEditCompany={() => setManager({ companyId: company.company_id, mode: 'company' })} onDuplicate={item => void duplicateLocation(item)} onSetActive={(item, active) => void setLocationActive(item, active)} />;
+          return <CompanyRow key={company.company_id} company={company} locations={companyLocations} expanded={expanded === company.company_id} onToggle={() => void toggleCompany(company)} detail={detail} agents={agents} locationAgents={locationAgents} representatives={representatives.filter(rep => rep.company_id === company.company_id)} settings={settings.find(item => item.company_id === company.company_id)} activeScopeIds={activeScopeIds} pkg={pkg} setPkg={setPkg} packageAllLocations={packageAllLocations} setPackageAllLocations={setPackageAllLocations} packageLocationIds={packageLocationIds} setPackageLocationIds={setPackageLocationIds} onCreatePackage={() => void createPackage(company.company_id)} onEditLocation={locationId => setManager({ companyId: company.company_id, mode: 'locations', locationId: locationId || undefined })} onEditCompany={() => setManager({ companyId: company.company_id, mode: 'company' })} onEditSlug={() => openSlugEditor(company)} onDuplicate={item => void duplicateLocation(item)} onSetActive={(item, active) => void setLocationActive(item, active)} />;
         })}</tbody></table></div>
       </section>
       <ReadyModeAgentTools agents={agents} companies={companies} />
     </main>
     {manager && <AdminSchedulingManager store={store} initialMode={manager.mode} initialCompanyId={manager.companyId} initialLocationId={manager.locationId} onClose={() => { setManager(null); void load(); }} />}
+    {slugEditor && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={() => !slugSaving && setSlugEditor(null)}><section role="dialog" aria-modal="true" aria-labelledby="company-slug-title" className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-2xl" onMouseDown={event => event.stopPropagation()}><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ReadyMode Company Variable</p><h2 id="company-slug-title" className="mt-1 text-lg font-black">Booking slug for {slugEditor.companyName}</h2><p className="mt-2 text-sm text-slate-500">Use this exact value for the company’s <strong>ReadyOpsSlug</strong> campaign variable. Changing an existing slug changes its booking URL.</p></div><label className="mt-4 block text-xs font-bold text-slate-600">Company slug<input autoFocus value={slugEditor.value} onChange={event => setSlugEditor({ ...slugEditor, value: normalizeSlug(event.target.value) })} onKeyDown={event => { if (event.key === 'Enter') void saveCompanySlug(); }} placeholder="company-name" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 font-mono text-sm outline-none focus:border-blue-400" /></label><p className="mt-2 text-xs text-slate-500">Booking URL: <span className="font-mono text-blue-700">{location.origin}/book/{normalizeSlug(slugEditor.value) || 'company-name'}</span></p><div className="mt-5 flex flex-wrap justify-end gap-2"><button disabled={slugSaving} onClick={() => setSlugEditor(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold text-slate-600 disabled:opacity-50">Cancel</button><button disabled={slugSaving || normalizeSlug(slugEditor.value).length < 2} onClick={() => void saveCompanySlug()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{slugSaving && <Loader2 size={15} className="animate-spin" />}{slugSaving ? 'Saving…' : 'Save Slug'}</button></div></section></div>}
   </div>;
 }
 
 type CompanyRowProps = {
-  company: Obj; locations: CompanyLocation[]; expanded: boolean; onToggle: () => void; detail: Obj[]; agents: Obj[]; locationAgents: Obj[]; representatives: Obj[]; settings?: Obj; activeScopeIds: string[]; pkg: PackageDraft; setPkg: (value: PackageDraft) => void; packageAllLocations: boolean; setPackageAllLocations: (value: boolean) => void; packageLocationIds: string[]; setPackageLocationIds: (value: string[]) => void; onCreatePackage: () => void; onEditLocation: (locationId: string) => void; onEditCompany: () => void; onDuplicate: (item: CompanyLocation) => void; onSetActive: (item: CompanyLocation, active: boolean) => void;
+  company: Obj; locations: CompanyLocation[]; expanded: boolean; onToggle: () => void; detail: Obj[]; agents: Obj[]; locationAgents: Obj[]; representatives: Obj[]; settings?: Obj; activeScopeIds: string[]; pkg: PackageDraft; setPkg: (value: PackageDraft) => void; packageAllLocations: boolean; setPackageAllLocations: (value: boolean) => void; packageLocationIds: string[]; setPackageLocationIds: (value: string[]) => void; onCreatePackage: () => void; onEditLocation: (locationId: string) => void; onEditCompany: () => void; onEditSlug: () => void; onDuplicate: (item: CompanyLocation) => void; onSetActive: (item: CompanyLocation, active: boolean) => void;
 };
 
 function CompanyRow(props: CompanyRowProps) {
-  const { company, locations, expanded, onToggle, detail, agents, locationAgents, representatives, settings, activeScopeIds, pkg, setPkg, packageAllLocations, setPackageAllLocations, packageLocationIds, setPackageLocationIds, onCreatePackage, onEditLocation, onEditCompany, onDuplicate, onSetActive } = props;
-  const agentLink = `${location.origin}${company.agent_link}`;
-  const companyLink = `${location.origin}${company.company_link}`;
+  const { company, locations, expanded, onToggle, detail, agents, locationAgents, representatives, settings, activeScopeIds, pkg, setPkg, packageAllLocations, setPackageAllLocations, packageLocationIds, setPackageLocationIds, onCreatePackage, onEditLocation, onEditCompany, onEditSlug, onDuplicate, onSetActive } = props;
+  const publicSlug = String(company.public_slug || '').trim();
+  const agentLink = company.agent_link ? `${location.origin}${company.agent_link}` : '';
+  const companyLink = company.company_link ? `${location.origin}${company.company_link}` : '';
   const activeLocations = locations.filter(item => item.active !== false);
   return <>
-    <tr onClick={onToggle} className="cursor-pointer border-t hover:bg-blue-50/30"><td className="p-3"><div className="flex items-center gap-2">{expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}<div><div className="font-bold">{company.company_name}</div><div className="text-[11px] text-slate-400">{company.state || ''} • {company.account_status}</div></div></div></td><td>{company.total_leads}</td><td><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">{company.qc_pending}</span></td><td>{company.approved_leads}</td><td>{company.scheduled_upcoming}</td><td>{activeLocations.length}</td><td>{company.package ? `${company.package.delivered_leads}/${company.package.lead_target}` : 'No active package'}</td><td className="font-bold">{company.package?.pending_leads ?? '—'}</td><td>{company.package ? <div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${company.package.payment_status === 'complete' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{company.package.payment_status === 'complete' ? 'PAID' : 'PENDING'}</span><div className="mt-1 text-[10px] text-slate-400">{company.package.payment_date || 'No date'}</div></div> : '—'}</td><td onClick={event => event.stopPropagation()}><div className="flex gap-1"><button onClick={() => void copyText(agentLink)} title="Copy agent booking link" className="rounded border p-1.5"><Clipboard size={12} /></button><button onClick={() => window.open(companyLink, '_blank', 'noopener,noreferrer')} title="Open company portal" className="rounded bg-slate-900 p-1.5 text-white"><ExternalLink size={12} /></button></div></td></tr>
+    <tr onClick={onToggle} className="cursor-pointer border-t hover:bg-blue-50/30"><td className="p-3"><div className="flex items-center gap-2">{expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}<div><div className="font-bold">{company.company_name}</div><div className="text-[11px] text-slate-400">{company.state || ''} • {company.account_status}</div></div></div></td><td>{company.total_leads}</td><td><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">{company.qc_pending}</span></td><td>{company.approved_leads}</td><td>{company.scheduled_upcoming}</td><td>{activeLocations.length}</td><td>{company.package ? `${company.package.delivered_leads}/${company.package.lead_target}` : 'No active package'}</td><td className="font-bold">{company.package?.pending_leads ?? '—'}</td><td>{company.package ? <div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${company.package.payment_status === 'complete' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{company.package.payment_status === 'complete' ? 'PAID' : 'PENDING'}</span><div className="mt-1 text-[10px] text-slate-400">{company.package.payment_date || 'No date'}</div></div> : '—'}</td><td onClick={event => event.stopPropagation()}><div className="flex flex-wrap gap-1"><button disabled={!agentLink} onClick={() => void copyText(agentLink)} title={agentLink ? 'Copy agent booking link' : 'Add a slug before copying the booking link'} className="rounded border p-1.5 disabled:cursor-not-allowed disabled:opacity-40"><Clipboard size={12} /></button><button disabled={!companyLink} onClick={() => companyLink && window.open(companyLink, '_blank', 'noopener,noreferrer')} title={companyLink ? 'Open company portal' : 'Add a slug before opening the company portal'} className="rounded bg-slate-900 p-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={12} /></button><button onClick={onEditSlug} title={publicSlug ? `Edit slug: ${publicSlug}` : 'Add company slug'} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-bold text-blue-700"><Link2 size={12} /> {publicSlug ? 'Edit Slug' : 'Add Slug'}</button></div>{publicSlug && <div className="mt-1 max-w-48 truncate font-mono text-[9px] text-slate-400" title={publicSlug}>{publicSlug}</div>}</td></tr>
     {expanded && <tr className="border-t bg-slate-50"><td colSpan={10} className="p-4"><div className="space-y-4">
       <section className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[1fr_auto]"><div><h3 className="font-bold">Overview</h3><p className="mt-1 text-xs text-slate-500">{company.contact_name || 'No contact'} • {company.phone || 'No phone'} • {company.email || 'No email'}</p></div><button onClick={onEditCompany} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold"><Pencil size={13} /> Edit Company</button></section>
       <LocationSection company={company} locations={locations} agents={agents} locationAgents={locationAgents} onEditLocation={onEditLocation} onDuplicate={onDuplicate} onSetActive={onSetActive} />
