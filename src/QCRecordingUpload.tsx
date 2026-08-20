@@ -19,10 +19,16 @@ type QualifyVerdict = 'qualified' | 'not-qualified' | 'needs-review';
 type QualifyResult = {
   transcript?: string;
   summary?: string;
-  qualified?: QualifyVerdict;
-  confidence?: number;
+  qualified: QualifyVerdict;
+  confidence?: number | string;
   reasons?: string[];
   error?: string;
+};
+
+type QualifyResponse = Omit<QualifyResult, 'qualified' | 'confidence'> & {
+  qualified?: boolean | QualifyVerdict | null;
+  qualification_status?: string | null;
+  confidence?: number | string | null;
 };
 
 type SpeechAlternativeLike = { transcript: string; confidence?: number };
@@ -67,6 +73,38 @@ function storagePath(value: string): string | null {
 
 function safeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-');
+}
+
+function normalizeQualifyResult(result: QualifyResponse): QualifyResult {
+  const responseStatus = typeof result.qualified === 'string' ? result.qualified : '';
+  const storedStatus = (result.qualification_status || '').replace(/_/g, '-');
+  const status = responseStatus || storedStatus;
+  const qualified: QualifyVerdict = result.qualified === true || status === 'qualified'
+    ? 'qualified'
+    : result.qualified === false || status === 'not-qualified'
+    ? 'not-qualified'
+    : 'needs-review';
+
+  return {
+    transcript: result.transcript,
+    summary: result.summary,
+    qualified,
+    confidence: result.confidence ?? undefined,
+    reasons: result.reasons,
+    error: result.error,
+  };
+}
+
+function confidenceLabel(confidence?: number | string): string {
+  if (typeof confidence === 'number') {
+    const percent = confidence <= 1 ? confidence * 100 : confidence;
+    return `${Math.round(percent)}%`;
+  }
+  if (typeof confidence === 'string' && confidence.trim()) {
+    const clean = confidence.trim();
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+  return '';
 }
 
 function speechLanguage(language?: string | null): string {
@@ -365,11 +403,13 @@ export function QCRecordingUpload({
       const { data, error: invokeError } = await supabase.functions.invoke('transcribe-and-qualify', {
         body: { lead_id: leadId },
       });
-      const result = data as QualifyResult | null;
-      if (invokeError) throw new Error(result?.error || invokeError.message);
-      if (result?.error) throw new Error(result.error);
-      if (result?.transcript) setTranscript(result.transcript);
-      if (result?.summary) setSummary(result.summary);
+      const response = data as QualifyResponse | null;
+      if (invokeError) throw new Error(response?.error || invokeError.message);
+      if (response?.error) throw new Error(response.error);
+      if (!response) throw new Error('The AI function returned an empty response.');
+      const result = normalizeQualifyResult(response);
+      if (result.transcript) setTranscript(result.transcript);
+      if (result.summary) setSummary(result.summary);
       setAiResult(result);
     } catch (qualifyError) {
       setAiError(qualifyError instanceof Error ? qualifyError.message : 'Unable to transcribe and qualify this call.');
@@ -429,7 +469,7 @@ export function QCRecordingUpload({
           </div>
         </div>
         {aiError && <p className="mt-2 text-xs font-semibold text-red-700">{aiError}</p>}
-        {aiResult?.qualified && (
+        {aiResult && (
           <div className="mt-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
               aiResult.qualified === 'qualified'
@@ -439,7 +479,7 @@ export function QCRecordingUpload({
                 : 'bg-amber-100 text-amber-800'
             }`}>
               {aiResult.qualified.replace('-', ' ')}
-              {typeof aiResult.confidence === 'number' && <span className="font-bold">• {Math.round(aiResult.confidence * 100)}%</span>}
+              {confidenceLabel(aiResult.confidence) && <span className="font-bold">• {confidenceLabel(aiResult.confidence)}</span>}
             </span>
             {aiResult.reasons && aiResult.reasons.length > 0 && (
               <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-slate-600">
