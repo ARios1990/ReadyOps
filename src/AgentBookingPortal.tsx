@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { DynamicLeadForm, PortalFormSection } from './DynamicLeadForm';
 import { addDays, buildLeadTemplate, copyText, formatDateLong, formatDateShort, formatTime, getPortalSessionId, localDate, rpcError, startOfWeek } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
+import { AgentWeatherPreview, useWeeklyWeather } from './AgentWeatherPreview';
 
 interface Slot { start: string; end: string; status: string; capacity: number; bookedCount: number; }
 interface DayAvailability { day: string; date: string; slots: Slot[]; booked: number; openings: number; closed: boolean; }
@@ -169,6 +170,18 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
   const startDate = localDate(weekStart);
   const endDate = localDate(addDays(weekStart, 6));
+  const selectedServiceArea = useMemo(() => {
+    if (!portal?.company.locations.length) return null;
+    if (locationId) return portal.company.locations.find(location => location.id === locationId) || null;
+    return portal.company.locations.length === 1 ? portal.company.locations[0] : null;
+  }, [portal, locationId]);
+  const weeklyWeather = useWeeklyWeather({
+    city: asString(formValues.city),
+    state: asString(formValues.state),
+    zip: asString(formValues.zip_code),
+    serviceArea: selectedServiceArea?.label,
+    serviceAreaState: selectedServiceArea?.state,
+  });
 
   async function loadPortal(nextLocationId = locationId) {
     setLoading(true);
@@ -325,7 +338,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     setBusy(false);
   }
 
-
   if (loading && !portal) return <FullPageMessage icon={<Loader2 className="animate-spin" />} title="Loading availability..." />;
   if (!portal) return <FullPageMessage icon={<AlertTriangle />} title="Booking portal unavailable" detail={error || 'This link may be disabled.'} />;
 
@@ -403,7 +415,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
             <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600"><ArrowLeft size={18} /></button>
-            <div className="text-center"><p className="text-xs font-semibold text-slate-500">{rescheduleMode ? 'Choose a new appointment time' : reservation ? 'Change Time / Weekly Availability' : 'Weekly Availability'}</p><h2 className="font-bold">{weekLabel}</h2></div>
+            <div className="text-center"><p className="text-xs font-semibold text-slate-500">{rescheduleMode ? 'Choose a new appointment time' : reservation ? 'Change Time / Weekly Availability' : 'Weekly Availability'}</p><h2 className="font-bold">{weekLabel}</h2>{weeklyWeather.locationLabel && <p className="mt-0.5 text-[10px] font-semibold text-sky-600">Forecast: {weeklyWeather.locationLabel}</p>}</div>
             <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600"><ArrowRight size={18} /></button>
           </div>
 
@@ -413,8 +425,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               const isFull = !day.closed && day.openings <= 0;
               return (
                 <div key={day.date} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <button onClick={() => setExpandedDate(expanded ? null : day.date)} className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left">
+                  <button onClick={() => setExpandedDate(expanded ? null : day.date)} className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 py-4 text-left sm:grid-cols-[1fr_minmax(190px,250px)_auto]">
                     <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2"><CalendarDays size={18} className="text-slate-600" /></div><div><p className="font-bold">{day.day}</p><p className="text-xs text-slate-500">{formatDateShort(day.date)}</p></div></div>
+                    <AgentWeatherPreview weather={weeklyWeather.daily[day.date]} loading={weeklyWeather.loading} hasLocation={weeklyWeather.hasLocation} />
                     <div className="text-right">{day.closed ? <span className="text-xs font-bold text-slate-400">CLOSED</span> : isFull ? <span className="text-xs font-bold text-red-600">FULL</span> : <><p className="text-sm font-bold text-emerald-600">{day.openings} Opening{day.openings === 1 ? '' : 's'}</p><p className="text-[11px] text-slate-400">{day.booked} booked</p></>}</div>
                   </button>
                   {expanded && !day.closed && <div className="border-t border-slate-100 bg-slate-50 p-3"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">{day.slots.map(slot => <button key={`${day.date}-${slot.start}`} disabled={slot.status !== 'available' || busy || (!settings.allowPublicBooking && !rescheduleMode)} onClick={() => void selectSlot(day, slot)} className={`rounded-xl border px-3 py-3 text-sm font-bold transition ${slot.status === 'available' ? 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'}`}><Clock3 size={14} className="mx-auto mb-1" />{formatTime(slot.start)}<span className="mt-1 block text-[10px] uppercase">{slot.status === 'available' ? 'Available' : slot.status}</span></button>)}</div></div>}
@@ -422,6 +435,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               );
             })}
           </div>
+          {weeklyWeather.error && <p className="mt-2 text-center text-[10px] font-semibold text-slate-400">{weeklyWeather.error}</p>}
         </section>
 
         {reservation && !confirmation && (
@@ -438,7 +452,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 function FullPageMessage({ icon, title, detail }: { icon: React.ReactNode; title: string; detail?: string }) {
   return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6"><div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">{icon}</div><h1 className="font-bold text-slate-900">{title}</h1>{detail && <p className="mt-2 text-sm text-slate-500">{detail}</p>}</div></div>;
 }
-
 
 function readReadyModePrefill(): { agent_name: string; values: Record<string, unknown> } {
   const q = new URLSearchParams(window.location.search);
