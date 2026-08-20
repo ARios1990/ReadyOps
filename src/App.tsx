@@ -13,6 +13,8 @@ import { QCQueue } from './QCQueue';
 import { ResetPasswordPage } from './ResetPasswordPage';
 import { ThemeProvider, ThemeToggle } from './ThemeContext';
 import { Loader2 } from 'lucide-react';
+import { usePresenceTracker } from './usePresenceTracker';
+import { ActiveUsers } from './ActiveUsers';
 
 function pathParts(): string[] { return window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent); }
 function PublicRoute() {
@@ -33,8 +35,10 @@ function FloatingThemeControl() {
 
 function AppContent() {
   const { session, profile, loading } = useAuth();
+  usePresenceTracker(session && profile ? session.user.id : null);
   const parts = pathParts();
   const portalAdminRequested = parts[0] === 'admin' && parts[1] === 'portals';
+  const activeUsersRequested = parts[0] === 'admin' && parts[1] === 'active-users';
   const qcRequested = parts[0] === 'qc';
   const managerRequested = parts[0] === 'manager';
   const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
@@ -43,6 +47,10 @@ function AppContent() {
   if (isResetPasswordRoute) return <><FloatingThemeControl /><ResetPasswordPage /></>;
   if (!session) return <><FloatingThemeControl /><LoginPage /></>;
 
+  if (activeUsersRequested) {
+    if (profile?.role !== 'admin') return <AccessDenied />;
+    return <><FloatingThemeControl /><ActiveUsers /></>;
+  }
   if (portalAdminRequested) {
     if (profile?.role !== 'admin') return <AccessDenied />;
     return <><FloatingThemeControl /><PortalAdmin /></>;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
-  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3,
+  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3, Wifi,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -53,6 +53,7 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Managers', UsersRound],
   ['teams', 'Teams', UsersRound],
+  ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
@@ -170,6 +171,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     else if (key === 'reports') setView('reports');
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
+    else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'settings') openManage('companies');
     else if (key === 'leads') { setView('overview'); scrollStaff(); }
     else openManage();
