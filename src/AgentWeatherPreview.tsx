@@ -118,18 +118,20 @@ export function useWeeklyWeather({
   zip,
   serviceArea,
   serviceAreaState,
+  serviceAreaZip,
 }: {
   city?: string | null;
   state?: string | null;
   zip?: string | null;
   serviceArea?: string | null;
   serviceAreaState?: string | null;
+  serviceAreaZip?: string | null;
 }) {
   const search = useMemo(() => {
     const leadLocation = normalizeSearch([city, state, zip]);
     if (leadLocation) return leadLocation;
-    return normalizeSearch([serviceArea, serviceAreaState]);
-  }, [city, state, zip, serviceArea, serviceAreaState]);
+    return normalizeSearch([serviceArea, serviceAreaState, serviceAreaZip]);
+  }, [city, state, zip, serviceArea, serviceAreaState, serviceAreaZip]);
 
   const [daily, setDaily] = useState<Record<string, DailyWeather>>({});
   const [locationLabel, setLocationLabel] = useState('');
@@ -231,19 +233,19 @@ export function AppointmentWeatherBadge({
 
 export function AgentWeatherPreview({ weather, loading, hasLocation }: { weather?: DailyWeather; loading: boolean; hasLocation: boolean }) {
   if (loading) {
-    return <div className="hidden min-w-44 items-center justify-center gap-2 text-xs font-semibold text-slate-400 sm:flex"><Loader2 size={14} className="animate-spin" /> Weather</div>;
+    return <div className="flex min-w-0 items-center justify-center gap-2 text-xs font-semibold text-slate-400"><Loader2 size={14} className="animate-spin" /> Weather</div>;
   }
   if (!hasLocation) {
-    return <div className="hidden min-w-44 text-center text-[11px] font-semibold text-slate-400 sm:block">Select area for weather</div>;
+    return <div className="min-w-0 text-center text-[11px] font-semibold text-slate-400">Add city/ZIP or select an area for weather</div>;
   }
   if (!weather) {
-    return <div className="hidden min-w-44 text-center text-[11px] font-semibold text-slate-400 sm:block">Forecast not available yet</div>;
+    return <div className="min-w-0 text-center text-[11px] font-semibold text-slate-400">Forecast not available yet</div>;
   }
 
   const meta = weatherMeta(weather.weatherCode);
   const quality = roofingQuality(weather);
   return (
-    <div className="hidden min-w-48 flex-col items-center justify-center text-center sm:flex">
+    <div className="flex min-w-0 flex-col items-center justify-center text-center">
       <div className="flex items-center gap-1.5 text-xs font-black text-slate-700">
         <span className="text-sky-600">{meta.icon}</span>
         <span>{Math.round(weather.tempMaxF)}°</span>
