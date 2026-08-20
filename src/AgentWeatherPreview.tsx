@@ -181,6 +181,54 @@ export function useWeeklyWeather({
   return { daily, locationLabel, loading, error, hasLocation: Boolean(search) };
 }
 
+export function useAppointmentWeather({
+  date,
+  city,
+  state,
+  zip,
+}: {
+  date: string;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}) {
+  const weekly = useWeeklyWeather({ city, state, zip });
+  return { weather: weekly.daily[date], loading: weekly.loading, hasLocation: weekly.hasLocation, error: weekly.error, locationLabel: weekly.locationLabel };
+}
+
+export function AppointmentWeatherBadge({
+  date,
+  city,
+  state,
+  zip,
+  size = 'sm',
+}: {
+  date: string;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  size?: 'sm' | 'lg';
+}) {
+  const { weather, loading, hasLocation } = useAppointmentWeather({ date, city, state, zip });
+
+  if (!hasLocation) return null;
+  if (loading) return <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400"><Loader2 size={12} className="animate-spin" /> Weather</span>;
+  if (!weather) return null;
+
+  const meta = weatherMeta(weather.weatherCode);
+  const quality = roofingQuality(weather);
+  const base = size === 'lg' ? 'text-xs' : 'text-[11px]';
+  return (
+    <div className={`inline-flex flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-semibold ${base} ${qualityClasses(quality)}`}>
+      <span className="text-sky-600">{meta.icon}</span>
+      <span className="font-black">{Math.round(weather.tempMaxF)}°</span>
+      <span>• {Math.round(weather.rainChance)}% rain</span>
+      <span className="inline-flex items-center gap-1"><Wind size={11} /> {Math.round(weather.windMph)} mph</span>
+      <span className={`rounded-full border px-2 py-0.5 font-black ${qualityClasses(quality)}`}>{qualityLabel(quality)}</span>
+    </div>
+  );
+}
+
 export function AgentWeatherPreview({ weather, loading, hasLocation }: { weather?: DailyWeather; loading: boolean; hasLocation: boolean }) {
   if (loading) {
     return <div className="hidden min-w-44 items-center justify-center gap-2 text-xs font-semibold text-slate-400 sm:flex"><Loader2 size={14} className="animate-spin" /> Weather</div>;
