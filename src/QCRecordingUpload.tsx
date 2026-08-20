@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { ClipboardCopy, ExternalLink, FileText, Headphones, Loader2, RefreshCw, Save, Sparkles, UploadCloud } from 'lucide-react';
 import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
@@ -93,6 +94,19 @@ function normalizeQualifyResult(result: QualifyResponse): QualifyResult {
     reasons: result.reasons,
     error: result.error,
   };
+}
+
+async function functionErrorMessage(error: unknown, response: QualifyResponse | null): Promise<string> {
+  if (response?.error) return response.error;
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json() as { error?: unknown };
+      if (typeof payload?.error === 'string' && payload.error.trim()) return payload.error.trim();
+    } catch {
+      // Fall through to the SDK message when the function did not return JSON.
+    }
+  }
+  return error instanceof Error ? error.message : 'Unable to transcribe and qualify this call.';
 }
 
 function confidenceLabel(confidence?: number | string): string {
@@ -404,7 +418,7 @@ export function QCRecordingUpload({
         body: { lead_id: leadId },
       });
       const response = data as QualifyResponse | null;
-      if (invokeError) throw new Error(response?.error || invokeError.message);
+      if (invokeError) throw new Error(await functionErrorMessage(invokeError, response));
       if (response?.error) throw new Error(response.error);
       if (!response) throw new Error('The AI function returned an empty response.');
       const result = normalizeQualifyResult(response);
