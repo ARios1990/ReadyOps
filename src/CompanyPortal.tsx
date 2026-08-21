@@ -7,6 +7,7 @@ import { READYOPS_LOGO_DATA_URI } from './brand';
 import { ClientLeadTemplate } from './ClientLeadTemplate';
 import { SharedRecordingPlayer } from './SharedRecordingPlayer';
 import { AppointmentWeatherBadge } from './AgentWeatherPreview';
+import { useCompanyPortalPresence } from './useCompanyPortalPresence';
 
 interface Location { id: string; location_label: string; state: string | null; }
 interface ScheduleRule { id: string; location_id: string | null; day_of_week: number; is_open: boolean; start_time: string; end_time: string; slot_minutes: number; max_per_slot: number; max_per_day: number; }
@@ -59,6 +60,8 @@ export function CompanyPortal({ companyId, token }: { companyId: string; token: 
   const [newException, setNewException] = useState({ exception_date: '', is_closed: true, start_time: '09:00', end_time: '18:00', note: '', location_id: '' });
   const [scheduleLocation, setScheduleLocation] = useState<string>('');
   const [selectedDay, setSelectedDay] = useState(() => localDate(new Date()));
+
+  useCompanyPortalPresence(companyId, token, tab);
 
   const windowStart = localDate(addDays(startOfWeek(), -7));
   const windowEnd = localDate(addDays(startOfWeek(), 28));
