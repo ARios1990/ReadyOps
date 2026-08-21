@@ -29,7 +29,7 @@ export function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<string | undefined>(undefined);
-  const [adminView, setAdminView] = useState<'overview' | 'slots'>(() => initialParams.get('view') === 'slots' ? 'slots' : 'overview');
+  const [adminView, setAdminView] = useState<'overview' | 'slots'>(() => ['appointments', 'slots'].includes(initialParams.get('view') || '') ? 'slots' : 'overview');
   const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState(() => scheduleWeekStart());
 
   useEffect(() => {
@@ -286,12 +286,12 @@ export function Dashboard() {
             <button onClick={() => setAdminView('overview')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'overview' ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Overview</button>
             <button onClick={() => { window.location.href = '/qc'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-50">QC Queue</button>
             <button onClick={() => { window.location.href = '/admin/portals'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Companies & Packages</button>
-            <button onClick={() => setAdminView('slots')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'slots' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Time Slots</button>
+            <button onClick={() => setAdminView('slots')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'slots' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Appointments</button>
           </nav>
         )}
 
         {isAdmin && adminView === 'overview' && (
-          <AdminOperationsHome onOpenTimeSlots={() => setAdminView('slots')} />
+          <AdminOperationsHome onOpenAppointments={() => setAdminView('slots')} />
         )}
 
         {(!isAdmin || adminView === 'slots') && (<>
@@ -531,7 +531,7 @@ export function Dashboard() {
 
         <div className="mt-4 text-center text-xs text-gray-400">
           {isAdmin
-            ? 'Time Slots -- manage weekly blocks and current-week appointment capacity.'
+            ? 'Appointments — manage weekly availability and current-week appointment capacity.'
             : 'Agent -- book open slots for your team\'s companies. Changes sync live.'}
         </div>
         </>)}

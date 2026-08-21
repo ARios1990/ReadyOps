@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
-  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3,
+  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3, Wifi,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -44,8 +44,7 @@ const SIDEBAR_STORAGE_KEY = 'readyops-sidebar-collapsed';
 const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['overview', 'Overview', Home],
   ['qc', 'QC Queue', ShieldCheck],
-  ['companies', 'Companies & Packages', Building2],
-  ['slots', 'Time Slots', CalendarDays],
+  ['companies', 'Companies & Scheduling', Building2],
   ['leads', 'Leads', FileText],
   ['appointments', 'Appointments', CalendarDays],
 ] as const;
@@ -53,6 +52,7 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Managers', UsersRound],
   ['teams', 'Teams', UsersRound],
+  ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
@@ -163,13 +163,14 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     closeMobileSidebar();
     if (key === 'overview') setView('overview');
     else if (key === 'qc') window.location.href = '/qc';
-    else if (key === 'companies') window.location.href = '/admin/portals';
+    else if (key === 'companies') window.location.href = '/admin/operations';
     else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
     else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
     else if (key === 'reports') setView('reports');
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
+    else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'settings') openManage('companies');
     else if (key === 'leads') { setView('overview'); scrollStaff(); }
     else openManage();
@@ -340,7 +341,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
           ) : (
             <section className="readyops-ref-slots-view">
               <PageHeader
-                title="Time Slots"
+                title="Appointments"
                 subtitle="Scheduling"
                 actions={(
                   <>

@@ -475,7 +475,7 @@ export function AdminSchedulingManager({ store, initialMode = 'locations', initi
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="mr-auto">
                     <h3 className="font-black text-slate-900">Locations / Offices / Service Areas</h3>
-                    <p className="text-xs text-slate-500">Each location prints as its own row on Time Slots and has independent weekly slot blocks.</p>
+                    <p className="text-xs text-slate-500">Each location appears as its own appointment-availability row and has independent weekly blocks.</p>
                   </div>
                   <button
                     onClick={startNewLocation}
