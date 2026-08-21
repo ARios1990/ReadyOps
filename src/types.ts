@@ -4,7 +4,7 @@ export interface CompanyLocation { id:string; company_id:string; location_label:
 export interface CompanyTeam { id:string; company_id:string; team_id:string; }
 export interface CompanyLocationAgent { id:string; location_id:string; agent_id:string; created_at?:string; }
 export interface Agent { id:string; name:string; team_id:string; email?:string|null; portal_slug?:string|null; access_token?:string|null; active?:boolean; }
-export interface Profile { id:string; role:'admin'|'agent'|'qc'|'manager'; agent_id:string|null; team_id?:string|null; display_name:string; email?:string|null; }
+export interface Profile { id:string; role:'admin'|'agent'|'qc'|'manager'|'company'; agent_id:string|null; team_id?:string|null; display_name:string; email?:string|null; }
 export interface CompanyBooking { id:string; company_id:string; location_id:string|null; day:string; time_slot:string; booked_by:string|null; created_at:string; }
 export interface PortalAppointment { id:string; company_id:string; location_id:string|null; appointment_date:string; start_time:string; status:string; }
 export interface CompanyScheduleException { id:string; company_id:string; location_id:string|null; exception_date:string; is_closed:boolean; start_time:string|null; end_time:string|null; note?:string|null; }

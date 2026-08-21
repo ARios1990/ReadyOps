@@ -63,7 +63,7 @@ type DetailRow = AppointmentRow & { lead?: LeadRow };
 
 type Tone = 'blue' | 'amber' | 'emerald' | 'violet' | 'cyan' | 'red' | 'slate';
 
-export function AdminOperationsHome({ onOpenTimeSlots }: { onOpenTimeSlots: () => void }) {
+export function AdminOperationsHome({ onOpenAppointments }: { onOpenAppointments: () => void }) {
   const [companies, setCompanies] = useState<CompanyOps[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -165,7 +165,7 @@ export function AdminOperationsHome({ onOpenTimeSlots }: { onOpenTimeSlots: () =
         <div className="flex flex-wrap gap-2">
           <button onClick={() => { window.location.href = '/qc'; }} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white"><ShieldCheck size={16}/> QC Queue</button>
           <button onClick={() => { window.location.href = '/admin/portals'; }} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white ring-1 ring-white/20"><Building2 size={16}/> Companies & Packages</button>
-          <button onClick={onOpenTimeSlots} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900"><CalendarDays size={16}/> Time Slots</button>
+          <button onClick={onOpenAppointments} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900"><CalendarDays size={16}/> Appointments</button>
         </div>
       </div>
     </section>

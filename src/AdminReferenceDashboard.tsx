@@ -44,8 +44,7 @@ const SIDEBAR_STORAGE_KEY = 'readyops-sidebar-collapsed';
 const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['overview', 'Overview', Home],
   ['qc', 'QC Queue', ShieldCheck],
-  ['companies', 'Companies & Packages', Building2],
-  ['slots', 'Time Slots', CalendarDays],
+  ['companies', 'Companies & Scheduling', Building2],
   ['leads', 'Leads', FileText],
   ['appointments', 'Appointments', CalendarDays],
 ] as const;
@@ -164,7 +163,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     closeMobileSidebar();
     if (key === 'overview') setView('overview');
     else if (key === 'qc') window.location.href = '/qc';
-    else if (key === 'companies') window.location.href = '/admin/portals';
+    else if (key === 'companies') window.location.href = '/admin/operations';
     else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
     else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
@@ -342,7 +341,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
           ) : (
             <section className="readyops-ref-slots-view">
               <PageHeader
-                title="Time Slots"
+                title="Appointments"
                 subtitle="Scheduling"
                 actions={(
                   <>

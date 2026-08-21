@@ -37,7 +37,7 @@ function AppContent() {
   const { session, profile, loading } = useAuth();
   usePresenceTracker(session && profile ? session.user.id : null);
   const parts = pathParts();
-  const portalAdminRequested = parts[0] === 'admin' && parts[1] === 'portals';
+  const portalAdminRequested = parts[0] === 'admin' && ['portals', 'operations'].includes(parts[1] || '');
   const activeUsersRequested = parts[0] === 'admin' && parts[1] === 'active-users';
   const qcRequested = parts[0] === 'qc';
   const managerRequested = parts[0] === 'manager';
@@ -56,7 +56,7 @@ function AppContent() {
     return <><FloatingThemeControl /><PortalAdmin /></>;
   }
   if (qcRequested || profile?.role === 'qc') {
-    if (!['admin','qc'].includes(profile?.role || '')) return <AccessDenied />;
+    if (!['admin','qc','manager'].includes(profile?.role || '')) return <AccessDenied />;
     return <><FloatingThemeControl /><QCQueue /></>;
   }
   if (managerRequested || profile?.role === 'manager') {

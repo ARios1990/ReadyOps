@@ -1,8 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Ban, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Clipboard,
+  Ban, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Clipboard,
   Copy, ExternalLink, Link2, Loader2, MapPin, PackageCheck, Pencil, Plus, RefreshCw,
-  ShieldCheck, UsersRound, WalletCards,
+  Search, Settings, ShieldCheck, UsersRound, WalletCards,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { copyText, formatTime, localDate, rpcError } from './portalUtils';
@@ -10,6 +10,7 @@ import { ReadyModeAgentTools } from './ReadyModeAgentTools';
 import { AdminSchedulingManager } from './AdminSchedulingManager';
 import { useScheduleStore } from './useScheduleStore';
 import type { CompanyLocation } from './types';
+import { AdminWorkspaceShell } from './AdminWorkspaceShell';
 
 // Admin RPC payloads are intentionally flexible because several legacy and
 // current database response shapes are rendered on this operations screen.
@@ -44,6 +45,9 @@ export function PortalAdmin() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [filter, setFilter] = useState<'active' | 'pending-payment' | 'all'>('active');
+  const [search, setSearch] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [agentFilter, setAgentFilter] = useState('');
   const [pkg, setPkg] = useState<PackageDraft>(EMPTY_PACKAGE);
   const [packageAllLocations, setPackageAllLocations] = useState(true);
   const [packageLocationIds, setPackageLocationIds] = useState<string[]>([]);
@@ -80,10 +84,24 @@ export function PortalAdmin() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const requestedCompany = new URLSearchParams(window.location.search).get('company');
+    if (requestedCompany && companies.some(company => company.company_id === requestedCompany) && expanded !== requestedCompany) {
+      const company = companies.find(item => item.company_id === requestedCompany);
+      if (company) void toggleCompany(company);
+    }
+    // The query parameter is a one-time deep link from QC, not a controlled filter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companies]);
 
-  const visible = useMemo(() => companies.filter(company => (
-    filter === 'all' || (filter === 'pending-payment' ? company.package?.payment_status === 'pending' : company.account_status === 'Active' || company.active_package)
-  )), [companies, filter]);
+  const visible = useMemo(() => companies.filter(company => {
+    const companyLocations = locations.filter(item => item.company_id === company.company_id);
+    const matchesStatus = filter === 'all' || (filter === 'pending-payment' ? company.package?.payment_status === 'pending' : company.account_status === 'Active' || company.active_package);
+    const matchesSearch = !search.trim() || `${company.company_name} ${company.state || ''} ${company.contact_name || ''}`.toLowerCase().includes(search.trim().toLowerCase());
+    const matchesLocation = !locationFilter || companyLocations.some(item => item.id === locationFilter);
+    const matchesAgent = !agentFilter || companyLocations.some(item => locationAgents.some(link => link.location_id === item.id && link.agent_id === agentFilter));
+    return matchesStatus && matchesSearch && matchesLocation && matchesAgent;
+  }), [agentFilter, companies, filter, locationAgents, locationFilter, locations, search]);
 
   const totals = useMemo(() => ({
     companies: visible.length,
@@ -201,14 +219,16 @@ export function PortalAdmin() {
 
   if (loading || store.loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" /></div>;
 
-  return <div className="min-h-screen bg-slate-50 text-slate-900">
-    <header className="sticky top-0 z-30 border-b bg-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between px-4 py-4"><div className="flex items-center gap-3"><button onClick={() => { location.href = '/'; }} className="rounded-lg border p-2"><ArrowLeft size={16} /></button><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">Ready Ops Admin</p><h1 className="text-xl font-bold">Company Operations & Packages</h1></div></div><div className="flex gap-2"><button onClick={() => { location.href = '/qc'; }} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><ShieldCheck size={14} /> QC Queue</button><button onClick={() => void load()} className="rounded-lg border p-2"><RefreshCw size={16} /></button></div></div></header>
-    <main className="mx-auto max-w-[1500px] space-y-5 p-4">
+  const pageActions = <><button onClick={() => document.getElementById('company-signup')?.scrollIntoView({ behavior: 'smooth' })} className="readyops-ref-primary"><Plus size={14} /> Add Company</button><button disabled={!expanded && visible.length === 0} onClick={() => setManager({ companyId: expanded || visible[0]?.company_id, mode: 'locations' })} className="readyops-ref-secondary disabled:opacity-40"><Plus size={14} /> Add Location</button><button onClick={() => document.getElementById('company-list')?.scrollIntoView({ behavior: 'smooth' })} className="readyops-ref-secondary"><PackageCheck size={14} /> Packages</button><button onClick={() => { location.href = '/qc'; }} className="readyops-ref-secondary"><ShieldCheck size={14} /> QC Queue</button><button onClick={() => { location.href = '/'; }} className="readyops-ref-secondary"><Settings size={14} /> Full Setup</button></>;
+
+  return <AdminWorkspaceShell active="companies" title="Company Operations & Scheduling" subtitle="Manage company packages, payments, locations, links, and appointment availability in one place." actions={pageActions}>
+    <div className="mx-auto max-w-[1600px] space-y-5">
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {message && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">{message}</div>}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<Building2 />} label="Active / Incomplete Companies" value={totals.companies} /><Metric icon={<ShieldCheck />} label="QC Pending" value={totals.qc} /><Metric icon={<PackageCheck />} label="Package Leads Remaining" value={totals.remaining} /><Metric icon={<WalletCards />} label="Pending Payments" value={totals.pendingPayments} /></section>
-      <section className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="flex-1"><h2 className="font-bold">New Company Signup Link</h2><p className="text-xs text-slate-500">Send this secure onboarding link to a new client. Their submission creates the company, portal links, default schedule, and optional package.</p></div><input value={inviteName} onChange={event => setInviteName(event.target.value)} placeholder="Company name (optional)" className="rounded-lg border px-3 py-2 text-sm" /><button onClick={() => void createInvite()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Link2 size={14} /> Create Signup Link</button></div>{inviteLink && <div className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3"><input readOnly value={inviteLink} className="min-w-0 flex-1 bg-transparent text-xs" /><button onClick={() => void copyText(inviteLink)} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"><Clipboard size={13} className="mr-1 inline" />Copy</button></div>}</section>
-      <section className="rounded-2xl border bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-bold">Companies</h2><p className="text-xs text-slate-500">Expand a company for locations, packages, scheduling, reps, and qualifications.</p></div><select value={filter} onChange={event => setFilter(event.target.value as typeof filter)} className="rounded-lg border px-3 py-2 text-sm"><option value="active">Active / Package Incomplete</option><option value="pending-payment">Pending Payment</option><option value="all">All Returned Companies</option></select></div>
+      <section id="company-signup" className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="flex-1"><h2 className="font-bold">New Company Signup Link</h2><p className="text-xs text-slate-500">Send this secure onboarding link to a new client. Their submission creates the company, portal links, default schedule, and optional package.</p></div><input value={inviteName} onChange={event => setInviteName(event.target.value)} placeholder="Company name (optional)" className="rounded-lg border px-3 py-2 text-sm" /><button onClick={() => void createInvite()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Link2 size={14} /> Create Signup Link</button></div>{inviteLink && <div className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3"><input readOnly value={inviteLink} className="min-w-0 flex-1 bg-transparent text-xs" /><button onClick={() => void copyText(inviteLink)} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"><Clipboard size={13} className="mr-1 inline" />Copy</button></div>}</section>
+      <section className="rounded-2xl border bg-white p-3"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_auto]"><label className="relative"><Search size={14} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search companies…" className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs" /></label><select value={locationFilter} onChange={event => setLocationFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Locations</option>{locations.filter(item => item.active !== false).map(item => <option key={item.id} value={item.id}>{item.location_label}</option>)}</select><select value={agentFilter} onChange={event => setAgentFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Reps</option>{agents.filter(agent => agent.active !== false).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><select value={filter} onChange={event => setFilter(event.target.value as typeof filter)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="active">Active / Package Incomplete</option><option value="pending-payment">Pending Payment</option><option value="all">All Companies</option></select><button onClick={() => void Promise.all([load(), store.refetch()])} className="readyops-ref-secondary"><RefreshCw size={14} /> Refresh</button></div><p className="mt-2 text-right text-xs font-semibold text-slate-500">{visible.length} companies • {store.portalAppointments.length} occupied slots this week</p></section>
+      <section id="company-list" className="rounded-2xl border bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-bold">Companies & Scheduling</h2><p className="text-xs text-slate-500">Expand a company for locations, packages, scheduling, reps, qualifications, and sent appointments.</p></div></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[1350px] text-sm"><thead><tr className="text-left text-[10px] uppercase text-slate-400"><th className="p-3">Company</th><th>Total Leads</th><th>QC Pending</th><th>Approved</th><th>Scheduled</th><th>Locations</th><th>Package</th><th>Remaining</th><th>Payment</th><th>Links & Slug</th></tr></thead><tbody>{visible.map(company => {
           const companyLocations = locations.filter(item => item.company_id === company.company_id);
           const activeScopeIds = packageScopes.filter(scope => scope.package_id === company.package?.id).map(scope => scope.location_id);
@@ -216,10 +236,10 @@ export function PortalAdmin() {
         })}</tbody></table></div>
       </section>
       <ReadyModeAgentTools agents={agents} companies={companies} />
-    </main>
+    </div>
     {manager && <AdminSchedulingManager store={store} initialMode={manager.mode} initialCompanyId={manager.companyId} initialLocationId={manager.locationId} onClose={() => { setManager(null); void load(); }} />}
     {slugEditor && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={() => !slugSaving && setSlugEditor(null)}><section role="dialog" aria-modal="true" aria-labelledby="company-slug-title" className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-2xl" onMouseDown={event => event.stopPropagation()}><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ReadyMode Company Variable</p><h2 id="company-slug-title" className="mt-1 text-lg font-black">Booking slug for {slugEditor.companyName}</h2><p className="mt-2 text-sm text-slate-500">Use this exact value for the company’s <strong>ReadyOpsSlug</strong> campaign variable. Changing an existing slug changes its booking URL.</p></div><label className="mt-4 block text-xs font-bold text-slate-600">Company slug<input autoFocus value={slugEditor.value} onChange={event => setSlugEditor({ ...slugEditor, value: normalizeSlug(event.target.value) })} onKeyDown={event => { if (event.key === 'Enter') void saveCompanySlug(); }} placeholder="company-name" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 font-mono text-sm outline-none focus:border-blue-400" /></label><p className="mt-2 text-xs text-slate-500">Booking URL: <span className="font-mono text-blue-700">{location.origin}/book/{normalizeSlug(slugEditor.value) || 'company-name'}</span></p><div className="mt-5 flex flex-wrap justify-end gap-2"><button disabled={slugSaving} onClick={() => setSlugEditor(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold text-slate-600 disabled:opacity-50">Cancel</button><button disabled={slugSaving || normalizeSlug(slugEditor.value).length < 2} onClick={() => void saveCompanySlug()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{slugSaving && <Loader2 size={15} className="animate-spin" />}{slugSaving ? 'Saving…' : 'Save Slug'}</button></div></section></div>}
-  </div>;
+  </AdminWorkspaceShell>;
 }
 
 type CompanyRowProps = {
@@ -251,7 +271,7 @@ function CompanyRow(props: CompanyRowProps) {
 function LocationSection({ company, locations, agents, locationAgents, onEditLocation, onDuplicate, onSetActive }: { company: Obj; locations: CompanyLocation[]; agents: Obj[]; locationAgents: Obj[]; onEditLocation: (id: string) => void; onDuplicate: (item: CompanyLocation) => void; onSetActive: (item: CompanyLocation, active: boolean) => void }) {
   return <section className="rounded-xl border bg-white p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-bold">Locations</h3><p className="text-xs text-slate-500">Offices, branches, service areas, and markets under this company.</p></div><button onClick={() => onEditLocation('')} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Plus size={13} /> Add Location</button></div>{locations.length === 0 ? <p className="rounded-lg border border-dashed p-4 text-sm text-slate-400">No detailed locations. Legacy company-wide scheduling remains active.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs"><thead><tr className="text-left text-slate-400"><th className="p-2">Location</th><th>City / State</th><th>Assigned Reps</th><th>Hours</th><th>Daily Capacity</th><th>Service ZIPs</th><th>Actions</th></tr></thead><tbody>{locations.map(item => {
     const assigned = locationAgents.filter(link => link.location_id === item.id).map(link => agents.find(agent => agent.id === link.agent_id)?.name).filter(Boolean);
-    return <tr key={item.id} className={`border-t ${item.active === false ? 'opacity-50' : ''}`}><td className="p-2 font-bold"><MapPin size={12} className="mr-1 inline text-blue-600" />{item.location_label}{item.office_name ? <div className="pl-4 text-[10px] font-normal text-slate-400">{item.office_name}</div> : null}</td><td>{[item.city, item.state].filter(Boolean).join(', ') || '—'}</td><td>{assigned.join(', ') || 'Unassigned'}</td><td>{item.available_days?.map(day => day.slice(0, 3)).join(', ') || 'Default'}<div className="text-[10px] text-slate-400">{String(item.start_time || '09:00').slice(0, 5)}–{String(item.end_time || '18:00').slice(0, 5)}</div></td><td>{item.max_per_day ?? 5}<div className="text-[10px] text-slate-400">{item.max_per_hour ?? 1}/hour • {item.slot_interval_minutes ?? 60} min</div></td><td>{item.service_zips?.length || 0}</td><td><div className="flex flex-wrap gap-1"><button onClick={() => onEditLocation(item.id)} className="rounded border p-1.5" title="Edit"><Pencil size={12} /></button><button onClick={() => { location.href = `/?view=slots&company=${company.company_id}&location=${item.id}`; }} className="rounded border p-1.5" title="Schedule"><CalendarDays size={12} /></button><button onClick={() => onDuplicate(item)} className="rounded border p-1.5" title="Duplicate"><Copy size={12} /></button><button onClick={() => onSetActive(item, item.active === false)} className="rounded border p-1.5" title={item.active === false ? 'Activate' : 'Deactivate'}>{item.active === false ? <CheckCircle2 size={12} /> : <Ban size={12} />}</button></div></td></tr>;
+    return <tr key={item.id} className={`border-t ${item.active === false ? 'opacity-50' : ''}`}><td className="p-2 font-bold"><MapPin size={12} className="mr-1 inline text-blue-600" />{item.location_label}{item.office_name ? <div className="pl-4 text-[10px] font-normal text-slate-400">{item.office_name}</div> : null}</td><td>{[item.city, item.state].filter(Boolean).join(', ') || '—'}</td><td>{assigned.join(', ') || 'Unassigned'}</td><td>{item.available_days?.map(day => day.slice(0, 3)).join(', ') || 'Default'}<div className="text-[10px] text-slate-400">{String(item.start_time || '09:00').slice(0, 5)}–{String(item.end_time || '18:00').slice(0, 5)}</div></td><td>{item.max_per_day ?? 5}<div className="text-[10px] text-slate-400">{item.max_per_hour ?? 1}/hour • {item.slot_interval_minutes ?? 60} min</div></td><td>{item.service_zips?.length || 0}</td><td><div className="flex flex-wrap gap-1"><button onClick={() => onEditLocation(item.id)} className="rounded border p-1.5" title="Edit"><Pencil size={12} /></button><button onClick={() => { location.href = `/?view=appointments&company=${company.company_id}&location=${item.id}`; }} className="rounded border p-1.5" title="Appointments"><CalendarDays size={12} /></button><button onClick={() => onDuplicate(item)} className="rounded border p-1.5" title="Duplicate"><Copy size={12} /></button><button onClick={() => onSetActive(item, item.active === false)} className="rounded border p-1.5" title={item.active === false ? 'Activate' : 'Deactivate'}>{item.active === false ? <CheckCircle2 size={12} /> : <Ban size={12} />}</button></div></td></tr>;
   })}</tbody></table></div>}</section>;
 }
 

@@ -46,7 +46,7 @@ export function startOfWeek(date = new Date()): Date {
   return copy;
 }
 
-/** Uses the same weekend-forward week as the admin Time Slots board. */
+/** Uses the same weekend-forward week as the admin Appointments board. */
 export function scheduleWeekStart(date = new Date()): Date {
   return startOfWeek(date);
 }

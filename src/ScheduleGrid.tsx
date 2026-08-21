@@ -138,7 +138,7 @@ export function ScheduleGrid({
                   )}
                 </td>
 
-                {/* Time Slots */}
+                {/* Appointment availability */}
                 {TIME_SLOTS.map(ts => {
                   const legacyBooked = isBooked(row.companyId, row.locationId, activeDay, ts);
                   const inheritedCompanyBlock = row.locationId !== null && isCompanyWideBooked(row.companyId, activeDay, ts);
