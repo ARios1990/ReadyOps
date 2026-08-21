@@ -313,9 +313,10 @@ export function QCRecordingUpload({
     }
 
     setTranscribing(true);
+    let localFailureDetail = '';
     try {
       setTranscriptStatus('Starting free local Whisper AI — no paid API...');
-      const localTranscript = await transcribeWithLocalWhisper(playbackUrl, setTranscriptStatus);
+      const localTranscript = await transcribeWithLocalWhisper(playbackUrl, language, setTranscriptStatus);
       if (!localTranscript) throw new Error('Local Whisper did not return transcript text.');
       const localSummary = buildRuleBasedSummary(localTranscript);
       setTranscript(localTranscript);
@@ -325,14 +326,14 @@ export function QCRecordingUpload({
       setTranscribing(false);
       return;
     } catch (localError) {
-      const detail = localError instanceof Error ? localError.message : 'Local Whisper failed.';
-      setTranscriptStatus(`Local Whisper unavailable (${detail}). Trying browser speech fallback...`);
+      localFailureDetail = localError instanceof Error ? localError.message : 'Local Whisper failed.';
+      setTranscriptStatus(`Local Whisper unavailable (${localFailureDetail}). Trying browser speech fallback...`);
     }
 
     const speechWindow = window as SpeechWindow;
     const SpeechCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechCtor) {
-      setError('Free local Whisper could not run and this browser has no speech-recognition fallback. You can still paste the transcript manually.');
+      setError(`Local Whisper could not run: ${localFailureDetail || 'unknown browser error'} This browser has no on-device speech fallback. Use AI Transcribe & Qualify for the OpenAI server fallback.`);
       setTranscribing(false);
       return;
     }
@@ -414,8 +415,14 @@ export function QCRecordingUpload({
     setAiResult(null);
     setAiQualifying(true);
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error('Your ReadyOps session expired. Sign in again, then retry AI Transcribe & Qualify.');
+      }
       const { data, error: invokeError } = await supabase.functions.invoke('transcribe-and-qualify', {
         body: { lead_id: leadId },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       const response = data as QualifyResponse | null;
       if (invokeError) throw new Error(await functionErrorMessage(invokeError, response));
@@ -502,7 +509,7 @@ export function QCRecordingUpload({
             )}
           </div>
         )}
-        <p className="mt-2 text-[11px] text-slate-500">Uses free local Whisper AI in your browser first (no per-minute API charge), then browser speech recognition as a fallback. The summary remains rule-based and does not use an LLM.</p>
+        <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify uses the secured OpenAI server fallback and evaluates the call against company requirements.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Build Rule Summary</button>

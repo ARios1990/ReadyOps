@@ -84,7 +84,11 @@ async function decodeAudioForWhisper(audioUrl: string, onProgress?: (message: st
   }
 }
 
-export async function transcribeWithLocalWhisper(audioUrl: string, onProgress?: (message: string) => void): Promise<string> {
+export async function transcribeWithLocalWhisper(
+  audioUrl: string,
+  language?: string | null,
+  onProgress?: (message: string) => void,
+): Promise<string> {
   const audio = await decodeAudioForWhisper(audioUrl, onProgress);
   const whisperWorker = getWorker();
   if (activeReject) activeReject(new Error('A newer transcription request replaced the previous request.'));
@@ -122,6 +126,6 @@ export async function transcribeWithLocalWhisper(audioUrl: string, onProgress?: 
 
     whisperWorker.addEventListener('message', onMessage);
     whisperWorker.addEventListener('error', onWorkerError);
-    whisperWorker.postMessage({ type: 'transcribe', audio }, [audio.buffer]);
+    whisperWorker.postMessage({ type: 'transcribe', audio, language }, [audio.buffer]);
   });
 }

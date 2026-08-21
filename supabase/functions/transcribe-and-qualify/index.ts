@@ -41,13 +41,15 @@ Deno.serve(async (req: Request) => {
     const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
     if (!accessToken) return json({ error: "Authentication required" }, 401);
 
-    const { data: authData, error: authError } = await admin.auth.getUser(accessToken);
-    if (authError || !authData.user) return json({ error: "Authentication required" }, 401);
+    // verify_jwt is enabled for this function, so Supabase's gateway has
+    // already validated the token signature and expiry before execution.
+    const callerId = jwtSubject(accessToken);
+    if (!callerId) return json({ error: "Authenticated user identity is missing" }, 401);
 
     const { data: callerProfile, error: callerProfileError } = await admin
       .from("profiles")
       .select("role")
-      .eq("id", authData.user.id)
+      .eq("id", callerId)
       .maybeSingle();
     if (callerProfileError) return json({ error: "Unable to verify caller access" }, 500);
     if (callerProfile?.role !== "admin" && callerProfile?.role !== "qc") {
@@ -265,6 +267,20 @@ ${transcript}`;
     return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 });
+
+function jwtSubject(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const bytes = Uint8Array.from(atob(padded), character => character.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return typeof payload?.sub === "string" && payload.sub ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
 
 function fileNameFromUrl(value: string): string {
   try {
