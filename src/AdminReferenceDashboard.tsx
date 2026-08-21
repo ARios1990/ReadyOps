@@ -77,7 +77,6 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [ops, setOps] = useState<CompanyOps[]>([]);
   const [loadingOps, setLoadingOps] = useState(true);
-  const [companyPortalsOnline, setCompanyPortalsOnline] = useState(0);
   const [userMenu, setUserMenu] = useState(false);
   const [showSchedulingManager, setShowSchedulingManager] = useState(false);
   const [schedulingManagerMode, setSchedulingManagerMode] = useState<'company' | 'locations'>('locations');
@@ -85,32 +84,16 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
 
   async function refreshDashboard() {
     setLoadingOps(true);
-    const [profilesRes, opsRes, presenceRes] = await Promise.all([
+    const [profilesRes, opsRes] = await Promise.all([
       supabase.from('profiles').select('*').order('display_name'),
       supabase.rpc('get_company_operations_overview'),
-      supabase
-        .from('company_portal_presence')
-        .select('*', { count: 'exact', head: true })
-        .gte('last_seen_at', new Date(Date.now() - 90_000).toISOString()),
     ]);
     if (profilesRes.data) setProfiles(profilesRes.data as Profile[]);
     if (opsRes.data) setOps(opsRes.data as CompanyOps[]);
-    if (!presenceRes.error) setCompanyPortalsOnline(presenceRes.count || 0);
     setLoadingOps(false);
   }
 
   useEffect(() => { void refreshDashboard(); }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      const { count, error } = await supabase
-        .from('company_portal_presence')
-        .select('*', { count: 'exact', head: true })
-        .gte('last_seen_at', new Date(Date.now() - 90_000).toISOString());
-      if (!error) setCompanyPortalsOnline(count || 0);
-    }, 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0');
@@ -310,12 +293,12 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
             />
 
             <section className="readyops-ref-metrics">
-              <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note={companyPortalsOnline ? `${companyPortalsOnline} using portal now` : 'No portal activity now'} icon={Building2} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active'; }}/>
-              <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'Needs review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=pending'; }}/>
-              <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Open approved leads" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=approved'; }}/>
-              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/?view=appointments&scope=upcoming'; }}/>
-              <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active-package'; }}/>
-              <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=pending-payment'; }}/>
+              <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note="+2 this week" icon={Building2} tone="blue" loading={loadingOps}/>
+              <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'Needs review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps}/>
+              <MetricCard label="APPROVED LEADS" value={metrics.approved} note="+1 today" icon={CheckCircle2} tone="green" loading={loadingOps}/>
+              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps}/>
+              <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps}/>
+              <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps}/>
             </section>
 
             <section id="readyops-staff" className="readyops-ref-card readyops-ref-staff-card">
@@ -418,8 +401,8 @@ function SidebarGroup({ title, items, active, onSelect, collapsed }: { title: st
   );
 }
 
-function MetricCard({ label, value, note, icon: Icon, tone, loading, onClick }: { label: string; value: number; note: string; icon: IconComponent; tone: string; loading: boolean; onClick: () => void }) {
-  return <button type="button" className={`readyops-ref-metric readyops-ref-metric-link tone-${tone}`} onClick={onClick} aria-label={`${label}: ${loading ? 'loading' : value}. ${note}`}><div><p>{label}</p><strong>{loading ? '—' : value}</strong><span>{note}</span></div><div className="readyops-ref-metric-icon"><Icon size={21}/></div></button>;
+function MetricCard({ label, value, note, icon: Icon, tone, loading }: { label: string; value: number; note: string; icon: IconComponent; tone: string; loading: boolean }) {
+  return <article className={`readyops-ref-metric tone-${tone}`}><div><p>{label}</p><strong>{loading ? '—' : value}</strong><span>{note}</span></div><div className="readyops-ref-metric-icon"><Icon size={21}/></div></article>;
 }
 
 function TeamBadge({ team }: { team?: Team }) {

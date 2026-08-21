@@ -20,10 +20,7 @@ export function Dashboard() {
   const isAdmin = profile?.role === 'admin';
   const store = useScheduleStore();
 
-  const [activeDay, setActiveDay] = useState<string>(() => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-    return DAYS.some(day => day === today) ? today : 'Monday';
-  });
+  const [activeDay, setActiveDay] = useState<string>('Monday');
   const [selectedCompany, setSelectedCompany] = useState<string>(() => initialParams.get('company') || 'all');
   const [selectedLocation, setSelectedLocation] = useState<string>(() => initialParams.get('location') || 'all');
   const [selectedRep, setSelectedRep] = useState<string>('all');

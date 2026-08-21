@@ -525,10 +525,6 @@ html[data-theme='dark'] .readyops-ref-scene { color:#32567d; opacity:.42; }
   min-height:104px; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:17px 18px; border-radius:10px; border:1px solid var(--readyops-border); background:rgba(255,255,255,.88); box-shadow:0 8px 18px rgba(33,67,108,.08);
 }
-.readyops-ref-metric-link { width:100%; color:inherit; font:inherit; text-align:left; cursor:pointer; transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
-.readyops-ref-metric-link:hover { transform:translateY(-2px); border-color:#93b9f5; box-shadow:0 12px 24px rgba(33,67,108,.14); }
-.readyops-ref-metric-link:focus-visible { outline:3px solid rgba(37,99,235,.28); outline-offset:2px; }
-.readyops-ref-metric-link:active { transform:translateY(0); }
 html[data-theme='dark'] .readyops-ref-metric { background:rgba(17,39,64,.86); box-shadow:0 8px 18px rgba(0,0,0,.16); }
 .readyops-ref-metric p { margin:0 0 5px; font-size:9px; letter-spacing:.02em; font-weight:800; opacity:.8; }
 .readyops-ref-metric strong { display:block; font-size:27px; line-height:1; font-weight:800; }
