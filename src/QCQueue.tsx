@@ -32,12 +32,13 @@ function countBy(rows: Obj[], status: string): number { return rows.filter(row =
 function quoteCsv(value: unknown): string { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
 
 export function QCQueue() {
+  const initialParams = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const [week, setWeek] = useState(() => weekStart());
   const [selectedDate, setSelectedDate] = useState(() => localDate(new Date()));
   const [queue, setQueue] = useState<QueueData>(EMPTY_QUEUE); const [refs, setRefs] = useState<RefData>(EMPTY_REFS);
   const [companyId, setCompanyId] = useState(''); const [locationId, setLocationId] = useState('');
   const [teamId, setTeamId] = useState(''); const [agentId, setAgentId] = useState('');
-  const [qcStatus, setQcStatus] = useState('all'); const [appointmentStatus, setAppointmentStatus] = useState('all');
+  const [qcStatus, setQcStatus] = useState(() => ['pending', 'in_review', 'approved', 'needs_correction', 'denied'].includes(initialParams.get('status') || '') ? initialParams.get('status')! : 'all'); const [appointmentStatus, setAppointmentStatus] = useState('all');
   const [stateFilter, setStateFilter] = useState('all'); const [areaFilter, setAreaFilter] = useState('all');
   const [search, setSearch] = useState(''); const [searchInput, setSearchInput] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set()); const [selected, setSelected] = useState<Obj | null>(null);
