@@ -421,7 +421,11 @@ export function QCRecordingUpload({
         throw new Error('Your ReadyOps session expired. Sign in again, then retry AI Transcribe & Qualify.');
       }
       const { data, error: invokeError } = await supabase.functions.invoke('transcribe-and-qualify', {
-        body: { lead_id: leadId, recording_url: value || undefined },
+        body: {
+          lead_id: leadId,
+          recording_url: value || undefined,
+          transcript: transcript.trim() || undefined,
+        },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const response = data as QualifyResponse | null;
@@ -484,7 +488,7 @@ export function QCRecordingUpload({
             <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
             </button>
-            <button type="button" disabled={aiQualifying} onClick={() => void transcribeAndQualify()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={aiQualifying || (!playbackUrl && !transcript.trim())} onClick={() => void transcribeAndQualify()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {aiQualifying ? <Loader2 size={13} className="animate-spin"/> : <Sparkles size={13}/>} {aiQualifying ? 'Transcribing & Qualifying…' : 'AI Transcribe & Qualify'}
             </button>
           </div>
@@ -509,7 +513,7 @@ export function QCRecordingUpload({
             )}
           </div>
         )}
-        <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify uses the secured OpenAI server fallback and evaluates the call against company requirements.</p>
+        <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify reuses the transcript when available, otherwise uses secured OpenAI transcription, then evaluates the call against company requirements.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Build Rule Summary</button>

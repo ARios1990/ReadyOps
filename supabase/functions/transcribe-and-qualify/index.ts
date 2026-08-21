@@ -8,8 +8,9 @@ const corsHeaders = {
 };
 
 const STORAGE_PREFIX = "storage://qc-recordings/";
-const TRANSCRIPTION_MODELS = ["gpt-4o-mini-transcribe", "whisper-1"] as const;
+const TRANSCRIPTION_MODELS = ["gpt-transcribe", "gpt-4o-mini-transcribe", "whisper-1"] as const;
 const QUALIFICATION_MODEL = "gpt-4o-mini";
+const MAX_TRANSCRIPT_CHARS = 200_000;
 
 type QualificationStatus = "qualified" | "not_qualified" | "needs_review";
 type Confidence = "high" | "medium" | "low";
@@ -26,7 +27,11 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const { lead_id, recording_url: requestedRecordingUrl } = await req.json();
+    const {
+      lead_id,
+      recording_url: requestedRecordingUrl,
+      transcript: requestedTranscript,
+    } = await req.json();
     if (!lead_id) return json({ error: "lead_id is required" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -41,10 +46,10 @@ Deno.serve(async (req: Request) => {
     const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
     if (!accessToken) return json({ error: "Authentication required" }, 401);
 
-    // verify_jwt is enabled for this function, so Supabase's gateway has
-    // already validated the token signature and expiry before execution.
-    const callerId = jwtSubject(accessToken);
-    if (!callerId) return json({ error: "Authenticated user identity is missing" }, 401);
+    // Verify against Supabase Auth instead of trusting decoded JWT claims.
+    const { data: callerAuth, error: callerAuthError } = await admin.auth.getUser(accessToken);
+    const callerId = callerAuth.user?.id;
+    if (callerAuthError || !callerId) return json({ error: "Your ReadyOps session expired. Sign in again and retry." }, 401);
 
     const { data: callerProfile, error: callerProfileError } = await admin
       .from("profiles")
@@ -63,8 +68,20 @@ Deno.serve(async (req: Request) => {
       .eq("id", lead_id)
       .maybeSingle();
     if (leadError || !lead) return json({ error: "Lead not found" }, 404);
+    const clientTranscript = typeof requestedTranscript === "string" ? requestedTranscript.trim() : "";
+    if (clientTranscript.length > MAX_TRANSCRIPT_CHARS) {
+      return json({ error: "Transcript is too large to qualify" }, 400);
+    }
+    const { data: savedTranscript } = await admin
+      .from("qc_lead_transcripts")
+      .select("transcript")
+      .eq("lead_id", lead.id)
+      .maybeSingle();
+    let transcript = clientTranscript || String(savedTranscript?.transcript || "").trim();
+    let transcriptionModelUsed = transcript ? "existing_transcript" : "";
     let recordingUrl = String(lead.recording_url || "").trim();
-    if (!recordingUrl) {
+
+    if (!transcript && !recordingUrl) {
       // An upload can finish before the parent lead-edit form is saved. Prefer
       // the path currently held by the UI, but only when it belongs to this lead.
       const requestedPath = typeof requestedRecordingUrl === "string" && requestedRecordingUrl.startsWith(STORAGE_PREFIX)
@@ -85,7 +102,7 @@ Deno.serve(async (req: Request) => {
         if (newestUpload) recordingUrl = `${STORAGE_PREFIX}${lead.id}/${newestUpload.name}`;
       }
 
-      if (!recordingUrl) return json({ error: "This lead has no recording to transcribe" }, 400);
+      if (!recordingUrl) return json({ error: "This lead has no recording or saved transcript to process" }, 400);
       const { error: attachError } = await admin
         .from("portal_leads")
         .update({ recording_url: recordingUrl, updated_at: new Date().toISOString() })
@@ -93,23 +110,7 @@ Deno.serve(async (req: Request) => {
       if (attachError) return json({ error: `Unable to attach recording to lead: ${attachError.message}` }, 500);
     }
 
-    // 2. Resolve a fetchable audio URL.
-    let audioUrl = recordingUrl;
-    let recordingName = fileNameFromUrl(recordingUrl);
-    if (recordingUrl.startsWith(STORAGE_PREFIX)) {
-      const path = recordingUrl.slice(STORAGE_PREFIX.length);
-      if (!path || path.includes("..")) return json({ error: "Invalid recording path" }, 400);
-      recordingName = fileNameFromPath(path);
-      const { data: signed, error: signError } = await admin.storage
-        .from("qc-recordings")
-        .createSignedUrl(path, 60 * 10);
-      if (signError || !signed?.signedUrl) {
-        return json({ error: signError?.message || "Unable to sign recording URL" }, 500);
-      }
-      audioUrl = signed.signedUrl;
-    }
-
-    // 3. Load company qualification requirements.
+    // 2. Load company qualification requirements.
     const { data: settings } = await admin
       .from("company_portal_settings")
       .select("requirements_short, requirements_detail, qualification_rules")
@@ -122,58 +123,73 @@ Deno.serve(async (req: Request) => {
     ].filter(Boolean).join("\n\n") ||
       "No specific company requirements are on file. Use general roofing-lead qualification judgment (homeowner, valid address, plausible roof age/damage, willingness to meet).";
 
-    // 4. Download the audio.
-    const audioResp = await fetch(audioUrl);
-    if (!audioResp.ok) return json({ error: `Unable to download recording (status ${audioResp.status})` }, 502);
-    const audioBlob = await audioResp.blob();
-    if (audioBlob.size === 0) return json({ error: "Recording is empty or unavailable" }, 502);
-    const contentType = (audioResp.headers.get("content-type") || audioBlob.type || "").split(";", 1)[0].trim().toLowerCase();
-    if (contentType === "text/html" || contentType === "application/json") {
-      return json({ error: "The recording link returned a web page instead of an audio file. Upload the MP3 directly and try again." }, 502);
-    }
-    recordingName = supportedAudioName(recordingName, contentType);
-
-    // 5. Transcribe with OpenAI. Use the current low-latency model first and
-    // retain Whisper as a compatibility fallback for older OpenAI projects.
-    let transcriptionJson: any = null;
-    let transcriptionModelUsed = "";
-    for (const model of TRANSCRIPTION_MODELS) {
-      const form = new FormData();
-      form.append("file", audioBlob, recordingName);
-      form.append("model", model);
-      form.append("response_format", "json");
-      const transcriptionResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiKey}` },
-        body: form,
-      });
-
-      if (transcriptionResp.ok) {
-        transcriptionJson = await transcriptionResp.json();
-        transcriptionModelUsed = model;
-        break;
+    // 3. Transcribe only when QC has not already produced or pasted a transcript.
+    if (!transcript) {
+      let audioUrl = recordingUrl;
+      let recordingName = fileNameFromUrl(recordingUrl);
+      if (recordingUrl.startsWith(STORAGE_PREFIX)) {
+        const path = recordingUrl.slice(STORAGE_PREFIX.length);
+        if (!path || path.includes("..")) return json({ error: "Invalid recording path" }, 400);
+        recordingName = fileNameFromPath(path);
+        const { data: signed, error: signError } = await admin.storage
+          .from("qc-recordings")
+          .createSignedUrl(path, 60 * 10);
+        if (signError || !signed?.signedUrl) {
+          return json({ error: signError?.message || "Unable to sign recording URL" }, 500);
+        }
+        audioUrl = signed.signedUrl;
       }
 
-      const error = await readOpenAIError(transcriptionResp);
-      const hasFallback = model !== TRANSCRIPTION_MODELS[TRANSCRIPTION_MODELS.length - 1];
-      if (hasFallback && isUnavailableModelError(transcriptionResp.status, error)) {
-        console.warn(JSON.stringify({
-          stage: "transcription",
-          model,
-          status: transcriptionResp.status,
-          code: error.code || undefined,
-          request_id: error.requestId,
-          fallback_model: TRANSCRIPTION_MODELS[TRANSCRIPTION_MODELS.length - 1],
-        }));
-        continue;
+      const audioResp = await fetch(audioUrl);
+      if (!audioResp.ok) return json({ error: `Unable to download recording (status ${audioResp.status})` }, 502);
+      const audioBlob = await audioResp.blob();
+      if (audioBlob.size === 0) return json({ error: "Recording is empty or unavailable" }, 502);
+      const contentType = (audioResp.headers.get("content-type") || audioBlob.type || "").split(";", 1)[0].trim().toLowerCase();
+      if (contentType === "text/html" || contentType === "application/json") {
+        return json({ error: "The recording link returned a web page instead of an audio file. Upload the MP3 directly and try again." }, 502);
+      }
+      recordingName = supportedAudioName(recordingName, contentType);
+
+      let transcriptionJson: any = null;
+      for (let index = 0; index < TRANSCRIPTION_MODELS.length; index += 1) {
+        const model = TRANSCRIPTION_MODELS[index];
+        const form = new FormData();
+        form.append("file", audioBlob, recordingName);
+        form.append("model", model);
+        form.append("response_format", "json");
+        const transcriptionResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: form,
+        });
+
+        if (transcriptionResp.ok) {
+          transcriptionJson = await transcriptionResp.json();
+          transcriptionModelUsed = model;
+          break;
+        }
+
+        const error = await readOpenAIError(transcriptionResp);
+        const fallbackModel = TRANSCRIPTION_MODELS[index + 1];
+        if (fallbackModel && isUnavailableModelError(transcriptionResp.status, error)) {
+          console.warn(JSON.stringify({
+            stage: "transcription",
+            model,
+            status: transcriptionResp.status,
+            code: error.code || undefined,
+            request_id: error.requestId,
+            fallback_model: fallbackModel,
+          }));
+          continue;
+        }
+
+        return renderOpenAIErrorResponse("Transcription", transcriptionResp.status, error);
       }
 
-      return renderOpenAIErrorResponse("Transcription", transcriptionResp.status, error);
+      if (!transcriptionJson) return json({ error: "Transcription failed: no enabled OpenAI transcription model is available to this API project" }, 502);
+      transcript = String(transcriptionJson.text || "").trim();
+      if (!transcript) return json({ error: "Transcription returned no text" }, 502);
     }
-
-    if (!transcriptionJson) return json({ error: "Transcription failed: no model returned a response" }, 502);
-    const transcript = String(transcriptionJson.text || "").trim();
-    if (!transcript) return json({ error: "Transcription returned no text" }, 502);
 
     // 6. Qualify and summarize with OpenAI Structured Outputs.
     const qualificationInput = `COMPANY REQUIREMENTS:
@@ -269,7 +285,7 @@ ${transcript}`;
       transcript,
       summary,
       language: "en",
-      method: "ai-openai",
+      method: transcriptionModelUsed === "existing_transcript" ? "ai-qualified-existing" : "ai-openai",
       updated_at: new Date().toISOString(),
     }, { onConflict: "lead_id" });
     if (transcriptError) return json({ error: `Unable to save transcript: ${transcriptError.message}` }, 500);
@@ -288,26 +304,13 @@ ${transcript}`;
       reasons,
       qualification_status: qualificationStatus,
       transcription_model: transcriptionModelUsed,
+      used_existing_transcript: transcriptionModelUsed === "existing_transcript",
     });
   } catch (error) {
     console.error("transcribe-and-qualify failed", error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 });
-
-function jwtSubject(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const bytes = Uint8Array.from(atob(padded), character => character.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    return typeof payload?.sub === "string" && payload.sub ? payload.sub : null;
-  } catch {
-    return null;
-  }
-}
 
 function fileNameFromUrl(value: string): string {
   try {
@@ -395,6 +398,8 @@ function renderOpenAIErrorResponse(
     friendly = "OpenAI API billing or credits are not active for this key. Add API billing/credits in the OpenAI Platform, then try again.";
   } else if (status === 429) {
     friendly = "OpenAI is rate-limiting requests. Wait a moment and try again.";
+  } else if (status === 402 || (status === 403 && (code === "model_not_found" || /does not have access/i.test(message)))) {
+    friendly = "The OpenAI API project connected to ReadyOps does not have paid model access. Enable API billing/model access for that OpenAI project, or replace the OPENAI_API_KEY Supabase secret with a key from an enabled project.";
   } else if (status === 403) {
     friendly = "This OpenAI API key does not have permission to use the requested model.";
   } else if (status === 404) {
