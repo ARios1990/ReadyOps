@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const { lead_id } = await req.json();
+    const { lead_id, recording_url: requestedRecordingUrl } = await req.json();
     if (!lead_id) return json({ error: "lead_id is required" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -63,10 +63,37 @@ Deno.serve(async (req: Request) => {
       .eq("id", lead_id)
       .maybeSingle();
     if (leadError || !lead) return json({ error: "Lead not found" }, 404);
-    if (!lead.recording_url) return json({ error: "This lead has no recording to transcribe" }, 400);
+    let recordingUrl = String(lead.recording_url || "").trim();
+    if (!recordingUrl) {
+      // An upload can finish before the parent lead-edit form is saved. Prefer
+      // the path currently held by the UI, but only when it belongs to this lead.
+      const requestedPath = typeof requestedRecordingUrl === "string" && requestedRecordingUrl.startsWith(STORAGE_PREFIX)
+        ? requestedRecordingUrl.slice(STORAGE_PREFIX.length)
+        : "";
+      if (requestedPath.startsWith(`${lead.id}/`) && !requestedPath.includes("..")) {
+        recordingUrl = `${STORAGE_PREFIX}${requestedPath}`;
+      } else {
+        // Support the already-published client by recovering the newest private
+        // upload from the lead's dedicated storage folder.
+        const { data: uploadedFiles, error: listError } = await admin.storage
+          .from("qc-recordings")
+          .list(String(lead.id), { limit: 100, offset: 0 });
+        if (listError) return json({ error: `Unable to find this lead's recording: ${listError.message}` }, 500);
+        const newestUpload = (uploadedFiles || [])
+          .filter(file => file.id && file.name)
+          .sort((left, right) => Date.parse(right.created_at || "") - Date.parse(left.created_at || ""))[0];
+        if (newestUpload) recordingUrl = `${STORAGE_PREFIX}${lead.id}/${newestUpload.name}`;
+      }
+
+      if (!recordingUrl) return json({ error: "This lead has no recording to transcribe" }, 400);
+      const { error: attachError } = await admin
+        .from("portal_leads")
+        .update({ recording_url: recordingUrl, updated_at: new Date().toISOString() })
+        .eq("id", lead.id);
+      if (attachError) return json({ error: `Unable to attach recording to lead: ${attachError.message}` }, 500);
+    }
 
     // 2. Resolve a fetchable audio URL.
-    const recordingUrl = String(lead.recording_url);
     let audioUrl = recordingUrl;
     let recordingName = fileNameFromUrl(recordingUrl);
     if (recordingUrl.startsWith(STORAGE_PREFIX)) {
