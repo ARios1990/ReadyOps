@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const STORAGE_PREFIX = "storage://qc-recordings/";
-const TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
+const TRANSCRIPTION_MODELS = ["gpt-4o-mini-transcribe", "whisper-1"] as const;
 const QUALIFICATION_MODEL = "gpt-4o-mini";
 
 type QualificationStatus = "qualified" | "not_qualified" | "needs_review";
@@ -35,6 +35,24 @@ Deno.serve(async (req: Request) => {
     if (!openaiKey) return json({ error: "OPENAI_API_KEY secret is not configured" }, 500);
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+    // Keep private call recordings limited to authenticated QC and Admin users.
+    const authHeader = req.headers.get("Authorization") || "";
+    const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (!accessToken) return json({ error: "Authentication required" }, 401);
+
+    const { data: authData, error: authError } = await admin.auth.getUser(accessToken);
+    if (authError || !authData.user) return json({ error: "Authentication required" }, 401);
+
+    const { data: callerProfile, error: callerProfileError } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+    if (callerProfileError) return json({ error: "Unable to verify caller access" }, 500);
+    if (callerProfile?.role !== "admin" && callerProfile?.role !== "qc") {
+      return json({ error: "Only QC and Admin users can transcribe recordings" }, 403);
+    }
 
     // 1. Load the lead.
     const { data: lead, error: leadError } = await admin
@@ -86,18 +104,45 @@ Deno.serve(async (req: Request) => {
     }
     recordingName = supportedAudioName(recordingName, contentType);
 
-    // 5. Transcribe with OpenAI.
-    const form = new FormData();
-    form.append("file", audioBlob, recordingName);
-    form.append("model", TRANSCRIPTION_MODEL);
-    form.append("response_format", "json");
-    const transcriptionResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}` },
-      body: form,
-    });
-    if (!transcriptionResp.ok) return await openAIErrorResponse("Transcription", transcriptionResp);
-    const transcriptionJson = await transcriptionResp.json();
+    // 5. Transcribe with OpenAI. Use the current low-latency model first and
+    // retain Whisper as a compatibility fallback for older OpenAI projects.
+    let transcriptionJson: any = null;
+    let transcriptionModelUsed = "";
+    for (const model of TRANSCRIPTION_MODELS) {
+      const form = new FormData();
+      form.append("file", audioBlob, recordingName);
+      form.append("model", model);
+      form.append("response_format", "json");
+      const transcriptionResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}` },
+        body: form,
+      });
+
+      if (transcriptionResp.ok) {
+        transcriptionJson = await transcriptionResp.json();
+        transcriptionModelUsed = model;
+        break;
+      }
+
+      const error = await readOpenAIError(transcriptionResp);
+      const hasFallback = model !== TRANSCRIPTION_MODELS[TRANSCRIPTION_MODELS.length - 1];
+      if (hasFallback && isUnavailableModelError(transcriptionResp.status, error)) {
+        console.warn(JSON.stringify({
+          stage: "transcription",
+          model,
+          status: transcriptionResp.status,
+          code: error.code || undefined,
+          request_id: error.requestId,
+          fallback_model: TRANSCRIPTION_MODELS[TRANSCRIPTION_MODELS.length - 1],
+        }));
+        continue;
+      }
+
+      return renderOpenAIErrorResponse("Transcription", transcriptionResp.status, error);
+    }
+
+    if (!transcriptionJson) return json({ error: "Transcription failed: no model returned a response" }, 502);
     const transcript = String(transcriptionJson.text || "").trim();
     if (!transcript) return json({ error: "Transcription returned no text" }, 502);
 
@@ -213,6 +258,7 @@ ${transcript}`;
       confidence,
       reasons,
       qualification_status: qualificationStatus,
+      transcription_model: transcriptionModelUsed,
     });
   } catch (error) {
     console.error("transcribe-and-qualify failed", error);
@@ -252,6 +298,17 @@ function supportedAudioName(name: string, contentType: string): string {
 }
 
 async function openAIErrorResponse(stage: "Transcription" | "Qualification", response: Response): Promise<Response> {
+  const error = await readOpenAIError(response);
+  return renderOpenAIErrorResponse(stage, response.status, error);
+}
+
+type OpenAIErrorInfo = {
+  code: string;
+  message: string;
+  requestId?: string;
+};
+
+async function readOpenAIError(response: Response): Promise<OpenAIErrorInfo> {
   const requestId = response.headers.get("x-request-id") || undefined;
   const raw = await response.text();
   let code = "";
@@ -264,30 +321,46 @@ async function openAIErrorResponse(stage: "Transcription" | "Qualification", res
     message = raw;
   }
 
+  return { code, message, requestId };
+}
+
+function isUnavailableModelError(status: number, error: OpenAIErrorInfo): boolean {
+  if (status === 403 || status === 404) return true;
+  if (status !== 400) return false;
+  return /model|access|not[_ -]?found|does not exist|unsupported/i.test(`${error.code} ${error.message}`);
+}
+
+function renderOpenAIErrorResponse(
+  stage: "Transcription" | "Qualification",
+  status: number,
+  error: OpenAIErrorInfo,
+): Response {
+  const { code, message, requestId } = error;
+
   console.error(JSON.stringify({
     stage: stage.toLowerCase(),
-    status: response.status,
+    status,
     code: code || undefined,
     request_id: requestId,
     message: message.slice(0, 500) || undefined,
   }));
 
-  let friendly = message.trim() || `OpenAI returned status ${response.status}.`;
-  if (response.status === 401) {
+  let friendly = message.trim() || `OpenAI returned status ${status}.`;
+  if (status === 401) {
     friendly = "OpenAI rejected the API key. Replace the OPENAI_API_KEY Supabase secret with a valid OpenAI API key.";
-  } else if (response.status === 429 && (/quota|billing|credit/i.test(message) || code === "insufficient_quota")) {
+  } else if (status === 429 && (/quota|billing|credit/i.test(message) || code === "insufficient_quota")) {
     friendly = "OpenAI API billing or credits are not active for this key. Add API billing/credits in the OpenAI Platform, then try again.";
-  } else if (response.status === 429) {
+  } else if (status === 429) {
     friendly = "OpenAI is rate-limiting requests. Wait a moment and try again.";
-  } else if (response.status === 403) {
+  } else if (status === 403) {
     friendly = "This OpenAI API key does not have permission to use the requested model.";
-  } else if (response.status === 404) {
+  } else if (status === 404) {
     friendly = "The requested OpenAI model is not available to this API project.";
   }
 
   return json({
     error: `${stage} failed: ${friendly.slice(0, 500)}`,
-    code: code || `openai_${response.status}`,
+    code: code || `openai_${status}`,
     request_id: requestId,
   }, 502);
 }
