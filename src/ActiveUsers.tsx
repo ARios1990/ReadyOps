@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Loader2, RefreshCw, Search, ShieldCheck, Users, Wifi, Clock,
+  ArrowLeft, Building2, Loader2, RefreshCw, Search, ShieldCheck, Users, Wifi, Clock,
 } from 'lucide-react';
 import { supabase } from './supabase';
 
@@ -20,6 +20,16 @@ type ProfileRow = {
 };
 
 type Row = PresenceRow & { profile: ProfileRow | null };
+
+type CompanyPresenceRow = {
+  company_id: string;
+  session_started_at: string;
+  last_seen_at: string;
+  current_section: string | null;
+  updated_at: string;
+};
+
+type CompanyRow = CompanyPresenceRow & { company_name: string; company_state: string | null };
 
 const ONLINE_WINDOW_MS = 90_000;
 const REFRESH_MS = 15_000;
@@ -58,6 +68,7 @@ function roleTone(role: string | null | undefined): string {
 
 export function ActiveUsers() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [companyRows, setCompanyRows] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -69,37 +80,55 @@ export function ActiveUsers() {
     else setRefreshing(true);
     setError('');
 
-    const { data: presenceData, error: presenceError } = await supabase
-      .from('user_presence')
-      .select('user_id, session_started_at, last_seen_at, current_path, updated_at')
-      .order('last_seen_at', { ascending: false });
+    const [userPresenceResult, companyPresenceResult] = await Promise.all([
+      supabase
+        .from('user_presence')
+        .select('user_id, session_started_at, last_seen_at, current_path, updated_at')
+        .order('last_seen_at', { ascending: false }),
+      supabase
+        .from('company_portal_presence')
+        .select('company_id, session_started_at, last_seen_at, current_section, updated_at')
+        .order('last_seen_at', { ascending: false }),
+    ]);
 
-    if (presenceError) {
-      setError(presenceError.message);
+    if (userPresenceResult.error || companyPresenceResult.error) {
+      setError((userPresenceResult.error || companyPresenceResult.error)?.message || 'Unable to load presence activity.');
       if (initial) setLoading(false);
       else setRefreshing(false);
       return;
     }
 
-    const presence = (presenceData || []) as PresenceRow[];
+    const presence = (userPresenceResult.data || []) as PresenceRow[];
+    const companyPresence = (companyPresenceResult.data || []) as CompanyPresenceRow[];
     const userIds = [...new Set(presence.map(p => p.user_id))];
+    const companyIds = [...new Set(companyPresence.map(p => p.company_id))];
     let profileMap = new Map<string, ProfileRow>();
+    let companyMap = new Map<string, { id: string; name: string; state: string | null }>();
 
-    if (userIds.length) {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, role, display_name, email')
-        .in('id', userIds);
-      if (profileError) {
-        setError(profileError.message);
+    const [profileResult, companyResult] = await Promise.all([
+      userIds.length
+        ? supabase.from('profiles').select('id, role, display_name, email').in('id', userIds)
+        : Promise.resolve({ data: [], error: null }),
+      companyIds.length
+        ? supabase.from('roster_companies').select('id, name, state').in('id', companyIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (profileResult.error || companyResult.error) {
+        setError((profileResult.error || companyResult.error)?.message || 'Unable to load presence details.');
         if (initial) setLoading(false);
         else setRefreshing(false);
         return;
-      }
-      profileMap = new Map((profileData || []).map(p => [p.id as string, p as ProfileRow]));
     }
 
+    profileMap = new Map((profileResult.data || []).map(p => [p.id as string, p as ProfileRow]));
+    companyMap = new Map((companyResult.data || []).map(c => [c.id as string, c as { id: string; name: string; state: string | null }]));
+
     setRows(presence.map(p => ({ ...p, profile: profileMap.get(p.user_id) || null })));
+    setCompanyRows(companyPresence.map(p => {
+      const company = companyMap.get(p.company_id);
+      return { ...p, company_name: company?.name || 'Unknown company', company_state: company?.state || null };
+    }));
     setNow(Date.now());
     if (initial) setLoading(false);
     else setRefreshing(false);
@@ -111,8 +140,11 @@ export function ActiveUsers() {
     const poll = window.setInterval(() => { void load(false); }, REFRESH_MS);
     const tick = window.setInterval(() => setNow(Date.now()), 5_000);
     const channel = supabase
-      .channel('user_presence_admin')
+      .channel('readyops_presence_admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, () => {
+        void load(false);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_portal_presence' }, () => {
         void load(false);
       })
       .subscribe();
@@ -137,8 +169,18 @@ export function ActiveUsers() {
     });
   }, [rows, search]);
 
+  const filteredCompanies = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return companyRows;
+    return companyRows.filter(row => [row.company_name, row.company_state, row.current_section]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(q)));
+  }, [companyRows, search]);
+
   const online = filtered.filter(r => isOnline(r.last_seen_at, now));
   const recent = filtered.filter(r => !isOnline(r.last_seen_at, now));
+  const companiesOnline = filteredCompanies.filter(r => isOnline(r.last_seen_at, now));
+  const companiesRecent = filteredCompanies.filter(r => !isOnline(r.last_seen_at, now));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -155,7 +197,7 @@ export function ActiveUsers() {
               <h1 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                 <Users size={18} className="text-blue-600" /> Active Users
               </h1>
-              <p className="truncate text-xs text-slate-500">Live view of who has ReadyOps open right now.</p>
+              <p className="truncate text-xs text-slate-500">Live view of staff and companies using ReadyOps right now.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -164,7 +206,7 @@ export function ActiveUsers() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60"></span>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
               </span>
-              {online.length} online
+              {online.length + companiesOnline.length} online
             </div>
             <button
               onClick={() => { void load(false); }}
@@ -178,10 +220,11 @@ export function ActiveUsers() {
       </header>
 
       <main className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatCard label="Online now" value={online.length} tone="emerald" icon={Wifi} />
-          <StatCard label="Recently active" value={recent.length} tone="blue" icon={Clock} />
-          <StatCard label="Total tracked" value={rows.length} tone="slate" icon={ShieldCheck} />
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Staff online" value={online.length} tone="emerald" icon={Wifi} />
+          <StatCard label="Company portals online" value={companiesOnline.length} tone="blue" icon={Building2} />
+          <StatCard label="Recently active" value={recent.length + companiesRecent.length} tone="blue" icon={Clock} />
+          <StatCard label="Total tracked" value={rows.length + companyRows.length} tone="slate" icon={ShieldCheck} />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -190,7 +233,7 @@ export function ActiveUsers() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, email, role, or page..."
+              placeholder="Search staff, company, role, or page..."
               className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -208,17 +251,33 @@ export function ActiveUsers() {
           </div>
         ) : (
           <div className="space-y-6">
+            <CompanyPresenceSection
+              title="Companies Using Their Portal"
+              subtitle="Private company links active within the last 90 seconds"
+              rows={companiesOnline}
+              onlineState
+              now={now}
+              emptyText="No company portal is currently active."
+            />
+            <CompanyPresenceSection
+              title="Recently Active Company Portals"
+              subtitle="Company portals last seen more than 90 seconds ago"
+              rows={companiesRecent}
+              onlineState={false}
+              now={now}
+              emptyText="No recent company portal activity to show."
+            />
             <PresenceSection
-              title="Online Now"
-              subtitle="Active within the last 90 seconds"
+              title="Staff Online Now"
+              subtitle="Signed-in ReadyOps users active within the last 90 seconds"
               rows={online}
               onlineState
               now={now}
               emptyText="No one is currently online."
             />
             <PresenceSection
-              title="Recently Active"
-              subtitle="Last seen more than 90 seconds ago"
+              title="Recently Active Staff"
+              subtitle="Signed-in users last seen more than 90 seconds ago"
               rows={recent}
               onlineState={false}
               now={now}
@@ -254,6 +313,87 @@ function StatCard({
         <Icon size={18} />
       </div>
     </div>
+  );
+}
+
+function CompanyPresenceSection({
+  title, subtitle, rows, onlineState, now, emptyText,
+}: {
+  title: string;
+  subtitle: string;
+  rows: CompanyRow[];
+  onlineState: boolean;
+  now: number;
+  emptyText: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-5 py-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Building2 size={16} className="text-blue-600" /> {title}</h2>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{rows.length}</span>
+      </header>
+
+      {rows.length === 0 ? (
+        <div className="px-5 py-10 text-center text-sm text-slate-500">{emptyText}</div>
+      ) : (
+        <>
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Company</th>
+                  <th className="px-5 py-3 font-semibold">Portal Section</th>
+                  <th className="px-5 py-3 font-semibold">Session Started</th>
+                  <th className="px-5 py-3 font-semibold">Last Seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <tr key={row.company_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
+                    <td className="px-5 py-3"><StatusDot online={onlineState} /></td>
+                    <td className="px-5 py-3">
+                      <div className="font-semibold text-slate-900">{row.company_name}</div>
+                      <div className="text-xs text-slate-500">{row.company_state || 'Company portal'}</div>
+                    </td>
+                    <td className="px-5 py-3"><PathPill path={row.current_section ? `/company-portal/${row.current_section}` : '/company-portal'} /></td>
+                    <td className="px-5 py-3 text-slate-600">{formatDateTime(row.session_started_at)}</td>
+                    <td className="px-5 py-3 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-3 p-4 md:hidden">
+            {rows.map(row => (
+              <article key={row.company_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{row.company_name}</div>
+                    <div className="text-xs text-slate-500">{row.company_state || 'Company portal'}</div>
+                  </div>
+                  <StatusDot online={onlineState} />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Section</dt>
+                    <dd className="mt-0.5"><PathPill path={row.current_section || 'portal'} /></dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Last seen</dt>
+                    <dd className="mt-0.5 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
