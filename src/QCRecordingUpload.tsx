@@ -421,7 +421,7 @@ export function QCRecordingUpload({
         throw new Error('Your ReadyOps session expired. Sign in again, then retry AI Transcribe & Qualify.');
       }
       const { data, error: invokeError } = await supabase.functions.invoke('transcribe-and-qualify', {
-        body: { lead_id: leadId },
+        body: { lead_id: leadId, recording_url: value || undefined },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const response = data as QualifyResponse | null;
