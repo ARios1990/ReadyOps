@@ -245,7 +245,7 @@ export function AdminLeadCRM() {
         row.lead.zip_code,
         row.appointment.appointment_date,
         row.appointment.start_time,
-        row.company.name,
+        displayCompanyName(row.lead.qc_status, row.company.name),
         row.agent.name,
         row.lead.service_needed,
         form.roof_age,
@@ -612,14 +612,18 @@ function LeadRow({
           : "—"}
       </Cell>
       <Cell className="font-semibold">
-        <a
-          href={`/admin/operations?company=${row.company.id}`}
-          onClick={(event) => event.stopPropagation()}
-          className="inline-flex items-center gap-1 text-blue-700 hover:underline"
-          title="Open this company in Companies & Scheduling"
-        >
-          {value(row.company.name)} <ExternalLink size={11} />
-        </a>
+        {row.lead.qc_status === "denied" ? (
+          <span className="font-black text-red-700">QC Denied</span>
+        ) : (
+          <a
+            href={`/admin/operations?company=${row.company.id}`}
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+            title="Open this company in Companies & Scheduling"
+          >
+            {value(row.company.name)} <ExternalLink size={11} />
+          </a>
+        )}
       </Cell>
       <Cell>{value(row.agent.name)}</Cell>
       <Cell>{value(row.lead.service_needed)}</Cell>
@@ -773,16 +777,19 @@ function LeadDetailModal({
               {lead.lead_code || shortId(lead.id)}
             </p>
             <h2 className="text-xl font-black">
-              {value(lead.full_name)} — {value(detail.company?.name)}
+              {value(lead.full_name)} —{" "}
+              {displayCompanyName(lead.qc_status, detail.company?.name)}
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <a
-              href={`/admin/operations?company=${detail.company?.id}`}
-              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold text-blue-700"
-            >
-              <ExternalLink size={13} /> Open Company
-            </a>
+            {lead.qc_status !== "denied" && (
+              <a
+                href={`/admin/operations?company=${detail.company?.id}`}
+                className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold text-blue-700"
+              >
+                <ExternalLink size={13} /> Open Company
+              </a>
+            )}
             {!editing && (
               <button
                 onClick={() => setEditing(true)}
@@ -863,7 +870,10 @@ function LeadDetailModal({
                   label="Company / Inspector"
                   value={
                     <div>
-                      {value(detail.company?.name)}
+                      {displayCompanyName(
+                        lead.qc_status,
+                        detail.company?.name,
+                      )}
                       <p className="text-xs text-slate-500">
                         Inspector: {value(detail.inspector?.name)}
                       </p>
@@ -1768,6 +1778,11 @@ function primaryStatus(row: Obj): string {
     row.appointment?.status ||
     "pending"
   );
+}
+function displayCompanyName(qcStatus: unknown, companyName: unknown): string {
+  return String(qcStatus || "").toLowerCase() === "denied"
+    ? "QC Denied"
+    : value(companyName);
 }
 function shortId(id: unknown): string {
   return (

@@ -478,7 +478,7 @@ export function QCRecordingUpload({
       />
 
       {value.startsWith(STORAGE_PREFIX) && <p className="mt-2 break-all text-[10px] font-semibold text-blue-700">Private upload attached.</p>}
-      {playbackUrl && <><audio controls preload="none" src={playbackUrl} className="mt-3 w-full"/><a href={playbackUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-blue-700"><ExternalLink size={12}/> Open audio</a></>}
+      {playbackUrl && <><audio controls preload="metadata" src={playbackUrl} className="mt-3 w-full"/><a href={playbackUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-blue-700"><ExternalLink size={12}/> Open audio</a></>}
       {error && <p className="mt-2 text-xs font-semibold text-red-700">{error}</p>}
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
