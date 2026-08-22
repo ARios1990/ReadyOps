@@ -33,6 +33,11 @@ const MAIN_ITEMS: readonly SidebarItem[] = [
   ['appointments', 'Appointments', CalendarDays, '/?view=appointments'],
 ] as const;
 
+const MANAGER_MAIN_ITEMS: readonly SidebarItem[] = [
+  ['overview', 'Team Dashboard', Home, '/manager'],
+  ['qc', 'Team QC Queue', ShieldCheck, '/qc'],
+] as const;
+
 const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
   ['staff', 'Agents & Managers', UsersRound, '/#readyops-staff'],
   ['teams', 'Teams', UsersRound, '/#readyops-staff'],
@@ -53,6 +58,7 @@ type Props = {
 
 export function AdminWorkspaceShell({ active, title, subtitle, actions, children }: Props) {
   const { profile, signOut } = useAuth();
+  const managerMode = profile?.role === 'manager';
   const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
@@ -103,8 +109,8 @@ export function AdminWorkspaceShell({ active, title, subtitle, actions, children
       >
         {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
       </button>
-      <AdminNavGroup title="MAIN" items={MAIN_ITEMS} active={active} collapsed={collapsed && !isMobile} onSelect={navigate} />
-      <AdminNavGroup title="MANAGEMENT" items={MANAGEMENT_ITEMS} active={active} collapsed={collapsed && !isMobile} onSelect={navigate} />
+      <AdminNavGroup title="MAIN" items={managerMode ? MANAGER_MAIN_ITEMS : MAIN_ITEMS} active={active} collapsed={collapsed && !isMobile} onSelect={navigate} />
+      {!managerMode && <AdminNavGroup title="MANAGEMENT" items={MANAGEMENT_ITEMS} active={active} collapsed={collapsed && !isMobile} onSelect={navigate} />}
     </aside>
 
     <div className="readyops-ref-workspace">
@@ -114,13 +120,13 @@ export function AdminWorkspaceShell({ active, title, subtitle, actions, children
           <button className="readyops-ref-icon-button" onClick={toggleSidebar} title="Open or collapse navigation"><Menu size={17} /></button>
           <div className="min-w-0">
             <h1 className="truncate text-base font-extrabold">Ready Ops</h1>
-            <p className="truncate text-[11px] opacity-70">Admin Dashboard — Full Access</p>
+            <p className="truncate text-[11px] opacity-70">{managerMode ? 'Manager Dashboard — Team Access' : 'Admin Dashboard — Full Access'}</p>
           </div>
         </div>
         <div className="readyops-ref-top-actions">
           <span className="readyops-ref-live"><i /> Live</span>
-          <span className="readyops-ref-admin"><i /> Admin</span>
-          <button className="readyops-ref-manage" onClick={() => navigate('/')}><Settings size={14} /> Manage</button>
+          <span className="readyops-ref-admin"><i /> {managerMode ? 'Manager' : 'Admin'}</span>
+          <button className="readyops-ref-manage" onClick={() => navigate(managerMode ? '/manager' : '/')}><Settings size={14} /> {managerMode ? 'Team' : 'Manage'}</button>
           <ThemeToggle />
           <div className="relative">
             <button className="readyops-ref-user" onClick={() => setUserMenu(value => !value)}>
