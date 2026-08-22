@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
-  ShieldCheck, Trash2, UserPlus, UsersRound, WalletCards, BarChart3, Wifi,
+  ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3, Wifi,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -51,7 +51,6 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
 
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Managers', UsersRound],
-  ['users', 'Users', UserPlus],
   ['teams', 'Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
@@ -184,7 +183,6 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     else if (key === 'companies') window.location.href = '/admin/operations';
     else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
-    else if (key === 'users') openManage('users');
     else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
     else if (key === 'reports') setView('reports');
     else if (key === 'invoices') setView('invoices');
@@ -304,7 +302,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
               actions={(
                 <>
                   <button className="readyops-ref-primary" onClick={() => openManage('add-company')}><Plus size={14}/> Add Company</button>
-                  <button className="readyops-ref-green" onClick={() => openManage('create-user')}><Plus size={14}/> Add Agent</button>
+                  <button className="readyops-ref-green" onClick={() => openManage('agents')}><Plus size={14}/> Add Agent</button>
                   <button className="readyops-ref-purple" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
                   <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Edit Status</button>
                 </>
@@ -330,7 +328,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
               <div className="readyops-ref-toolbar">
                 <div className="readyops-ref-search"><Search size={14}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={staffTab === 'managers' ? 'Search managers...' : 'Search agents...'}/></div>
                 <div className="ml-auto flex flex-wrap gap-2">
-                  <button className="readyops-ref-primary" onClick={() => openManage('create-user')}><Plus size={14}/> {staffTab === 'managers' ? 'Add Manager' : 'Add Agent'}</button>
+                  <button className="readyops-ref-primary" onClick={() => openManage(staffTab === 'managers' ? undefined : 'agents')}><Plus size={14}/> {staffTab === 'managers' ? 'Add Manager' : 'Add Agent'}</button>
                   <button className="readyops-ref-secondary" onClick={() => void addTeam()}><Plus size={14}/> Add Team</button>
                   <label className="readyops-ref-filter"><Filter size={14}/><select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}><option value="all">Filter</option>{store.teams.map(team => <option key={team.id} value={team.id}>{team.abbreviation}</option>)}</select></label>
                 </div>
@@ -387,7 +385,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
           onClose={() => setShowSchedulingManager(false)}
         />
       )}
-      {showManage && <AdminPanel store={store} onClose={() => { setShowManage(false); void refreshDashboard(); }} initialTab={manageTab}/>}
+      {showManage && <AdminPanel store={store} onClose={() => setShowManage(false)} initialTab={manageTab}/>} 
     </div>
   );
 }

@@ -16,22 +16,6 @@ export function localDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Returns a YYYY-MM-DD calendar date in the requested IANA time zone. */
-export function dateInTimeZone(date: Date, timeZone: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(date);
-    const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    return `${value.year}-${value.month}-${value.day}`;
-  } catch {
-    return localDate(date);
-  }
-}
-
 export function addDays(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
