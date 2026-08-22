@@ -24,11 +24,12 @@ interface Props {
   values: Record<string, unknown>;
   disabled?: boolean;
   submitLabel?: string;
+  recordingUploadSlug?: string;
   onChange: (key: string, value: unknown) => void;
   onSubmit: () => void;
 }
 
-export function DynamicLeadForm({ schema, values, disabled = false, submitLabel = 'Confirm Appointment', onChange, onSubmit }: Props) {
+export function DynamicLeadForm({ schema, values, disabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, onChange, onSubmit }: Props) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
@@ -41,7 +42,7 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
           <h3 className="text-sm font-bold text-slate-900 mb-4">{section.title}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             {section.fields.filter(field => shouldShowField(field.showWhen, values)).map(field => (
-              <Field key={field.key} field={field} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} onChange={onChange} />
+              <Field key={field.key} field={field} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />
             ))}
           </div>
         </section>
@@ -57,13 +58,13 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
   );
 }
 
-function Field({ field, value, disabled, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; onChange: (key: string, value: unknown) => void }) {
+function Field({ field, value, disabled, recordingUploadSlug, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; onChange: (key: string, value: unknown) => void }) {
   const common = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50';
   const label = <label className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}{field.required ? ' *' : ''}</label>;
   const isWide = field.type === 'textarea' || field.type === 'address' || field.type === 'multiselect' || field.type === 'recording';
 
   if (field.type === 'recording') {
-    return <RecordingField field={field} value={value} disabled={disabled} onChange={onChange} />;
+    return <RecordingField field={field} value={value} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />;
   }
 
   if (field.type === 'textarea') {
@@ -107,7 +108,7 @@ function Field({ field, value, disabled, onChange }: { field: PortalFormField; v
   );
 }
 
-function RecordingField({ field, value, disabled, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; onChange: (key: string, value: unknown) => void }) {
+function RecordingField({ field, value, disabled, recordingUploadSlug, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; onChange: (key: string, value: unknown) => void }) {
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -120,7 +121,7 @@ function RecordingField({ field, value, disabled, onChange }: { field: PortalFor
     try {
       const sessionId = getPortalSessionId();
       const parts = window.location.pathname.split('/').filter(Boolean);
-      const slug = parts[0] === 'book' ? decodeURIComponent(parts[1] || '') : '';
+      const slug = recordingUploadSlug || (parts[0] === 'book' ? decodeURIComponent(parts[1] || '') : '');
       if (!slug) throw new Error('Company form link is missing its company slug.');
 
       const { data, error: tokenError } = await supabase.functions.invoke('agent-recording-upload-token', {

@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  Send,
   ShieldCheck,
   Shuffle,
   Trash2,
@@ -117,6 +118,7 @@ function quoteCsv(value: unknown): string {
 export function QCQueue() {
   const { profile } = useAuth();
   const isManager = profile?.role === "manager";
+  const isAdmin = profile?.role === "admin";
   const initialParams =
     typeof window === "undefined"
       ? new URLSearchParams()
@@ -315,6 +317,16 @@ export function QCQueue() {
       inReview: countBy(selectedRows, "in_review"),
       managerApproved: countBy(selectedRows, "manager_approved"),
       approved: countBy(selectedRows, "approved"),
+      awaitingSend: selectedRows.filter(
+        (row) =>
+          (row.qc_review?.status || row.lead?.qc_status) === "approved" &&
+          !row.appointment?.company_visible_at,
+      ).length,
+      sent: selectedRows.filter(
+        (row) =>
+          (row.qc_review?.status || row.lead?.qc_status) === "approved" &&
+          Boolean(row.appointment?.company_visible_at),
+      ).length,
       denied: countBy(selectedRows, "denied"),
       correction: countBy(selectedRows, "needs_correction"),
     }),
@@ -560,10 +572,34 @@ export function QCQueue() {
         decision === "approved"
           ? isManager
             ? "Manager review submitted to Main QC. The lead remains hidden from the client."
-            : "Final QC approved and released to the Company Link."
+            : "QC Approved. The lead is still internal until an Admin presses Send Lead."
           : decision === "needs_correction"
             ? "Returned to the assigned agent for correction."
             : "Denied; it remains hidden from the Company Link.",
+      );
+      setSelected(null);
+      await load(true);
+    }
+    setBusy(false);
+  }
+  async function sendLead(row: Obj) {
+    if (!isAdmin || !row?.lead?.id) return;
+    if (
+      !window.confirm(
+        `Send ${row.lead.full_name || "this lead"} to ${row.company?.name || "the company"}? The company will be able to see it and it will count as delivered.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    const { error: sendError } = await supabase.rpc(
+      "qc_send_lead_to_client",
+      { p_lead_id: row.lead.id },
+    );
+    if (sendError) setError(rpcError(sendError));
+    else {
+      setMessage(
+        `${row.lead.lead_code || "Lead"} was sent to ${row.company?.name || "the company"}.`,
       );
       setSelected(null);
       await load(true);
@@ -700,7 +736,9 @@ export function QCQueue() {
       subtitle={
         isManager
           ? "Review your team’s leads and submit approvals to Main QC."
-          : "Complete final QC and release approved leads to clients."
+          : isAdmin
+            ? "Complete QC, then explicitly send approved leads to clients."
+            : "Complete final QC; an Admin sends approved leads to clients."
       }
       actions={actions}
     >
@@ -711,7 +749,9 @@ export function QCQueue() {
       >
         {isManager
           ? "Manager QC mode: Approve submits the lead to Main QC. It does not send or expose the lead to the client."
-          : "Final QC mode: only an Admin or Main QC approval releases a lead to the client."}
+          : isAdmin
+            ? "Admin QC mode: Approve keeps the lead internal. Use Send Lead only after QC is complete."
+            : "Final QC mode: Approve keeps the lead internal. An Admin must press Send Lead before the client can see it."}
       </div>
       <section className="readyops-ref-metrics">
         <Metric
@@ -741,8 +781,14 @@ export function QCQueue() {
         <Metric
           icon={<CheckCircle2 />}
           tone="green"
-          label="Client Approved"
-          value={selectedSummary.approved}
+          label="Awaiting Send"
+          value={selectedSummary.awaitingSend}
+        />
+        <Metric
+          icon={<Send />}
+          tone="green"
+          label="Sent to Client"
+          value={selectedSummary.sent}
         />
         <Metric
           icon={<AlertTriangle />}
@@ -836,7 +882,7 @@ export function QCQueue() {
               ["pending", "Pending QC"],
               ["in_review", "In Review"],
               ["manager_approved", "Awaiting Final QC"],
-              ["approved", "Client Approved"],
+              ["approved", "QC Approved / Sent"],
               ["needs_correction", "Needs Correction"],
               ["denied", "Denied"],
             ].map(([value, label]) => ({ value, label }))}
@@ -986,7 +1032,9 @@ export function QCQueue() {
               open={expanded.has(items[0].company.id)}
               onToggle={() => toggleGroup(items[0].company.id)}
               onReview={openReview}
+              onSend={sendLead}
               isManager={isManager}
+              canSend={isAdmin}
               dateBasis={dateBasis}
               allHistory={isAllHistorySearch}
             />
@@ -1022,6 +1070,8 @@ export function QCQueue() {
           reopen={reopen}
           openExternal={openExternal}
           isManager={isManager}
+          canSend={isAdmin}
+          send={() => sendLead(selected)}
           selectedAgentId={selectedAgentId}
           setSelectedAgentId={setSelectedAgentId}
           reassignAgent={reassignAgent}
@@ -1037,7 +1087,9 @@ function CompanyGroup({
   open,
   onToggle,
   onReview,
+  onSend,
   isManager,
+  canSend,
   dateBasis,
   allHistory,
 }: {
@@ -1045,7 +1097,9 @@ function CompanyGroup({
   open: boolean;
   onToggle: () => void;
   onReview: (row: Obj, start?: boolean) => Promise<void>;
+  onSend: (row: Obj) => Promise<void>;
   isManager: boolean;
+  canSend: boolean;
   dateBasis: "appointment" | "call";
   allHistory: boolean;
 }) {
@@ -1054,6 +1108,12 @@ function CompanyGroup({
   const inReview = countBy(items, "in_review");
   const managerApproved = countBy(items, "manager_approved");
   const approved = countBy(items, "approved");
+  const awaitingSend = items.filter(
+    (row) =>
+      (row.qc_review?.status || row.lead.qc_status) === "approved" &&
+      !row.appointment?.company_visible_at,
+  ).length;
+  const sent = approved - awaitingSend;
   const denied = countBy(items, "denied");
   const correction = countBy(items, "needs_correction");
   const actionable = isManager
@@ -1085,7 +1145,10 @@ function CompanyGroup({
         {managerApproved > 0 && (
           <Pill tone="purple">{managerApproved} Awaiting Final</Pill>
         )}
-        <Pill tone="green">{approved} Client Approved</Pill>
+        {awaitingSend > 0 && (
+          <Pill tone="orange">{awaitingSend} Awaiting Send</Pill>
+        )}
+        <Pill tone="green">{sent} Sent</Pill>
         {correction > 0 && (
           <Pill tone="orange">{correction} Needs Correction</Pill>
         )}
@@ -1176,16 +1239,30 @@ function CompanyGroup({
                       )}
                     </td>
                     <td>
-                      <button
-                        onClick={() => void onReview(row, start)}
-                        className="rounded-lg border border-blue-500 px-4 py-1.5 font-bold text-blue-700"
-                      >
-                        {status === "pending"
-                          ? "Start QC"
-                          : status === "manager_approved" && isManager
-                            ? "Submitted"
-                            : "Review"}
-                      </button>
+                      {status === "approved" &&
+                      !row.appointment?.company_visible_at &&
+                      canSend ? (
+                        <button
+                          onClick={() => void onSend(row)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-1.5 font-bold text-white"
+                        >
+                          <Send size={12} /> Send Lead
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => void onReview(row, start)}
+                          className="rounded-lg border border-blue-500 px-4 py-1.5 font-bold text-blue-700"
+                        >
+                          {status === "pending"
+                            ? "Start QC"
+                            : status === "manager_approved" && isManager
+                              ? "Submitted"
+                              : status === "approved" &&
+                                  row.appointment?.company_visible_at
+                                ? "Sent"
+                                : "Review"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1225,6 +1302,8 @@ type DialogProps = {
   reopen: () => Promise<void>;
   openExternal: (row: Obj) => void;
   isManager: boolean;
+  canSend: boolean;
+  send: () => Promise<void>;
   selectedAgentId: string;
   setSelectedAgentId: (value: string) => void;
   reassignAgent: () => Promise<void>;
@@ -1234,6 +1313,8 @@ function ReviewDialog(props: DialogProps) {
   const status = props.row.qc_review?.status || props.row.lead.qc_status;
   const finalCompleted = ["approved", "denied"].includes(status);
   const managerSubmitted = status === "manager_approved";
+  const awaitingSend =
+    status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
   if (props.isManager && completed)
     return (
@@ -1247,8 +1328,8 @@ function ReviewDialog(props: DialogProps) {
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {managerSubmitted
-              ? "Your team review was submitted successfully. This lead is still hidden from the client and can only be released by an Admin or the Main QC Manager."
-              : "This review is complete. Only an Admin or the Main QC Manager can reopen a completed QC decision."}
+              ? "Your team review was submitted successfully. This lead is still hidden from the client. Final QC must approve it, and an Admin must press Send Lead."
+              : "This review is complete. Only an Admin can send an approved lead to the client or reopen a completed QC decision."}
           </p>
           <button
             onClick={props.close}
@@ -1443,6 +1524,31 @@ function ReviewDialog(props: DialogProps) {
                 <Shuffle size={14} /> Move / Keep Pending
               </button>
             </div>
+            {awaitingSend && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2 text-emerald-950">
+                  <CheckCircle2 size={17} />
+                  <h3 className="font-black">QC Approved — Awaiting Send</h3>
+                </div>
+                <p className="mt-2 text-xs text-emerald-800">
+                  Approval is complete, but the company still cannot see this
+                  lead and it does not count as delivered.
+                </p>
+                {props.canSend ? (
+                  <button
+                    disabled={props.busy}
+                    onClick={() => void props.send()}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 p-3 text-sm font-black text-white disabled:opacity-40"
+                  >
+                    <Send size={15} /> Send Lead to Company
+                  </button>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-white p-2 text-xs font-bold text-slate-600">
+                    Waiting for an Admin to press Send Lead.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="rounded-xl border p-4">
               <label className="text-xs font-bold text-slate-600">
                 Decision Reason
@@ -1510,6 +1616,7 @@ function ReviewDialog(props: DialogProps) {
               )}
             </div>
             {status === "approved" &&
+              Boolean(props.row.appointment?.company_visible_at) &&
               props.row.portal?.form_mode !== "internal" &&
               props.row.portal?.external_form_url && (
                 <button

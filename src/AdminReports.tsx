@@ -111,7 +111,7 @@ export function AdminReports() {
   function exportCsv() {
     const rows = filtered.map(r => ({
       Date: r.appointment_date,
-      Company: companies.find(c => c.id === r.company_id)?.name || '',
+      Company: r.lead?.qc_status === 'denied' ? 'QC Denied' : companies.find(c => c.id === r.company_id)?.name || '',
       Agent: r.lead?.agent_name || '',
       Lead_ID: r.lead?.lead_code || '',
       QC: r.lead?.qc_status || '',
@@ -154,7 +154,7 @@ function Kpi({label,value}:{label:string;value:string|number}){return <div class
 function money(v:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v)}
 function CompanyTable({rows}:{rows:Obj[]}){return <Table headers={['Company','Delivered','Approved','QC Denied','Good','No Show','Signed']} rows={rows.map(r=>[r.name,r.total,r.approved,r.denied,r.good,r.noShow,r.signed])}/>}
 function AgentTable({rows}:{rows:Obj[]}){return <Table headers={['Agent','Team','Leads','Approved','QC Denied','No Show','Signed','Conversion']} rows={rows.map(r=>[r.name,r.team,r.total,r.approved,r.denied,r.noShow,r.signed,`${r.conversion}%`])}/>}
-function AppointmentTable({rows,companies}:{rows:Obj[];companies:Obj[]}){return <Table headers={['Date','Company','Agent','Lead ID','QC','Client Status','Appointment','Sales']} rows={rows.map(r=>[r.appointment_date,companies.find(c=>c.id===r.company_id)?.name||'—',r.lead?.agent_name||'—',r.lead?.lead_code||'—',r.lead?.qc_status||'—',r.client_status||'—',r.status||'—',r.sales_outcome||'—'])}/>}
+function AppointmentTable({rows,companies}:{rows:Obj[];companies:Obj[]}){return <Table headers={['Date','Company','Agent','Lead ID','QC','Client Status','Appointment','Sales']} rows={rows.map(r=>[r.appointment_date,r.lead?.qc_status==='denied'?'QC Denied':companies.find(c=>c.id===r.company_id)?.name||'—',r.lead?.agent_name||'—',r.lead?.lead_code||'—',r.lead?.qc_status||'—',r.client_status||'—',r.status||'—',r.sales_outcome||'—'])}/>}
 function Financial({revenue,payroll}:{revenue:number;payroll:number}){return <div className="grid gap-4 p-5 md:grid-cols-3"><Kpi label="Invoice Revenue" value={money(revenue)}/><Kpi label="Payroll Cost" value={money(payroll)}/><Kpi label="Gross Before Other Costs" value={money(revenue-payroll)}/></div>}
 function Overview({companyRows,agentRows}:{companyRows:Obj[];agentRows:Obj[]}){return <div className="grid gap-5 p-5 xl:grid-cols-2"><div><h3 className="mb-3 font-bold">Company Performance</h3><CompanyTable rows={companyRows.slice(0,10)}/></div><div><h3 className="mb-3 font-bold">Agent Performance</h3><AgentTable rows={agentRows.slice(0,10)}/></div></div>}
 function Table({headers,rows}:{headers:string[];rows:(string|number)[][]}){return <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="bg-slate-50 text-left text-[10px] uppercase opacity-60">{headers.map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i} className="border-t">{r.map((v,j)=><td key={j} className="px-4 py-3">{String(v).replace(/_/g,' ')}</td>)}</tr>):<tr><td colSpan={headers.length} className="p-8 text-center opacity-50">No records for this filter.</td></tr>}</tbody></table></div>}
