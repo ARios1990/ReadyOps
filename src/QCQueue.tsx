@@ -8,6 +8,7 @@ import { supabase } from './supabase';
 import { AdminWorkspaceShell } from './AdminWorkspaceShell';
 import { QCRecordingUpload } from './QCRecordingUpload';
 import { buildExternalFormUrl, formatDateLong, formatTime, localDate, rpcError } from './portalUtils';
+import { leadStatusClasses, leadStatusLabel } from './leadStatusPresentation';
 
 // RPC records stay flexible while the migration preserves legacy portal fields.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,5 +151,5 @@ function ReviewDialog(props: DialogProps) {
 function Select({ value, onChange, emptyValue, label, options }: { value: string; onChange: (value: string) => void; emptyValue: string; label: string; options: { value: string; label: string }[] }) { return <select value={value} onChange={event => onChange(event.target.value)} className="h-10 rounded-lg border bg-white px-3 text-xs font-semibold"><option value={emptyValue}>{label}</option>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>; }
 function Metric({ icon, tone, label, value }: { icon: ReactNode; tone: string; label: string; value: ReactNode }) { return <div className={`readyops-ref-metric tone-${tone}`}><span className="readyops-ref-metric-icon">{icon}</span><div><p>{label}</p><strong>{value}</strong></div></div>; }
 function Pill({ tone, children }: { tone: 'amber' | 'green' | 'orange' | 'purple' | 'gray'; children: ReactNode }) { const classes = { amber: 'bg-amber-50 text-amber-700', green: 'bg-emerald-50 text-emerald-700', orange: 'bg-orange-50 text-orange-700', purple: 'bg-violet-50 text-violet-700', gray: 'bg-slate-100 text-slate-500' }; return <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold ${classes[tone]}`}>{children}</span>; }
-function StatusPill({ status }: { status: string }) { const normalized = String(status || 'pending'); const tone = normalized === 'approved' || normalized === 'good_inspected' || normalized === 'signed_contract' ? 'green' : normalized === 'denied' || normalized === 'bad' ? 'gray' : normalized === 'needs_correction' || normalized === 'no_show' ? 'orange' : normalized === 'in_review' ? 'purple' : 'amber'; return <Pill tone={tone}>{normalized.replace(/_/g, ' ').replace(/\b\w/g, value => value.toUpperCase())}</Pill>; }
+function StatusPill({ status }: { status: string }) { return <span className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-black ${leadStatusClasses(status)}`}>{leadStatusLabel(status)}</span>; }
 function Notice({ tone, text }: { tone: 'red' | 'blue'; text: string }) { return <div className={`mb-4 rounded-xl border p-3 text-sm ${tone === 'red' ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>{text}</div>; }
