@@ -62,7 +62,8 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [cuEmail, setCuEmail] = useState('');
   const [cuPassword, setCuPassword] = useState('');
   const [cuName, setCuName] = useState('');
-  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc'>('agent');
+  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'manager' | 'qc'>('agent');
+  const [cuTeam, setCuTeam] = useState('');
   const [cuAgent, setCuAgent] = useState('');
   const [cuLoading, setCuLoading] = useState(false);
   const [cuMsg, setCuMsg] = useState('');
@@ -171,6 +172,10 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     if (!cuEmail || !cuPassword || !cuName) return;
+    if ((cuRole === 'agent' || cuRole === 'manager') && !cuAgent && !cuTeam) {
+      setCuMsg('Select a team for agents and managers.');
+      return;
+    }
     setCuLoading(true);
     setCuMsg('');
 
@@ -191,10 +196,11 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
           Apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
-          email: cuEmail,
+          email: cuEmail.trim().toLowerCase(),
           password: cuPassword,
-          display_name: cuName,
+          display_name: cuName.trim(),
           role: cuRole,
+          team_id: cuTeam || store.agents.find(agent => agent.id === cuAgent)?.team_id || null,
           agent_id: cuAgent || null,
         }),
       }
@@ -204,9 +210,10 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
     if (!res.ok) {
       setCuMsg(data.error || 'Failed to create user');
     } else {
-      setCuMsg('User created successfully!');
-      setCuEmail(''); setCuPassword(''); setCuName(''); setCuRole('agent'); setCuAgent('');
+      setCuMsg(data.created === false ? 'Existing user updated and linked successfully!' : 'User created and linked successfully!');
+      setCuEmail(''); setCuPassword(''); setCuName(''); setCuRole('agent'); setCuTeam(''); setCuAgent('');
       await fetchProfiles();
+      await store.refetch();
     }
     setCuLoading(false);
   }
@@ -227,7 +234,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
       role="presentation"
     >
       <aside
-        className="absolute right-0 top-0 h-full w-full max-w-[1180px] overflow-y-auto border-l border-gray-200 bg-gray-50 shadow-2xl"
+        className="absolute left-0 top-0 h-full w-full max-w-[1180px] overflow-y-auto border-r border-gray-200 bg-gray-50 shadow-2xl"
         onMouseDown={event => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -242,7 +249,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
               {([
                 { key: 'companies', icon: Building2, label: 'Company Setup' },
                 { key: 'agents', icon: Users, label: 'Agents' },
-                { key: 'users', icon: UserPlus, label: 'Agent Names' },
+                { key: 'users', icon: UserPlus, label: 'Users' },
                 { key: 'add-company', icon: Plus, label: 'Add Company' },
                 { key: 'create-user', icon: UserPlus, label: 'Create User' },
               ] as { key: Tab; icon: typeof Building2; label: string }[]).map(t => (
@@ -500,6 +507,10 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
         {/* === USERS / AGENT NAMES TAB === */}
         {tab === 'users' && (
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-220px)] overflow-y-auto">
+            <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+              <div><h3 className="text-sm font-bold text-gray-800">User Accounts</h3><p className="text-[11px] text-gray-500">Create a login and link it to the matching staff record.</p></div>
+              <button onClick={() => setTab('create-user')} className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700"><UserPlus size={13} /> Create User</button>
+            </div>
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -516,7 +527,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                   const team = agent ? store.teams.find(t => t.id === agent.team_id) : null;
                   return (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="py-2 px-4 font-medium text-gray-800">{p.display_name}</td>
+                      <td className="py-2 px-4 font-medium text-gray-800">{p.display_name}{p.email && <span className="mt-0.5 block text-[10px] font-normal text-gray-400">{p.email}</span>}</td>
                       <td className="py-2 px-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded ${
                           p.role === 'admin' ? 'bg-amber-100 text-amber-700' : p.role === 'qc' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
@@ -659,9 +670,8 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
         {/* === CREATE USER TAB === */}
         {tab === 'create-user' && (
           <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-lg">
-            <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <UserPlus size={16} /> Create New User Account
-            </h3>
+            <h3 className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><UserPlus size={16} /> Create Staff Login</h3>
+            <p className="mb-4 text-xs text-gray-500">Agents are automatically created and linked when no existing agent is selected. Manager and admin roles are linked to their login profile.</p>
             <form onSubmit={handleCreateUser} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Display Name *</label>
@@ -676,36 +686,45 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Password *</label>
-                  <input type="text" value={cuPassword} onChange={e => setCuPassword(e.target.value)} required placeholder="Min 6 chars"
+                  <input type="password" value={cuPassword} onChange={e => setCuPassword(e.target.value)} required placeholder="Min 6 characters"
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
-                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent' | 'qc')}
+                  <select value={cuRole} onChange={e => setCuRole(e.target.value as 'admin' | 'agent' | 'manager' | 'qc')}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="agent">Agent</option>
+                    <option value="manager">Manager</option>
                     <option value="qc">QC - Quality Control</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Link to Agent</label>
-                  <select value={cuAgent} onChange={e => setCuAgent(e.target.value)}
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Team {cuRole === 'admin' || cuRole === 'qc' ? '(optional)' : '*'}</label>
+                  <select value={cuTeam} onChange={e => setCuTeam(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">None (link later)</option>
-                    {store.agents.map(a => {
-                      const t = store.teams.find(tm => tm.id === a.team_id);
-                      return <option key={a.id} value={a.id}>{a.name} ({t?.abbreviation})</option>;
-                    })}
+                    <option value="">Select team...</option>
+                    {store.teams.map(team => <option key={team.id} value={team.id}>{team.abbreviation} — {team.name}</option>)}
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Link Existing Agent (optional)</label>
+                <select value={cuAgent} onChange={e => { const agentId = e.target.value; setCuAgent(agentId); const agent = store.agents.find(item => item.id === agentId); if (agent) setCuTeam(agent.team_id); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Create/link automatically when needed</option>
+                  {store.agents.map(a => {
+                    const t = store.teams.find(tm => tm.id === a.team_id);
+                    return <option key={a.id} value={a.id}>{a.name} ({t?.abbreviation})</option>;
+                  })}
+                </select>
+              </div>
               {cuMsg && <p className={`text-xs ${cuMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{cuMsg}</p>}
-              <button type="submit" disabled={cuLoading || !cuEmail || !cuPassword || !cuName}
+              <button type="submit" disabled={cuLoading || !cuEmail || !cuPassword || !cuName || ((cuRole === 'agent' || cuRole === 'manager') && !cuTeam && !cuAgent)}
                 className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
-                <UserPlus size={14} /> {cuLoading ? 'Creating...' : 'Create User'}
+                <UserPlus size={14} /> {cuLoading ? 'Creating...' : 'Create & Link User'}
               </button>
             </form>
           </div>
