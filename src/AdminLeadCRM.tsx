@@ -16,7 +16,9 @@ import {
   History,
   Home,
   Loader2,
+  Pencil,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
   X,
@@ -38,6 +40,7 @@ type CrmData = {
   companies: Obj[];
   sources: string[];
 };
+type ReferenceData = { agents: Obj[] };
 
 const PAGE_SIZE = 50;
 const EMPTY_DATA: CrmData = {
@@ -65,7 +68,9 @@ export function AdminLeadCRM() {
   const [endDate, setEndDate] = useState("");
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [startEditing, setStartEditing] = useState(false);
   const [detail, setDetail] = useState<Obj | null>(null);
+  const [references, setReferences] = useState<ReferenceData>({ agents: [] });
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -74,9 +79,8 @@ export function AdminLeadCRM() {
     async (quiet = false) => {
       if (!quiet) setLoading(true);
       setError("");
-      const { data: result, error: loadError } = await supabase.rpc(
-        "get_admin_lead_crm",
-        {
+      const [crmResult, referenceResult] = await Promise.all([
+        supabase.rpc("get_admin_lead_crm", {
           p_search: search || null,
           p_company_id: companyId || null,
           p_qc_status: qcStatus === "all" ? null : qcStatus,
@@ -87,10 +91,17 @@ export function AdminLeadCRM() {
           p_end_date: endDate || null,
           p_limit: PAGE_SIZE,
           p_offset: offset,
-        },
-      );
-      if (loadError) setError(rpcError(loadError));
-      else setData((result || EMPTY_DATA) as CrmData);
+        }),
+        supabase.rpc("get_qc_reference_data"),
+      ]);
+      if (crmResult.error || referenceResult.error)
+        setError(rpcError(crmResult.error || referenceResult.error));
+      else {
+        setData((crmResult.data || EMPTY_DATA) as CrmData);
+        setReferences(
+          (referenceResult.data || { agents: [] }) as ReferenceData,
+        );
+      }
       setLoading(false);
     },
     [
@@ -142,8 +153,9 @@ export function AdminLeadCRM() {
     ? `${offset + 1}–${Math.min(offset + data.rows.length, data.total)} of ${data.total}`
     : "0 records";
 
-  async function openDetail(leadId: string) {
+  async function openDetail(leadId: string, edit = false) {
     setSelectedId(leadId);
+    setStartEditing(edit);
     setDetail(null);
     setDetailLoading(true);
     setError("");
@@ -156,6 +168,26 @@ export function AdminLeadCRM() {
       setSelectedId("");
     } else setDetail(result as Obj);
     setDetailLoading(false);
+  }
+
+  async function saveLeadEdits(
+    leadId: string,
+    leadPatch: Obj,
+    appointmentPatch: Obj,
+  ): Promise<boolean> {
+    setError("");
+    const { error: updateError } = await supabase.rpc("admin_update_lead_crm", {
+      p_lead_id: leadId,
+      p_lead_patch: leadPatch,
+      p_appointment_patch: appointmentPatch,
+    });
+    if (updateError) {
+      setError(rpcError(updateError));
+      return false;
+    }
+    await load(true);
+    await openDetail(leadId, false);
+    return true;
   }
 
   function updateFilter(action: () => void) {
@@ -253,8 +285,8 @@ export function AdminLeadCRM() {
   return (
     <AdminWorkspaceShell
       active="leads"
-      title="Admin Lead CRM"
-      subtitle="Homeowner and property records with appointment, company, agent, QC, client, and financial outcomes."
+      title="All Leads"
+      subtitle="Spreadsheet view of every submitted company lead. Corrections update the shared QC and company record."
       actions={actions}
     >
       {error && (
@@ -422,9 +454,9 @@ export function AdminLeadCRM() {
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
           <div>
-            <h3 className="font-black">Homeowner & Property Records</h3>
+            <h3 className="font-black">All Companies Lead Spreadsheet</h3>
             <p className="text-xs text-slate-500">
-              {visibleRange} • click any row for the complete record
+              {visibleRange} • click a row for the complete record or use Edit
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-bold">
@@ -460,7 +492,7 @@ export function AdminLeadCRM() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[3150px] text-xs">
+            <table className="w-full min-w-[3500px] border-separate border-spacing-0 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
                   {[
@@ -468,12 +500,14 @@ export function AdminLeadCRM() {
                     "Status",
                     "Homeowner Name",
                     "Phone",
+                    "Email",
                     "Address",
                     "City",
                     "State",
                     "ZIP",
                     "Appointment Date",
                     "Appointment Time",
+                    "Lead Received",
                     "Company",
                     "Agent",
                     "Service",
@@ -488,8 +522,12 @@ export function AdminLeadCRM() {
                     "Client Status",
                     "Source",
                     "Notes",
-                  ].map((label) => (
-                    <th key={label} className="whitespace-nowrap px-3 py-3">
+                    "Actions",
+                  ].map((label, index, labels) => (
+                    <th
+                      key={label}
+                      className={`whitespace-nowrap border-b px-3 py-3 ${index === 0 ? "sticky left-0 z-20 bg-slate-50" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-50" : ""}`}
+                    >
                       {label}
                     </th>
                   ))}
@@ -501,6 +539,7 @@ export function AdminLeadCRM() {
                     key={row.lead.id}
                     row={row}
                     onOpen={() => void openDetail(row.lead.id)}
+                    onEdit={() => void openDetail(row.lead.id, true)}
                   />
                 ))}
               </tbody>
@@ -517,13 +556,24 @@ export function AdminLeadCRM() {
             setSelectedId("");
             setDetail(null);
           }}
+          agents={references.agents}
+          initialEditing={startEditing}
+          onSave={saveLeadEdits}
         />
       )}
     </AdminWorkspaceShell>
   );
 }
 
-function LeadRow({ row, onOpen }: { row: Obj; onOpen: () => void }) {
+function LeadRow({
+  row,
+  onOpen,
+  onEdit,
+}: {
+  row: Obj;
+  onOpen: () => void;
+  onEdit: () => void;
+}) {
   const form = row.lead.form_data || {};
   const stormDate = form.storm_date || form.hail_date || form.last_checked_on;
   return (
@@ -531,7 +581,7 @@ function LeadRow({ row, onOpen }: { row: Obj; onOpen: () => void }) {
       onClick={onOpen}
       className="cursor-pointer border-t align-top hover:bg-blue-50/50"
     >
-      <Cell className="font-black text-blue-700">
+      <Cell className="sticky left-0 z-10 border-r bg-white font-black text-blue-700">
         {row.lead.lead_code || shortId(row.lead.id)}
       </Cell>
       <Cell>
@@ -539,13 +589,28 @@ function LeadRow({ row, onOpen }: { row: Obj; onOpen: () => void }) {
       </Cell>
       <Cell className="font-bold">{value(row.lead.full_name)}</Cell>
       <Cell>{value(row.lead.phone_number)}</Cell>
+      <Cell>{value(row.lead.email)}</Cell>
       <Cell className="max-w-[260px]">{value(row.lead.address)}</Cell>
       <Cell>{value(row.lead.city)}</Cell>
       <Cell>{value(row.lead.state)}</Cell>
       <Cell>{value(row.lead.zip_code)}</Cell>
       <Cell>{dateValue(row.appointment.appointment_date)}</Cell>
       <Cell>{timeValue(row.appointment.start_time)}</Cell>
-      <Cell className="font-semibold">{value(row.company.name)}</Cell>
+      <Cell>
+        {row.lead.created_at
+          ? new Date(row.lead.created_at).toLocaleString()
+          : "—"}
+      </Cell>
+      <Cell className="font-semibold">
+        <a
+          href={`/admin/operations?company=${row.company.id}`}
+          onClick={(event) => event.stopPropagation()}
+          className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+          title="Open this company in Companies & Scheduling"
+        >
+          {value(row.company.name)} <ExternalLink size={11} />
+        </a>
+      </Cell>
       <Cell>{value(row.agent.name)}</Cell>
       <Cell>{value(row.lead.service_needed)}</Cell>
       <Cell>{value(form.roof_age)}</Cell>
@@ -571,6 +636,17 @@ function LeadRow({ row, onOpen }: { row: Obj; onOpen: () => void }) {
       <Cell className="max-w-[300px] truncate" title={row.lead.notes || ""}>
         {value(row.lead.notes)}
       </Cell>
+      <Cell className="sticky right-0 z-10 border-l bg-white">
+        <button
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit();
+          }}
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700"
+        >
+          <Pencil size={12} /> Edit
+        </button>
+      </Cell>
     </tr>
   );
 }
@@ -579,11 +655,80 @@ function LeadDetailModal({
   detail,
   loading,
   close,
+  agents,
+  initialEditing,
+  onSave,
 }: {
   detail: Obj | null;
   loading: boolean;
   close: () => void;
+  agents: Obj[];
+  initialEditing: boolean;
+  onSave: (
+    leadId: string,
+    leadPatch: Obj,
+    appointmentPatch: Obj,
+  ) => Promise<boolean>;
 }) {
+  const [editing, setEditing] = useState(initialEditing);
+  const [draft, setDraft] = useState<Obj>({});
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  useEffect(() => {
+    if (detail) {
+      setDraft(buildEditDraft(detail));
+      setEditing(initialEditing);
+      setEditError("");
+    }
+  }, [detail, initialEditing]);
+
+  async function save() {
+    if (!detail?.lead?.id) return;
+    setSaving(true);
+    setEditError("");
+    const form = draft.form_data || {};
+    const leadPatch = {
+      full_name: draft.full_name,
+      phone_number: draft.phone_number,
+      email: draft.email,
+      address: draft.address,
+      city: draft.city,
+      state: draft.state,
+      zip_code: draft.zip_code,
+      service_needed: draft.service_needed,
+      language: draft.language,
+      notes: draft.notes,
+      home_value: draft.home_value,
+      sq_ft: draft.sq_ft,
+      web_url: draft.web_url,
+      source: draft.source,
+      source_lead_id: draft.source_lead_id,
+      source_disposition: draft.source_disposition,
+      qualification_status: draft.qualification_status,
+      agent_id: draft.agent_id,
+      form_data: form,
+    };
+    const appointmentPatch = detail.appointment?.id
+      ? {
+          appointment_date: draft.appointment_date,
+          start_time: draft.start_time,
+          status: draft.appointment_status,
+          client_status: draft.client_status,
+          attendance_status: draft.attendance_status,
+          inspection_status: draft.inspection_status,
+          sales_outcome: draft.sales_outcome,
+          inspector_notes: draft.inspector_notes,
+          company_action: draft.company_action,
+        }
+      : {};
+    const saved = await onSave(detail.lead.id, leadPatch, appointmentPatch);
+    if (!saved)
+      setEditError(
+        "The record could not be saved. Review the message above and try again.",
+      );
+    setSaving(false);
+  }
+
   if (loading || !detail)
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-6">
@@ -600,7 +745,7 @@ function LeadDetailModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 p-3 sm:p-6">
       <section className="mx-auto max-w-7xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-white px-5 py-4">
           <div>
             <p className="text-xs font-black uppercase tracking-wider text-blue-600">
               {lead.lead_code || shortId(lead.id)}
@@ -609,203 +754,699 @@ function LeadDetailModal({
               {value(lead.full_name)} — {value(detail.company?.name)}
             </h2>
           </div>
-          <button onClick={close} className="rounded-lg border p-2">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/admin/operations?company=${detail.company?.id}`}
+              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold text-blue-700"
+            >
+              <ExternalLink size={13} /> Open Company
+            </a>
+            {!editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
+              >
+                <Pencil size={13} /> Edit Record
+              </button>
+            )}
+            <button onClick={close} className="rounded-lg border p-2">
+              <X size={18} />
+            </button>
+          </div>
         </header>
         <div className="space-y-5 p-5">
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <HeroValue
-              label="Lead ID / Status"
-              value={
-                <>
-                  <strong>{lead.lead_code || shortId(lead.id)}</strong>
-                  <Status value={currentStatus} />
-                </>
-              }
+          {editing ? (
+            <LeadEditForm
+              detail={detail}
+              draft={draft}
+              setDraft={setDraft}
+              agents={agents}
+              saving={saving}
+              error={editError}
+              cancel={() => {
+                setDraft(buildEditDraft(detail));
+                setEditing(false);
+                setEditError("");
+              }}
+              save={() => void save()}
             />
-            <HeroValue label="Homeowner" value={value(lead.full_name)} />
-            <HeroValue
-              label="Phone / Email"
-              value={
-                <div>
-                  <a
-                    className="font-bold text-blue-700"
-                    href={`tel:${lead.phone_number || ""}`}
-                  >
-                    {value(lead.phone_number)}
-                  </a>
-                  <p className="text-xs text-slate-500">{value(lead.email)}</p>
-                </div>
-              }
-            />
-            <HeroValue
-              label="Property"
-              value={
-                [lead.address, lead.city, lead.state, lead.zip_code]
-                  .filter(Boolean)
-                  .join(", ") || "—"
-              }
-            />
-            <HeroValue
-              label="Appointment"
-              value={
-                appointment.appointment_date
-                  ? `${formatDateLong(appointment.appointment_date)} · ${timeValue(appointment.start_time)}`
-                  : "Not scheduled"
-              }
-            />
-            <HeroValue
-              label="Company / Inspector"
-              value={
-                <div>
-                  {value(detail.company?.name)}
-                  <p className="text-xs text-slate-500">
-                    Inspector: {value(detail.inspector?.name)}
-                  </p>
-                </div>
-              }
-            />
-            <HeroValue
-              label="Agent / Setter"
-              value={value(detail.agent?.name || lead.agent_name)}
-            />
-            <HeroValue
-              label="Lead Received"
-              value={
-                lead.created_at
-                  ? new Date(lead.created_at).toLocaleString()
-                  : "—"
-              }
-            />
-          </section>
+          ) : (
+            <>
+              <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <HeroValue
+                  label="Lead ID / Status"
+                  value={
+                    <>
+                      <strong>{lead.lead_code || shortId(lead.id)}</strong>
+                      <Status value={currentStatus} />
+                    </>
+                  }
+                />
+                <HeroValue label="Homeowner" value={value(lead.full_name)} />
+                <HeroValue
+                  label="Phone / Email"
+                  value={
+                    <div>
+                      <a
+                        className="font-bold text-blue-700"
+                        href={`tel:${lead.phone_number || ""}`}
+                      >
+                        {value(lead.phone_number)}
+                      </a>
+                      <p className="text-xs text-slate-500">
+                        {value(lead.email)}
+                      </p>
+                    </div>
+                  }
+                />
+                <HeroValue
+                  label="Property"
+                  value={
+                    [lead.address, lead.city, lead.state, lead.zip_code]
+                      .filter(Boolean)
+                      .join(", ") || "—"
+                  }
+                />
+                <HeroValue
+                  label="Appointment"
+                  value={
+                    appointment.appointment_date
+                      ? `${formatDateLong(appointment.appointment_date)} · ${timeValue(appointment.start_time)}`
+                      : "Not scheduled"
+                  }
+                />
+                <HeroValue
+                  label="Company / Inspector"
+                  value={
+                    <div>
+                      {value(detail.company?.name)}
+                      <p className="text-xs text-slate-500">
+                        Inspector: {value(detail.inspector?.name)}
+                      </p>
+                    </div>
+                  }
+                />
+                <HeroValue
+                  label="Agent / Setter"
+                  value={value(detail.agent?.name || lead.agent_name)}
+                />
+                <HeroValue
+                  label="Lead Received"
+                  value={
+                    lead.created_at
+                      ? new Date(lead.created_at).toLocaleString()
+                      : "—"
+                  }
+                />
+              </section>
 
-          <div className="grid gap-5 xl:grid-cols-3">
-            <RecordSection
-              title="Property & Qualification"
-              icon={<Home size={17} />}
-            >
-              <RecordGrid
-                entries={[
-                  ["Service / Lead Type", lead.service_needed],
-                  ["Roof Age", form.roof_age],
-                  ["Roof Type", form.roof_type],
-                  ["Stories", form.stories],
-                  ["Home Type", form.home_type],
-                  ["SQ FT", lead.sq_ft || form.sq_ft],
-                  ["Home Value", money(lead.home_value || form.home_value)],
-                  ["Insurance", form.insurance],
-                  ["Carrier", form.insurance_name],
-                  ["Claim Filed", form.claim_filed],
-                  ["Visible Damage", form.visible_damage],
-                  ["Damage Type", form.damage_type],
-                  ["Hail Size", form.hail_size],
-                  ["Last Checked", form.last_checked_on],
-                  ["Contract", form.contract],
-                  ["Qualification", lead.qualification_status],
-                ]}
-              />
-            </RecordSection>
-            <RecordSection title="Operations" icon={<ShieldCheck size={17} />}>
-              <RecordGrid
-                entries={[
-                  ["QC Status", lead.qc_status],
-                  ["QC Reason", lead.qc_reason],
-                  ["Inspector Status", appointment.inspection_status],
-                  ["Client Status", appointment.client_status],
-                  [
-                    "Appointment Status",
-                    appointment.canonical_status || appointment.status,
-                  ],
-                  [
-                    "Sent to Client",
-                    appointment.company_visible_at
-                      ? new Date(
-                          appointment.company_visible_at,
-                        ).toLocaleString()
-                      : "Not sent",
-                  ],
-                  ["Attendance", appointment.attendance_status],
-                  ["Appointment Result", appointment.sales_outcome],
-                  [
-                    "Signed Contract",
-                    appointment.sales_outcome === "signed_contract" ||
-                    appointment.canonical_status === "signed_contract"
-                      ? "Yes"
-                      : "No",
-                  ],
-                  ["Source", lead.source],
-                  ["Source Lead ID", lead.source_lead_id],
-                  ["Source Disposition", lead.source_disposition],
-                ]}
-              />
-            </RecordSection>
-            <RecordSection
-              title="Financial Outcome"
-              icon={<CircleDollarSign size={17} />}
-            >
-              <RecordGrid
-                entries={[
-                  ["Package", detail.package?.package_name],
-                  [
-                    "Lead Price",
-                    money(
-                      detail.invoice?.unit_rate ||
-                        detail.package?.amount_per_lead,
-                    ),
-                  ],
-                  [
-                    "Revenue",
-                    money(
-                      detail.invoice?.line_total ||
-                        detail.package?.amount_per_lead,
-                    ),
-                  ],
-                  ["Invoice", detail.invoice?.invoice_number],
-                  ["Invoice Status", detail.invoice?.status],
-                  ["Amount Paid", money(detail.invoice?.amount_paid)],
-                  ["Balance", money(detail.invoice?.balance)],
-                  ["Due Date", detail.invoice?.due_date],
-                ]}
-              />
-            </RecordSection>
-          </div>
-
-          <div className="grid gap-5 lg:grid-cols-2">
-            <RecordSection
-              title="Notes & Recording"
-              icon={<Headphones size={17} />}
-            >
-              <p className="whitespace-pre-wrap text-sm text-slate-700">
-                {value(lead.notes)}
-              </p>
-              {lead.recording_url ? (
-                <a
-                  href={lead.recording_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"
+              <div className="grid gap-5 xl:grid-cols-3">
+                <RecordSection
+                  title="Property & Qualification"
+                  icon={<Home size={17} />}
                 >
-                  <Headphones size={14} /> Open Call Recording
-                </a>
-              ) : (
-                <p className="mt-4 text-xs font-semibold text-slate-400">
-                  No recording attached.
-                </p>
-              )}
-            </RecordSection>
-            <RecordSection title="Record History" icon={<History size={17} />}>
-              <HistoryList
-                qc={detail.qc_history || []}
-                reschedules={detail.reschedule_history || []}
-                audits={detail.audit_history || []}
-              />
-            </RecordSection>
-          </div>
+                  <RecordGrid
+                    entries={[
+                      ["Service / Lead Type", lead.service_needed],
+                      ["Roof Age", form.roof_age],
+                      ["Roof Type", form.roof_type],
+                      ["Stories", form.stories],
+                      ["Home Type", form.home_type],
+                      ["SQ FT", lead.sq_ft || form.sq_ft],
+                      ["Home Value", money(lead.home_value || form.home_value)],
+                      ["Insurance", form.insurance],
+                      ["Carrier", form.insurance_name],
+                      ["Claim Filed", form.claim_filed],
+                      ["Visible Damage", form.visible_damage],
+                      ["Damage Type", form.damage_type],
+                      ["Hail Size", form.hail_size],
+                      ["Last Checked", form.last_checked_on],
+                      ["Contract", form.contract],
+                      ["Qualification", lead.qualification_status],
+                    ]}
+                  />
+                </RecordSection>
+                <RecordSection
+                  title="Operations"
+                  icon={<ShieldCheck size={17} />}
+                >
+                  <RecordGrid
+                    entries={[
+                      ["QC Status", lead.qc_status],
+                      ["QC Reason", lead.qc_reason],
+                      ["Inspector Status", appointment.inspection_status],
+                      ["Client Status", appointment.client_status],
+                      [
+                        "Appointment Status",
+                        appointment.canonical_status || appointment.status,
+                      ],
+                      [
+                        "Sent to Client",
+                        appointment.company_visible_at
+                          ? new Date(
+                              appointment.company_visible_at,
+                            ).toLocaleString()
+                          : "Not sent",
+                      ],
+                      ["Attendance", appointment.attendance_status],
+                      ["Appointment Result", appointment.sales_outcome],
+                      [
+                        "Signed Contract",
+                        appointment.sales_outcome === "signed_contract" ||
+                        appointment.canonical_status === "signed_contract"
+                          ? "Yes"
+                          : "No",
+                      ],
+                      ["Source", lead.source],
+                      ["Source Lead ID", lead.source_lead_id],
+                      ["Source Disposition", lead.source_disposition],
+                    ]}
+                  />
+                </RecordSection>
+                <RecordSection
+                  title="Financial Outcome"
+                  icon={<CircleDollarSign size={17} />}
+                >
+                  <RecordGrid
+                    entries={[
+                      ["Package", detail.package?.package_name],
+                      [
+                        "Lead Price",
+                        money(
+                          detail.invoice?.unit_rate ||
+                            detail.package?.amount_per_lead,
+                        ),
+                      ],
+                      [
+                        "Revenue",
+                        money(
+                          detail.invoice?.line_total ||
+                            detail.package?.amount_per_lead,
+                        ),
+                      ],
+                      ["Invoice", detail.invoice?.invoice_number],
+                      ["Invoice Status", detail.invoice?.status],
+                      ["Amount Paid", money(detail.invoice?.amount_paid)],
+                      ["Balance", money(detail.invoice?.balance)],
+                      ["Due Date", detail.invoice?.due_date],
+                    ]}
+                  />
+                </RecordSection>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <RecordSection
+                  title="Notes & Recording"
+                  icon={<Headphones size={17} />}
+                >
+                  <p className="whitespace-pre-wrap text-sm text-slate-700">
+                    {value(lead.notes)}
+                  </p>
+                  {lead.recording_url ? (
+                    <a
+                      href={lead.recording_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"
+                    >
+                      <Headphones size={14} /> Open Call Recording
+                    </a>
+                  ) : (
+                    <p className="mt-4 text-xs font-semibold text-slate-400">
+                      No recording attached.
+                    </p>
+                  )}
+                </RecordSection>
+                <RecordSection
+                  title="Record History"
+                  icon={<History size={17} />}
+                >
+                  <HistoryList
+                    qc={detail.qc_history || []}
+                    reschedules={detail.reschedule_history || []}
+                    audits={detail.audit_history || []}
+                  />
+                </RecordSection>
+              </div>
+            </>
+          )}
         </div>
       </section>
     </div>
   );
+}
+
+function LeadEditForm({
+  detail,
+  draft,
+  setDraft,
+  agents,
+  saving,
+  error,
+  cancel,
+  save,
+}: {
+  detail: Obj;
+  draft: Obj;
+  setDraft: (value: Obj) => void;
+  agents: Obj[];
+  saving: boolean;
+  error: string;
+  cancel: () => void;
+  save: () => void;
+}) {
+  const set = (key: string, next: string) =>
+    setDraft({ ...draft, [key]: next });
+  const setForm = (key: string, next: string) =>
+    setDraft({
+      ...draft,
+      form_data: { ...(draft.form_data || {}), [key]: next },
+    });
+  const form = draft.form_data || {};
+  return (
+    <section className="space-y-5">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+        You are editing the shared lead record. Saving here updates QC, company
+        portals, reports, and every other screen that uses this lead. Every save
+        is recorded in the audit history.
+      </div>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+
+      <EditSection title="Homeowner & Property">
+        <EditField
+          label="Homeowner Name"
+          value={draft.full_name}
+          onChange={(value) => set("full_name", value)}
+          required
+        />
+        <EditField
+          label="Phone"
+          value={draft.phone_number}
+          onChange={(value) => set("phone_number", value)}
+          required
+        />
+        <EditField
+          label="Email"
+          type="email"
+          value={draft.email}
+          onChange={(value) => set("email", value)}
+        />
+        <EditField
+          label="Property Address"
+          value={draft.address}
+          onChange={(value) => set("address", value)}
+          required
+          wide
+        />
+        <EditField
+          label="City"
+          value={draft.city}
+          onChange={(value) => set("city", value)}
+        />
+        <EditField
+          label="State"
+          value={draft.state}
+          onChange={(value) => set("state", value)}
+        />
+        <EditField
+          label="ZIP"
+          value={draft.zip_code}
+          onChange={(value) => set("zip_code", value)}
+        />
+        <EditField
+          label="Service / Lead Type"
+          value={draft.service_needed}
+          onChange={(value) => set("service_needed", value)}
+        />
+        <EditField
+          label="Language"
+          value={draft.language}
+          onChange={(value) => set("language", value)}
+        />
+        <EditField
+          label="Home Value"
+          value={draft.home_value}
+          onChange={(value) => set("home_value", value)}
+        />
+        <EditField
+          label="SQ FT"
+          value={draft.sq_ft}
+          onChange={(value) => set("sq_ft", value)}
+        />
+        <EditField
+          label="Web Link"
+          type="url"
+          value={draft.web_url}
+          onChange={(value) => set("web_url", value)}
+          wide
+        />
+      </EditSection>
+
+      <EditSection title="Assignment & Source">
+        <div className="rounded-lg border bg-slate-50 px-3 py-2">
+          <p className="text-[10px] font-bold uppercase text-slate-400">
+            Company
+          </p>
+          <a
+            href={`/admin/operations?company=${detail.company?.id}`}
+            className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-blue-700"
+          >
+            {value(detail.company?.name)} <ExternalLink size={12} />
+          </a>
+        </div>
+        <EditSelect
+          label="Assigned Agent"
+          value={draft.agent_id}
+          onChange={(value) => set("agent_id", value)}
+          options={[
+            { value: "", label: "Unassigned" },
+            ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
+          ]}
+        />
+        <EditField
+          label="Source / Campaign"
+          value={draft.source}
+          onChange={(value) => set("source", value)}
+        />
+        <EditField
+          label="Source Lead ID"
+          value={draft.source_lead_id}
+          onChange={(value) => set("source_lead_id", value)}
+        />
+        <EditField
+          label="Source Disposition"
+          value={draft.source_disposition}
+          onChange={(value) => set("source_disposition", value)}
+        />
+        <EditField
+          label="Qualification Status"
+          value={draft.qualification_status}
+          onChange={(value) => set("qualification_status", value)}
+        />
+      </EditSection>
+
+      {detail.appointment?.id && (
+        <EditSection title="Appointment & Outcome">
+          <EditField
+            label="Appointment Date"
+            type="date"
+            value={draft.appointment_date}
+            onChange={(value) => set("appointment_date", value)}
+            required
+          />
+          <EditField
+            label="Appointment Time"
+            type="time"
+            value={draft.start_time}
+            onChange={(value) => set("start_time", value)}
+            required
+          />
+          <EditSelect
+            label="Appointment Status"
+            value={draft.appointment_status}
+            onChange={(value) => set("appointment_status", value)}
+            options={statusOptions([
+              "confirmed",
+              "assigned",
+              "completed",
+              "cancelled",
+              "qc_pending",
+              "qc_denied",
+            ])}
+          />
+          <EditSelect
+            label="Client Status"
+            value={draft.client_status}
+            onChange={(value) => set("client_status", value)}
+            options={statusOptions([
+              "pending",
+              "good",
+              "bad",
+              "no_show",
+              "reschedule",
+              "signed_contract",
+            ])}
+          />
+          <EditSelect
+            label="Attendance"
+            value={draft.attendance_status}
+            onChange={(value) => set("attendance_status", value)}
+            options={statusOptions([
+              "unknown",
+              "confirmed",
+              "homeowner_no_show",
+              "cancelled",
+            ])}
+          />
+          <EditSelect
+            label="Inspection Status"
+            value={draft.inspection_status}
+            onChange={(value) => set("inspection_status", value)}
+            options={statusOptions(["not_started", "started", "completed"])}
+          />
+          <EditSelect
+            label="Sales Outcome"
+            value={draft.sales_outcome}
+            onChange={(value) => set("sales_outcome", value)}
+            options={statusOptions([
+              "pending",
+              "follow_up",
+              "estimate_given",
+              "claim_filed",
+              "signed_contract",
+              "lost",
+              "no_sale",
+            ])}
+          />
+          <EditSelect
+            label="Company Action"
+            value={draft.company_action}
+            onChange={(value) => set("company_action", value)}
+            options={statusOptions([
+              "pending",
+              "contacted",
+              "confirmed",
+              "inspected",
+              "no_show",
+              "rescheduled",
+              "estimate_given",
+              "claim_filed",
+              "signed_contract",
+              "lost",
+            ])}
+          />
+          <EditTextArea
+            label="Inspector / Company Notes"
+            value={draft.inspector_notes}
+            onChange={(value) => set("inspector_notes", value)}
+            wide
+          />
+        </EditSection>
+      )}
+
+      <EditSection title="Roofing & Qualification Details">
+        {[
+          ["roof_age", "Roof Age"],
+          ["roof_type", "Roof Type"],
+          ["stories", "Stories"],
+          ["home_type", "Home Type"],
+          ["insurance", "Insurance"],
+          ["insurance_name", "Insurance Carrier"],
+          ["claim_filed", "Claim Filed"],
+          ["visible_damage", "Visible Damage"],
+          ["damage_type", "Damage Type"],
+          ["hail_size", "Hail Size"],
+          ["storm_date", "Storm / Hail Date"],
+          ["last_checked_on", "Last Checked"],
+          ["contract", "Contract"],
+        ].map(([key, label]) => (
+          <EditField
+            key={key}
+            label={label}
+            value={form[key]}
+            onChange={(value) => setForm(key, value)}
+          />
+        ))}
+      </EditSection>
+
+      <EditSection title="Lead Notes">
+        <EditTextArea
+          label="Internal / Lead Notes"
+          value={draft.notes}
+          onChange={(value) => set("notes", value)}
+          wide
+        />
+      </EditSection>
+
+      <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-white/95 py-4 backdrop-blur">
+        <button
+          disabled={saving}
+          onClick={cancel}
+          className="rounded-lg border px-4 py-2.5 text-xs font-bold"
+        >
+          Cancel
+        </button>
+        <button
+          disabled={saving}
+          onClick={save}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+        >
+          {saving ? (
+            <Loader2 className="animate-spin" size={14} />
+          ) : (
+            <Save size={14} />
+          )}{" "}
+          Save Shared Record
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function EditSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <h3 className="mb-4 font-black">{title}</h3>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{children}</div>
+    </section>
+  );
+}
+function EditField({
+  label,
+  value: fieldValue,
+  onChange,
+  type = "text",
+  required = false,
+  wide = false,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+  wide?: boolean;
+}) {
+  return (
+    <label
+      className={`text-[10px] font-bold uppercase text-slate-500 ${wide ? "md:col-span-2" : ""}`}
+    >
+      {label}
+      {required && <span className="text-red-500"> *</span>}
+      <input
+        required={required}
+        type={type}
+        value={String(fieldValue ?? "")}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-xs font-semibold normal-case text-slate-800"
+      />
+    </label>
+  );
+}
+function EditTextArea({
+  label,
+  value: fieldValue,
+  onChange,
+  wide = false,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  wide?: boolean;
+}) {
+  return (
+    <label
+      className={`text-[10px] font-bold uppercase text-slate-500 ${wide ? "md:col-span-2 xl:col-span-4" : ""}`}
+    >
+      {label}
+      <textarea
+        value={String(fieldValue ?? "")}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 min-h-24 w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold normal-case text-slate-800"
+      />
+    </label>
+  );
+}
+function EditSelect({
+  label,
+  value: fieldValue,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  const selected = String(fieldValue ?? "");
+  const withCurrent =
+    selected && !options.some((option) => option.value === selected)
+      ? [{ value: selected, label: leadStatusLabel(selected) }, ...options]
+      : options;
+  return (
+    <label className="text-[10px] font-bold uppercase text-slate-500">
+      {label}
+      <select
+        value={selected}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-xs font-semibold normal-case text-slate-800"
+      >
+        {withCurrent.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+function statusOptions(
+  values: string[],
+): Array<{ value: string; label: string }> {
+  return values.map((item) => ({ value: item, label: leadStatusLabel(item) }));
+}
+function buildEditDraft(detail: Obj): Obj {
+  const lead = detail.lead || {};
+  const appointment = detail.appointment || {};
+  return {
+    full_name: lead.full_name || "",
+    phone_number: lead.phone_number || "",
+    email: lead.email || "",
+    address: lead.address || "",
+    city: lead.city || "",
+    state: lead.state || "",
+    zip_code: lead.zip_code || "",
+    service_needed: lead.service_needed || "",
+    language: lead.language || "",
+    notes: lead.notes || "",
+    home_value: lead.home_value || "",
+    sq_ft: lead.sq_ft || "",
+    web_url: lead.web_url || "",
+    source: lead.source || "",
+    source_lead_id: lead.source_lead_id || "",
+    source_disposition: lead.source_disposition || "",
+    qualification_status: lead.qualification_status || "",
+    agent_id: detail.agent?.id || "",
+    form_data: { ...(lead.form_data || {}) },
+    appointment_date: appointment.appointment_date || "",
+    start_time: String(appointment.start_time || "").slice(0, 5),
+    appointment_status: appointment.status || "confirmed",
+    client_status: appointment.client_status || "pending",
+    attendance_status: appointment.attendance_status || "unknown",
+    inspection_status: appointment.inspection_status || "not_started",
+    sales_outcome: appointment.sales_outcome || "pending",
+    inspector_notes: appointment.inspector_notes || "",
+    company_action: appointment.company_action || "pending",
+  };
 }
 
 function HistoryList({
