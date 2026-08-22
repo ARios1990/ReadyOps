@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { copyText, formatDateLong, formatTime, rpcError } from './portalUtils';
+import { leadStatusClasses, leadStatusLabel } from './leadStatusPresentation';
 
 type PackageRecord = {
   id: string;
@@ -233,4 +234,4 @@ function CompanyDetails({ company, rows, loading }: { company: CompanyOps; rows:
 function Metric({label,value,tone}:{label:string;value:number;tone:Tone}){const styles:Record<Tone,string>={blue:'bg-blue-50 text-blue-700 border-blue-100',amber:'bg-amber-50 text-amber-700 border-amber-100',emerald:'bg-emerald-50 text-emerald-700 border-emerald-100',violet:'bg-violet-50 text-violet-700 border-violet-100',cyan:'bg-cyan-50 text-cyan-700 border-cyan-100',red:'bg-red-50 text-red-700 border-red-100',slate:'bg-white text-slate-700 border-slate-200'};return <div className={`rounded-2xl border p-4 ${styles[tone]}`}><p className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>}
 function Count({value,warn=false}:{value:number;warn?:boolean}){return <div className={`px-3 py-4 text-center font-bold ${warn&&value>0?'text-amber-700':'text-slate-700'}`}>{value}</div>}
 function Money({value}:{value:number|null|undefined}){return <div className="px-3 py-4 text-right font-semibold text-slate-700">{value==null?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(value))}</div>}
-function Status({value}:{value:string}){const v=value.toLowerCase();const cls=v.includes('denied')||v==='bad'||v.includes('cancel')?'bg-red-50 text-red-700':v.includes('approve')||v==='good'||v.includes('signed')||v.includes('complete')?'bg-emerald-50 text-emerald-700':v.includes('pending')||v.includes('follow')?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-600';return <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${cls}`}>{value.replace(/_/g,' ')}</span>}
+function Status({value}:{value:string}){return <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-black ${leadStatusClasses(value)}`}>{leadStatusLabel(value)}</span>}
