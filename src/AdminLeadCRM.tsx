@@ -40,7 +40,7 @@ type CrmData = {
   companies: Obj[];
   sources: string[];
 };
-type ReferenceData = { agents: Obj[] };
+type ReferenceData = { agents: Obj[]; companies: Obj[]; locations: Obj[] };
 
 const PAGE_SIZE = 50;
 const EMPTY_DATA: CrmData = {
@@ -70,7 +70,11 @@ export function AdminLeadCRM() {
   const [selectedId, setSelectedId] = useState("");
   const [startEditing, setStartEditing] = useState(false);
   const [detail, setDetail] = useState<Obj | null>(null);
-  const [references, setReferences] = useState<ReferenceData>({ agents: [] });
+  const [references, setReferences] = useState<ReferenceData>({
+    agents: [],
+    companies: [],
+    locations: [],
+  });
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,7 +103,11 @@ export function AdminLeadCRM() {
       else {
         setData((crmResult.data || EMPTY_DATA) as CrmData);
         setReferences(
-          (referenceResult.data || { agents: [] }) as ReferenceData,
+          (referenceResult.data || {
+            agents: [],
+            companies: [],
+            locations: [],
+          }) as ReferenceData,
         );
       }
       setLoading(false);
@@ -538,7 +546,7 @@ export function AdminLeadCRM() {
                   <LeadRow
                     key={row.lead.id}
                     row={row}
-                    onOpen={() => void openDetail(row.lead.id)}
+                    onOpen={() => void openDetail(row.lead.id, true)}
                     onEdit={() => void openDetail(row.lead.id, true)}
                   />
                 ))}
@@ -557,6 +565,8 @@ export function AdminLeadCRM() {
             setDetail(null);
           }}
           agents={references.agents}
+          companies={references.companies}
+          locations={references.locations}
           initialEditing={startEditing}
           onSave={saveLeadEdits}
         />
@@ -656,6 +666,8 @@ function LeadDetailModal({
   loading,
   close,
   agents,
+  companies,
+  locations,
   initialEditing,
   onSave,
 }: {
@@ -663,6 +675,8 @@ function LeadDetailModal({
   loading: boolean;
   close: () => void;
   agents: Obj[];
+  companies: Obj[];
+  locations: Obj[];
   initialEditing: boolean;
   onSave: (
     leadId: string,
@@ -705,7 +719,15 @@ function LeadDetailModal({
       source_lead_id: draft.source_lead_id,
       source_disposition: draft.source_disposition,
       qualification_status: draft.qualification_status,
+      qualification_reasons: draft.qualification_reasons,
+      company_id: draft.company_id,
+      location_id: draft.location_id,
       agent_id: draft.agent_id,
+      qc_status: draft.qc_status,
+      qc_reason: draft.qc_reason,
+      qc_notes: draft.qc_notes,
+      recording_url: draft.recording_url,
+      share_recording_with_company: Boolean(draft.share_recording_with_company),
       form_data: form,
     };
     const appointmentPatch = detail.appointment?.id
@@ -781,6 +803,8 @@ function LeadDetailModal({
               draft={draft}
               setDraft={setDraft}
               agents={agents}
+              companies={companies}
+              locations={locations}
               saving={saving}
               error={editError}
               cancel={() => {
@@ -1001,6 +1025,8 @@ function LeadEditForm({
   draft,
   setDraft,
   agents,
+  companies,
+  locations,
   saving,
   error,
   cancel,
@@ -1010,12 +1036,14 @@ function LeadEditForm({
   draft: Obj;
   setDraft: (value: Obj) => void;
   agents: Obj[];
+  companies: Obj[];
+  locations: Obj[];
   saving: boolean;
   error: string;
   cancel: () => void;
   save: () => void;
 }) {
-  const set = (key: string, next: string) =>
+  const set = (key: string, next: string | boolean) =>
     setDraft({ ...draft, [key]: next });
   const setForm = (key: string, next: string) =>
     setDraft({
@@ -1023,12 +1051,17 @@ function LeadEditForm({
       form_data: { ...(draft.form_data || {}), [key]: next },
     });
   const form = draft.form_data || {};
+  const companyLocations = locations.filter(
+    (location) => location.company_id === draft.company_id,
+  );
   return (
     <section className="space-y-5">
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
         You are editing the shared lead record. Saving here updates QC, company
         portals, reports, and every other screen that uses this lead. Every save
-        is recorded in the audit history.
+        is recorded in the audit history. QC-denied leads use this exact same
+        editor—City, State, ZIP, Company, and all other business fields remain
+        editable.
       </div>
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
@@ -1107,17 +1140,39 @@ function LeadEditForm({
       </EditSection>
 
       <EditSection title="Assignment & Source">
-        <div className="rounded-lg border bg-slate-50 px-3 py-2">
-          <p className="text-[10px] font-bold uppercase text-slate-400">
-            Company
-          </p>
-          <a
-            href={`/admin/operations?company=${detail.company?.id}`}
-            className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-blue-700"
-          >
-            {value(detail.company?.name)} <ExternalLink size={12} />
-          </a>
-        </div>
+        <EditSelect
+          label="Company"
+          value={draft.company_id}
+          onChange={(nextCompanyId) =>
+            setDraft({
+              ...draft,
+              company_id: nextCompanyId,
+              location_id: locations.some(
+                (location) =>
+                  location.id === draft.location_id &&
+                  location.company_id === nextCompanyId,
+              )
+                ? draft.location_id
+                : "",
+            })
+          }
+          options={companies.map((company) => ({
+            value: company.id,
+            label: company.name,
+          }))}
+        />
+        <EditSelect
+          label="Company Location"
+          value={draft.location_id}
+          onChange={(value) => set("location_id", value)}
+          options={[
+            { value: "", label: "No location" },
+            ...companyLocations.map((location) => ({
+              value: location.id,
+              label: location.label,
+            })),
+          ]}
+        />
         <EditSelect
           label="Assigned Agent"
           value={draft.agent_id}
@@ -1142,10 +1197,50 @@ function LeadEditForm({
           value={draft.source_disposition}
           onChange={(value) => set("source_disposition", value)}
         />
-        <EditField
+        <EditSelect
           label="Qualification Status"
           value={draft.qualification_status}
           onChange={(value) => set("qualification_status", value)}
+          options={statusOptions(["qualified", "review_needed", "do_not_book"])}
+        />
+      </EditSection>
+
+      <EditSection title="QC & Recording">
+        <EditSelect
+          label="QC Status"
+          value={draft.qc_status}
+          onChange={(value) => set("qc_status", value)}
+          options={statusOptions([
+            "pending",
+            "in_review",
+            "manager_approved",
+            "approved",
+            "denied",
+            "needs_correction",
+          ])}
+        />
+        <EditField
+          label="QC Reason"
+          value={draft.qc_reason}
+          onChange={(value) => set("qc_reason", value)}
+        />
+        <EditTextArea
+          label="QC Notes"
+          value={draft.qc_notes}
+          onChange={(value) => set("qc_notes", value)}
+          wide
+        />
+        <EditField
+          label="Recording URL"
+          type="url"
+          value={draft.recording_url}
+          onChange={(value) => set("recording_url", value)}
+          wide
+        />
+        <EditCheckbox
+          label="Share recording with company"
+          checked={draft.share_recording_with_company}
+          onChange={(value) => set("share_recording_with_company", value)}
         />
       </EditSection>
 
@@ -1197,8 +1292,10 @@ function LeadEditForm({
             onChange={(value) => set("attendance_status", value)}
             options={statusOptions([
               "unknown",
-              "confirmed",
+              "verified_show",
+              "unverified_show",
               "homeowner_no_show",
+              "rep_no_show",
               "cancelled",
             ])}
           />
@@ -1206,7 +1303,12 @@ function LeadEditForm({
             label="Inspection Status"
             value={draft.inspection_status}
             onChange={(value) => set("inspection_status", value)}
-            options={statusOptions(["not_started", "started", "completed"])}
+            options={statusOptions([
+              "not_started",
+              "started",
+              "completed",
+              "not_completed",
+            ])}
           />
           <EditSelect
             label="Sales Outcome"
@@ -1215,11 +1317,9 @@ function LeadEditForm({
             options={statusOptions([
               "pending",
               "follow_up",
-              "estimate_given",
-              "claim_filed",
               "signed_contract",
               "lost",
-              "no_sale",
+              "not_applicable",
             ])}
           />
           <EditSelect
@@ -1376,6 +1476,27 @@ function EditTextArea({
     </label>
   );
 }
+function EditCheckbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: unknown;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex min-h-10 items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+      <input
+        type="checkbox"
+        checked={Boolean(checked)}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 rounded border-slate-300 text-blue-600"
+      />
+      {label}
+    </label>
+  );
+}
 function EditSelect({
   label,
   value: fieldValue,
@@ -1435,7 +1556,15 @@ function buildEditDraft(detail: Obj): Obj {
     source_lead_id: lead.source_lead_id || "",
     source_disposition: lead.source_disposition || "",
     qualification_status: lead.qualification_status || "",
+    qualification_reasons: lead.qualification_reasons || [],
+    company_id: detail.company?.id || lead.company_id || "",
+    location_id: detail.location?.id || lead.location_id || "",
     agent_id: detail.agent?.id || "",
+    qc_status: lead.qc_status || "pending",
+    qc_reason: lead.qc_reason || "",
+    qc_notes: lead.qc_notes || "",
+    recording_url: lead.recording_url || "",
+    share_recording_with_company: Boolean(lead.share_recording_with_company),
     form_data: { ...(lead.form_data || {}) },
     appointment_date: appointment.appointment_date || "",
     start_time: String(appointment.start_time || "").slice(0, 5),
@@ -1631,6 +1760,7 @@ function Status({ value: status }: { value: unknown }) {
   );
 }
 function primaryStatus(row: Obj): string {
+  if (row.lead?.qc_status === "denied") return "qc_denied";
   return (
     row.appointment?.client_status ||
     row.appointment?.canonical_status ||
