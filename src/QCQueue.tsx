@@ -53,7 +53,14 @@ type RefData = {
   teams: Obj[];
   agents: Obj[];
 };
-type QueueData = { days: Obj[]; summary: Obj; rows: Obj[] };
+type QueueData = {
+  days: Obj[];
+  summary: Obj;
+  rows: Obj[];
+  total?: number;
+  truncated?: boolean;
+  scope?: string;
+};
 const EMPTY_REFS: RefData = {
   companies: [],
   locations: [],
@@ -142,6 +149,9 @@ export function QCQueue() {
   const [areaFilter, setAreaFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [searchScope, setSearchScope] = useState<
+    "all_history" | "selected_day"
+  >("all_history");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Obj | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -163,7 +173,8 @@ export function QCQueue() {
     async (quiet = false) => {
       if (!quiet) setLoading(true);
       setError("");
-      const [queueResult, refsResult] = await Promise.all([
+      const allHistorySearch = Boolean(search) && searchScope === "all_history";
+      const [calendarResult, refsResult, globalResult] = await Promise.all([
         supabase.rpc("get_qc_calendar_queue", {
           p_start_date: startDate,
           p_end_date: endDate,
@@ -173,17 +184,38 @@ export function QCQueue() {
           p_qc_status: qcStatus === "all" ? null : qcStatus,
           p_appointment_status:
             appointmentStatus === "all" ? null : appointmentStatus,
-          p_search: search || null,
+          p_search: allHistorySearch ? null : search || null,
           p_state: stateFilter === "all" ? null : stateFilter,
           p_service_area: areaFilter === "all" ? null : areaFilter,
           p_date_basis: dateBasis,
         }),
         supabase.rpc("get_qc_reference_data"),
+        allHistorySearch
+          ? supabase.rpc("search_qc_leads_global", {
+              p_search: search,
+              p_company_id: companyId || null,
+              p_location_id: locationId || null,
+              p_team_id: teamId || null,
+              p_agent_id: agentId || null,
+              p_qc_status: qcStatus === "all" ? null : qcStatus,
+              p_appointment_status:
+                appointmentStatus === "all" ? null : appointmentStatus,
+              p_state: stateFilter === "all" ? null : stateFilter,
+              p_service_area: areaFilter === "all" ? null : areaFilter,
+              p_limit: 100,
+            })
+          : Promise.resolve({ data: null, error: null }),
       ]);
-      if (queueResult.error || refsResult.error)
-        setError(rpcError(queueResult.error || refsResult.error));
+      if (calendarResult.error || refsResult.error || globalResult.error)
+        setError(
+          rpcError(
+            calendarResult.error || refsResult.error || globalResult.error,
+          ),
+        );
       else {
-        setQueue((queueResult.data || EMPTY_QUEUE) as QueueData);
+        const calendar = (calendarResult.data || EMPTY_QUEUE) as QueueData;
+        const global = globalResult.data as QueueData | null;
+        setQueue(global ? { ...global, days: calendar.days } : calendar);
         setRefs((refsResult.data || EMPTY_REFS) as RefData);
       }
       setLoading(false);
@@ -198,8 +230,10 @@ export function QCQueue() {
       locationId,
       qcStatus,
       search,
+      searchScope,
       startDate,
       stateFilter,
+      teamId,
     ],
   );
 
@@ -265,11 +299,14 @@ export function QCQueue() {
     () =>
       queue.rows.filter(
         (row) =>
-          row.filter_date === selectedDate &&
+          (search && searchScope === "all_history"
+            ? true
+            : row.filter_date === selectedDate) &&
           (!teamId || row.agent?.team_id === teamId),
       ),
-    [queue.rows, selectedDate, teamId],
+    [queue.rows, search, searchScope, selectedDate, teamId],
   );
+  const isAllHistorySearch = Boolean(search) && searchScope === "all_history";
   const selectedSummary = useMemo(
     () => ({
       companies: new Set(selectedRows.map((row) => row.company?.id)).size,
@@ -837,8 +874,22 @@ export function QCQueue() {
               className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-xs"
             />
           </form>
+          <Select
+            value={searchScope}
+            onChange={(value) =>
+              setSearchScope(
+                value === "selected_day" ? "selected_day" : "all_history",
+              )
+            }
+            emptyValue="all_history"
+            label="Search All History"
+            options={[{ value: "selected_day", label: "Search Selected Day" }]}
+          />
           <div className="flex items-center justify-center gap-2 rounded-lg border bg-slate-50 text-xs font-bold text-slate-600">
-            <Clock3 size={14} /> Location Time Zones
+            <Clock3 size={14} />{" "}
+            {isAllHistorySearch
+              ? `All dates • up to 100 results`
+              : "Location Time Zones"}
           </div>
         </div>
       </section>
@@ -849,7 +900,10 @@ export function QCQueue() {
           return (
             <button
               key={day.date}
-              onClick={() => setSelectedDate(day.date)}
+              onClick={() => {
+                setSelectedDate(day.date);
+                if (search) setSearchScope("selected_day");
+              }}
               className={`rounded-xl border p-3 text-center shadow-sm transition ${active ? "border-blue-600 bg-blue-600 text-white" : "bg-white hover:border-blue-300"}`}
             >
               <p className="text-xs">
@@ -875,19 +929,31 @@ export function QCQueue() {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-xl font-black">
-            {formatDateLong(selectedDate)} —{" "}
-            {dateBasis === "call" ? "Leads Received" : "QC Queue"}
+            {isAllHistorySearch ? (
+              `All-History Search — “${search}”`
+            ) : (
+              <>
+                {formatDateLong(selectedDate)} —{" "}
+                {dateBasis === "call" ? "Leads Received" : "QC Queue"}
+              </>
+            )}
           </h3>
           <p className="text-xs text-slate-500">
-            {isManager
-              ? "Only leads assigned to agents on your team are visible."
-              : "Admins and Main QC can review leads across every team."}
+            {isAllHistorySearch
+              ? `Phone formatting is ignored, and every lead date is checked.${queue.truncated ? ` Showing the first 100 of ${queue.total} matches.` : ""}`
+              : isManager
+                ? "Only leads assigned to agents on your team are visible."
+                : "Admins and Main QC can review leads across every team."}
           </p>
         </div>
         <p className="text-sm font-semibold">
           {selectedSummary.scheduled}{" "}
-          {dateBasis === "call" ? "received" : "scheduled"} •{" "}
-          {selectedSummary.pending + selectedSummary.inReview} pending •{" "}
+          {isAllHistorySearch
+            ? "matches"
+            : dateBasis === "call"
+              ? "received"
+              : "scheduled"}{" "}
+          • {selectedSummary.pending + selectedSummary.inReview} pending •{" "}
           {selectedSummary.managerApproved} awaiting final QC
         </p>
       </div>
@@ -899,9 +965,15 @@ export function QCQueue() {
         <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed bg-white text-center">
           <div>
             <CalendarDays className="mx-auto mb-3 text-slate-300" size={36} />
-            <p className="font-bold">No leads match this day and filter set.</p>
+            <p className="font-bold">
+              {isAllHistorySearch
+                ? "No lead in the full history matches this search."
+                : "No leads match this day and filter set."}
+            </p>
             <p className="text-xs text-slate-500">
-              Choose another date or clear one of the filters.
+              {isAllHistorySearch
+                ? "Check the phone number or clear one of the company, area, team, or status filters."
+                : "Choose another date or clear one of the filters."}
             </p>
           </div>
         </div>
@@ -916,6 +988,7 @@ export function QCQueue() {
               onReview={openReview}
               isManager={isManager}
               dateBasis={dateBasis}
+              allHistory={isAllHistorySearch}
             />
           ))}
         </div>
@@ -966,6 +1039,7 @@ function CompanyGroup({
   onReview,
   isManager,
   dateBasis,
+  allHistory,
 }: {
   items: Obj[];
   open: boolean;
@@ -973,6 +1047,7 @@ function CompanyGroup({
   onReview: (row: Obj, start?: boolean) => Promise<void>;
   isManager: boolean;
   dateBasis: "appointment" | "call";
+  allHistory: boolean;
 }) {
   const first = items[0];
   const pending = countBy(items, "pending");
@@ -1039,7 +1114,7 @@ function CompanyGroup({
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="p-3">
-                  {dateBasis === "call" ? "Appointment" : "Time"}
+                  {dateBasis === "call" || allHistory ? "Appointment" : "Time"}
                 </th>
                 <th>Homeowner</th>
                 <th>Address</th>
@@ -1062,7 +1137,7 @@ function CompanyGroup({
                     className="border-t hover:bg-blue-50/30"
                   >
                     <td className="p-3 font-bold text-blue-700">
-                      {dateBasis === "call" && (
+                      {(dateBasis === "call" || allHistory) && (
                         <span className="block text-[10px] font-semibold text-slate-500">
                           {row.appointment.appointment_date}
                         </span>
