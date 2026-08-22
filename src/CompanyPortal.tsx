@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   ShieldCheck,
   Trash2,
   UserRoundCheck,
@@ -81,6 +82,7 @@ interface LeadRecord {
   state: string | null;
   zip_code: string | null;
   email: string | null;
+  service_needed: string | null;
   language: string | null;
   notes: string | null;
   form_data: Record<string, unknown>;
@@ -196,6 +198,7 @@ interface CompanyDashboardSummary {
 
 type Tab =
   | "appointments"
+  | "leads"
   | "schedule"
   | "requirements"
   | "forms"
@@ -224,6 +227,7 @@ export function CompanyPortal({
     null,
   );
   const [tab, setTab] = useState<Tab>("appointments");
+  const [companyLeadFilter, setCompanyLeadFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -758,6 +762,7 @@ export function CompanyPortal({
           {(
             [
               ["appointments", "Appointments", CalendarDays],
+              ["leads", "Leads", FileSpreadsheet],
               ["schedule", "Schedule", CalendarDays],
               ["requirements", "Requirements", ShieldCheck],
               ["forms", "Forms", Clipboard],
@@ -788,6 +793,21 @@ export function CompanyPortal({
             assignRep={assignRep}
             updateAppointmentStatus={updateAppointmentStatus}
             updateLeadOutcome={updateLeadOutcome}
+            openLeads={(filter) => {
+              setCompanyLeadFilter(filter);
+              setTab("leads");
+            }}
+          />
+        )}
+
+        {tab === "leads" && (
+          <CompanyLeadsSpreadsheet
+            companyId={companyId}
+            token={token}
+            filter={companyLeadFilter}
+            setFilter={setCompanyLeadFilter}
+            openLead={setSelectedLead}
+            activePackage={dashboard?.active_package || null}
           />
         )}
 
@@ -1387,6 +1407,324 @@ export function CompanyPortal({
   );
 }
 
+function CompanyLeadsSpreadsheet({
+  companyId,
+  token,
+  filter,
+  setFilter,
+  openLead,
+  activePackage,
+}: {
+  companyId: string;
+  token: string;
+  filter: string;
+  setFilter: (value: string) => void;
+  openLead: (appointment: Appointment) => void;
+  activePackage: CompanyDashboardSummary["active_package"];
+}) {
+  const [data, setData] = useState<CompanyLeadSheetData>({
+    rows: [],
+    total: 0,
+    limit: 100,
+    offset: 0,
+    summary: {
+      delivered: 0,
+      good: 0,
+      no_show: 0,
+      rescheduled: 0,
+      signed_contract: 0,
+      pending: 0,
+    },
+  });
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const { data: result, error: loadError } = await supabase.rpc(
+      "get_company_lead_spreadsheet",
+      {
+        p_company_id: companyId,
+        p_access_token: token,
+        p_filter: filter,
+        p_search: search || null,
+        p_limit: 100,
+        p_offset: offset,
+      },
+    );
+    if (loadError) setError(rpcError(loadError));
+    else setData(result as CompanyLeadSheetData);
+    setLoading(false);
+  }, [companyId, filter, offset, search, token]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const chooseFilter = (next: string) => {
+    setOffset(0);
+    setFilter(next);
+  };
+  const filterCards = [
+    [
+      "all",
+      "Delivered",
+      data.summary.delivered,
+      "border-blue-200 bg-blue-50 text-blue-700",
+    ],
+    [
+      "good",
+      "Good",
+      data.summary.good,
+      "border-emerald-200 bg-emerald-50 text-emerald-700",
+    ],
+    [
+      "no_show",
+      "No Show",
+      data.summary.no_show,
+      "border-orange-200 bg-orange-50 text-orange-700",
+    ],
+    [
+      "rescheduled",
+      "Rescheduled",
+      data.summary.rescheduled,
+      "border-amber-200 bg-amber-50 text-amber-700",
+    ],
+    [
+      "signed_contract",
+      "Signed Contracts",
+      data.summary.signed_contract,
+      "border-violet-200 bg-violet-50 text-violet-700",
+    ],
+    [
+      "pending",
+      "Pending Updates",
+      data.summary.pending,
+      "border-red-200 bg-red-50 text-red-700",
+    ],
+  ] as const;
+  const page = Math.floor(offset / 100) + 1;
+  const pages = Math.max(1, Math.ceil(data.total / 100));
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">Company Leads</h2>
+          <p className="text-xs text-slate-500">
+            Every QC-approved lead delivered to this company, across all dates.
+          </p>
+        </div>
+        <div className="rounded-xl border bg-white px-4 py-2 text-xs">
+          <strong>{activePackage?.remaining_leads ?? "—"}</strong> package leads
+          remaining{" "}
+          <span className="text-slate-400">(not yet delivered records)</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        {filterCards.map(([key, label, count, tone]) => (
+          <button
+            key={key}
+            onClick={() => chooseFilter(key)}
+            className={`rounded-xl border p-3 text-left ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+          >
+            <span className="text-[10px] font-black uppercase tracking-wide">
+              {label}
+            </span>
+            <strong className="mt-1 block text-2xl text-slate-950">
+              {count}
+            </strong>
+            <span className="text-[9px] font-bold">Show matching leads →</span>
+          </button>
+        ))}
+      </div>
+      <section className="rounded-2xl border bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+          <form
+            className="relative min-w-[260px] flex-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setOffset(0);
+              setSearch(searchInput.trim());
+            }}
+          >
+            <Search
+              size={14}
+              className="absolute left-3 top-3 text-slate-400"
+            />
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search homeowner, phone, address, service…"
+              className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs"
+            />
+          </form>
+          <button
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-bold"
+          >
+            <RefreshCw size={13} /> Refresh
+          </button>
+          <span className="text-xs font-bold text-slate-500">
+            {data.total} matching leads • Page {page} of {pages}
+          </span>
+        </div>
+        {error && (
+          <div className="m-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            {error}
+          </div>
+        )}
+        {loading ? (
+          <div className="grid min-h-64 place-items-center">
+            <Loader2 className="animate-spin text-blue-600" />
+          </div>
+        ) : !data.rows.length ? (
+          <Empty text="No company leads match this filter." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  {[
+                    "Appointment Date",
+                    "Time",
+                    "Homeowner",
+                    "Phone",
+                    "Property Address",
+                    "City / State / ZIP",
+                    "Service",
+                    "Roof Age",
+                    "Roof Type",
+                    "Insurance",
+                    "Carrier",
+                    "Damage / Hail",
+                    "Inspector",
+                    "Lead Status",
+                    "Client Notes",
+                    "Action",
+                  ].map((label, index, labels) => (
+                    <th
+                      key={label}
+                      className={`border-b px-3 py-3 ${index === 0 ? "sticky left-0 z-20 bg-slate-50" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-50" : ""}`}
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((appointment) => {
+                  const form = appointment.lead.form_data || {};
+                  const status =
+                    appointment.company_action ||
+                    appointment.canonical_status ||
+                    appointment.client_status ||
+                    appointment.status;
+                  return (
+                    <tr
+                      key={appointment.id}
+                      onClick={() => openLead(appointment)}
+                      className="cursor-pointer hover:bg-blue-50/40"
+                    >
+                      <td className="sticky left-0 z-[1] border-b border-r bg-white px-3 py-3 font-black text-blue-700">
+                        {appointment.appointment_date}
+                      </td>
+                      <td className="border-b px-3 py-3 font-bold">
+                        {formatTime(appointment.start_time)}
+                      </td>
+                      <td className="border-b px-3 py-3 font-black">
+                        {appointment.lead.full_name}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {appointment.lead.phone_number}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {appointment.lead.address}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {[
+                          appointment.lead.city,
+                          appointment.lead.state,
+                          appointment.lead.zip_code,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {appointment.lead.service_needed || "—"}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {String(form.roof_age || "—")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {String(form.roof_type || "—")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {String(form.insurance || "—")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {String(form.insurance_name || "—")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {String(form.visible_damage || form.hail_size || "—")}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        {appointment.representative_name || "Unassigned"}
+                      </td>
+                      <td className="border-b px-3 py-3">
+                        <StatusChip status={status} />
+                      </td>
+                      <td
+                        className="max-w-[280px] truncate border-b px-3 py-3"
+                        title={
+                          appointment.inspector_notes ||
+                          appointment.lead.notes ||
+                          ""
+                        }
+                      >
+                        {appointment.inspector_notes ||
+                          appointment.lead.notes ||
+                          "—"}
+                      </td>
+                      <td className="sticky right-0 z-[1] border-b border-l bg-white px-3 py-3">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openLead(appointment);
+                          }}
+                          className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700"
+                        >
+                          View Lead
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 border-t p-3">
+          <button
+            disabled={offset === 0 || loading}
+            onClick={() => setOffset((value) => Math.max(0, value - 100))}
+            className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <button
+            disabled={page >= pages || loading}
+            onClick={() => setOffset((value) => value + 100)}
+            className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function CompanyAppointmentsDashboard({
   data,
   dashboard,
@@ -1397,6 +1735,7 @@ function CompanyAppointmentsDashboard({
   assignRep,
   updateAppointmentStatus,
   updateLeadOutcome,
+  openLeads,
 }: {
   data: CompanyPortalData;
   dashboard: CompanyDashboardSummary | null;
@@ -1413,6 +1752,7 @@ function CompanyAppointmentsDashboard({
     appointment: Appointment,
     clientStatus: string,
   ) => Promise<void>;
+  openLeads: (filter: string) => void;
 }) {
   const delivered = data.appointments;
   const fallbackPerformance = performanceFromAppointments(delivered);
@@ -1443,48 +1783,56 @@ function CompanyAppointmentsDashboard({
               label="Package"
               value={pkg?.lead_target ?? "—"}
               icon={<Clipboard size={18} />}
+              onClick={() => openLeads("all")}
             />
             <PerformanceCard
               tone="blue"
               label="Delivered"
               value={pkg?.delivered_leads ?? performance.total_leads}
               icon={<Users size={18} />}
+              onClick={() => openLeads("all")}
             />
             <PerformanceCard
               tone="purple"
               label="Remaining"
               value={pkg?.remaining_leads ?? "—"}
               icon={<CalendarDays size={18} />}
+              onClick={() => openLeads("all")}
             />
             <PerformanceCard
               tone="green"
               label="Good"
               value={performance.good_inspected}
               icon={<UserRoundCheck size={18} />}
+              onClick={() => openLeads("good")}
             />
             <PerformanceCard
               tone="orange"
               label="No Show"
               value={performance.no_shows}
               icon={<UserX size={18} />}
+              onClick={() => openLeads("no_show")}
             />
             <PerformanceCard
               tone="orange"
               label="Rescheduled"
               value={rescheduled}
               icon={<RefreshCw size={18} />}
+              onClick={() => openLeads("rescheduled")}
             />
             <PerformanceCard
               tone="purple"
               label="Signed Contracts"
               value={performance.signed_contracts}
               icon={<Clipboard size={18} />}
+              onClick={() => openLeads("signed_contract")}
             />
             <PerformanceCard
               tone="red"
               label="Pending Updates"
               value={pendingUpdates}
               icon={<AlertTriangle size={18} />}
+              onClick={() => openLeads("pending")}
             />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1969,12 +2317,14 @@ function PerformanceCard({
   value,
   suffix,
   icon,
+  onClick,
 }: {
   tone: "blue" | "green" | "purple" | "orange" | "red";
   label: string;
   value: React.ReactNode;
   suffix?: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
   const colors = {
     blue: "border-blue-100 bg-blue-50 text-blue-700",
@@ -1983,16 +2333,45 @@ function PerformanceCard({
     orange: "border-orange-100 bg-orange-50 text-orange-700",
     red: "border-red-100 bg-red-50 text-red-700",
   };
-  return (
-    <div className={`rounded-xl border p-3 ${colors[tone]}`}>
+  const content = (
+    <>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold text-slate-600">{label}</span>
         {icon}
       </div>
       <strong className="mt-2 block text-2xl text-slate-950">{value}</strong>
       {suffix && <span className="text-[10px] font-bold">{suffix}</span>}
-    </div>
+    </>
   );
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${colors[tone]}`}
+      title={`Open ${label} leads`}
+    >
+      {content}
+      <span className="mt-2 block text-[9px] font-black uppercase tracking-wide opacity-70">
+        View leads →
+      </span>
+    </button>
+  ) : (
+    <div className={`rounded-xl border p-3 ${colors[tone]}`}>{content}</div>
+  );
+}
+interface CompanyLeadSheetData {
+  rows: Appointment[];
+  total: number;
+  limit: number;
+  offset: number;
+  summary: {
+    delivered: number;
+    good: number;
+    no_show: number;
+    rescheduled: number;
+    signed_contract: number;
+    pending: number;
+  };
 }
 function PackageNumber({ value, label }: { value: number; label: string }) {
   return (
