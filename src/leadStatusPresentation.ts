@@ -1,6 +1,6 @@
 const GREEN_STATUSES = new Set(['approved', 'good', 'good_inspected', 'completed', 'signed_contract']);
 const RED_STATUSES = new Set(['bad', 'denied', 'cancelled', 'canceled']);
-const BLUE_STATUSES = new Set(['pending', 'pending_qc', 'confirmed', 'assigned']);
+const BLUE_STATUSES = new Set(['pending', 'pending_qc', 'manager_approved', 'confirmed', 'assigned']);
 const YELLOW_STATUSES = new Set(['no_show', 'homeowner_no_show']);
 const ORANGE_STATUSES = new Set(['needs_correction', 'reschedule', 'rescheduled', 'follow_up']);
 
@@ -12,6 +12,7 @@ export function leadStatusLabel(value: unknown): string {
   const status = normalizeLeadStatus(value);
   if (status === 'good_inspected') return 'GOOD';
   if (status === 'homeowner_no_show') return 'NO SHOW';
+  if (status === 'manager_approved') return 'AWAITING FINAL QC';
   return status.replace(/_/g, ' ').toUpperCase();
 }
 

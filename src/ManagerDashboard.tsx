@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCopy, ExternalLink, Loader2, RefreshCw, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ClipboardCopy, ExternalLink, Loader2, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { supabase } from './supabase';
 import { buildReadyModeBookingLink, copyText, rpcError } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
@@ -15,6 +15,7 @@ type AgentSummary = {
   team_id: string | null;
   total_leads: number;
   qc_pending: number;
+  awaiting_final_qc: number;
   approved: number;
   denied: number;
 };
@@ -46,7 +47,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -84,9 +85,9 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
       setData(result as ManagerData);
     }
     setLoading(false);
-  }
+  }, [profile?.team_id, slug, token]);
 
-  useEffect(() => { void load(); }, [token, slug, profile?.team_id]);
+  useEffect(() => { void load(); }, [load]);
 
   const filteredAgents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -133,6 +134,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-4"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="readyops-brand-logo-sm"/><div className="border-l border-white/15 pl-4"><p className="readyops-brand-subtitle text-xs font-bold uppercase tracking-[0.18em]">Manager Dashboard</p><h1 className="text-xl font-bold text-white">{data.manager?.name || data.team.name}</h1><p className="readyops-brand-subtitle text-xs">Team: {data.team.abbreviation} — {data.team.name}</p></div></div>
           <div className="flex gap-2">
+            {!privateLinkMode && <button onClick={() => { window.location.href = '/qc'; }} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white"><ShieldCheck size={14} /> Team QC</button>}
             <button onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"><RefreshCw size={14} /> Refresh</button>
             <button onClick={() => void exitPortal()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white">{privateLinkMode ? 'Close' : 'Sign Out'}</button>
           </div>
@@ -142,9 +144,10 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
       <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6">
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Metric label="Agents" value={data.agents.length} />
           <Metric label="QC Pending" value={data.agents.reduce((sum, a) => sum + Number(a.qc_pending || 0), 0)} />
+          <Metric label="Awaiting Final QC" value={data.agents.reduce((sum, a) => sum + Number(a.awaiting_final_qc || 0), 0)} />
           <Metric label="Approved" value={data.agents.reduce((sum, a) => sum + Number(a.approved || 0), 0)} />
           <Metric label="Companies" value={data.companies.filter(c => c.account_status === 'Active').length} />
         </section>
@@ -156,7 +159,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">Client Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAgents.map(agent => {
                   const agentLink = agent.portal_slug && agent.access_token
@@ -167,6 +170,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
                     <td className="px-3 py-3"><span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{data.team.abbreviation}</span></td>
                     <td className="px-3 py-3 text-center font-bold">{agent.total_leads}</td>
                     <td className="px-3 py-3 text-center font-bold text-amber-700">{agent.qc_pending}</td>
+                    <td className="px-3 py-3 text-center font-bold text-violet-700">{agent.awaiting_final_qc}</td>
                     <td className="px-3 py-3 text-center font-bold text-emerald-700">{agent.approved}</td>
                     <td className="px-3 py-3 text-center font-bold text-red-700">{agent.denied}</td>
                     <td className="px-4 py-3"><div className="flex justify-end gap-2">{agentLink && <><button onClick={() => void copyText(agentLink)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><ClipboardCopy size={13}/> Copy Link</button><button onClick={() => window.open(agentLink, '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Open <ExternalLink size={13}/></button></>}{!privateLinkMode && <button onClick={() => void regenerateAgentPortalLink(agent)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700"><RefreshCw size={13}/> {agentLink ? 'New Link' : 'Generate Link'}</button>}{!agentLink && privateLinkMode && <span className="text-xs text-slate-400">Link unavailable</span>}</div></td>

@@ -22,6 +22,8 @@ type OpenAIVerdict = {
   summary?: string;
 };
 
+type TranscriptionResponse = { text?: unknown };
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -41,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // Keep private call recordings limited to authenticated QC and Admin users.
+    // Keep private call recordings limited to authenticated QC reviewers.
     const authHeader = req.headers.get("Authorization") || "";
     const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
     if (!accessToken) return json({ error: "Authentication required" }, 401);
@@ -53,21 +55,31 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerProfile, error: callerProfileError } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, team_id")
       .eq("id", callerId)
       .maybeSingle();
     if (callerProfileError) return json({ error: "Unable to verify caller access" }, 500);
-    if (callerProfile?.role !== "admin" && callerProfile?.role !== "qc") {
-      return json({ error: "Only QC and Admin users can transcribe recordings" }, 403);
+    if (!callerProfile || !["admin", "qc", "manager"].includes(callerProfile.role)) {
+      return json({ error: "Only authorized QC reviewers can transcribe recordings" }, 403);
     }
 
     // 1. Load the lead.
     const { data: lead, error: leadError } = await admin
       .from("portal_leads")
-      .select("id, company_id, full_name, notes, form_data, recording_url")
+      .select("id, company_id, agent_id, full_name, notes, form_data, recording_url")
       .eq("id", lead_id)
       .maybeSingle();
     if (leadError || !lead) return json({ error: "Lead not found" }, 404);
+    if (callerProfile.role === "manager") {
+      if (!callerProfile.team_id || !lead.agent_id) return json({ error: "This lead is not assigned to your team" }, 403);
+      const { data: leadAgent, error: leadAgentError } = await admin
+        .from("agents")
+        .select("team_id")
+        .eq("id", lead.agent_id)
+        .maybeSingle();
+      if (leadAgentError) return json({ error: "Unable to verify the lead team" }, 500);
+      if (leadAgent?.team_id !== callerProfile.team_id) return json({ error: "This lead is not assigned to your team" }, 403);
+    }
     const clientTranscript = typeof requestedTranscript === "string" ? requestedTranscript.trim() : "";
     if (clientTranscript.length > MAX_TRANSCRIPT_CHARS) {
       return json({ error: "Transcript is too large to qualify" }, 400);
@@ -150,7 +162,7 @@ Deno.serve(async (req: Request) => {
       }
       recordingName = supportedAudioName(recordingName, contentType);
 
-      let transcriptionJson: any = null;
+      let transcriptionJson: TranscriptionResponse | null = null;
       for (let index = 0; index < TRANSCRIPTION_MODELS.length; index += 1) {
         const model = TRANSCRIPTION_MODELS[index];
         const form = new FormData();
@@ -164,7 +176,7 @@ Deno.serve(async (req: Request) => {
         });
 
         if (transcriptionResp.ok) {
-          transcriptionJson = await transcriptionResp.json();
+          transcriptionJson = await transcriptionResp.json() as TranscriptionResponse;
           transcriptionModelUsed = model;
           break;
         }
@@ -413,12 +425,18 @@ function renderOpenAIErrorResponse(
   }, 502);
 }
 
-function extractOutputText(response: any): string {
-  if (!Array.isArray(response?.output)) return "";
-  for (const item of response.output) {
-    if (!Array.isArray(item?.content)) continue;
-    for (const part of item.content) {
-      if (part?.type === "output_text" && typeof part.text === "string") return part.text.trim();
+function extractOutputText(response: unknown): string {
+  const output = typeof response === "object" && response !== null && "output" in response
+    ? (response as { output?: unknown }).output
+    : null;
+  if (!Array.isArray(output)) return "";
+  for (const item of output) {
+    const content = typeof item === "object" && item !== null && "content" in item
+      ? (item as { content?: unknown }).content
+      : null;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (typeof part === "object" && part !== null && "type" in part && "text" in part && (part as { type?: unknown }).type === "output_text" && typeof (part as { text?: unknown }).text === "string") return ((part as { text: string }).text).trim();
     }
   }
   return "";
