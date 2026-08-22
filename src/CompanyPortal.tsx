@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   ImageUp,
   Loader2,
+  MapPin,
   Plus,
   RefreshCw,
   Save,
@@ -42,6 +43,19 @@ interface Location {
   id: string;
   location_label: string;
   state: string | null;
+  office_name: string | null;
+  address: string | null;
+  city: string | null;
+  zip_code: string | null;
+  service_cities: string[];
+  service_zips: string[];
+  phone: string | null;
+  email: string | null;
+  manager_name: string | null;
+  timezone: string;
+  notes: string | null;
+  active: boolean;
+  sort_order: number;
 }
 interface ScheduleRule {
   id: string;
@@ -199,6 +213,7 @@ interface CompanyDashboardSummary {
 type Tab =
   | "appointments"
   | "leads"
+  | "locations"
   | "schedule"
   | "requirements"
   | "forms"
@@ -228,6 +243,7 @@ export function CompanyPortal({
   );
   const [tab, setTab] = useState<Tab>("appointments");
   const [companyLeadFilter, setCompanyLeadFilter] = useState("all");
+  const [companyLeadLocationId, setCompanyLeadLocationId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -763,6 +779,7 @@ export function CompanyPortal({
             [
               ["appointments", "Appointments", CalendarDays],
               ["leads", "Leads", FileSpreadsheet],
+              ["locations", "Locations", MapPin],
               ["schedule", "Schedule", CalendarDays],
               ["requirements", "Requirements", ShieldCheck],
               ["forms", "Forms", Clipboard],
@@ -795,6 +812,7 @@ export function CompanyPortal({
             updateLeadOutcome={updateLeadOutcome}
             openLeads={(filter) => {
               setCompanyLeadFilter(filter);
+              setCompanyLeadLocationId("");
               setTab("leads");
             }}
           />
@@ -806,8 +824,29 @@ export function CompanyPortal({
             token={token}
             filter={companyLeadFilter}
             setFilter={setCompanyLeadFilter}
+            locations={data.locations}
+            locationId={companyLeadLocationId}
+            setLocationId={setCompanyLeadLocationId}
             openLead={setSelectedLead}
             activePackage={dashboard?.active_package || null}
+          />
+        )}
+
+        {tab === "locations" && (
+          <CompanyLocationsManager
+            companyId={companyId}
+            token={token}
+            locations={data.locations}
+            reload={load}
+            onOpenSchedule={(locationId) => {
+              setScheduleLocation(locationId);
+              setTab("schedule");
+            }}
+            onOpenLeads={(locationId) => {
+              setCompanyLeadLocationId(locationId);
+              setCompanyLeadFilter("all");
+              setTab("leads");
+            }}
           />
         )}
 
@@ -1407,11 +1446,362 @@ export function CompanyPortal({
   );
 }
 
+type LocationDraft = {
+  location_label: string;
+  office_name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  service_cities: string;
+  service_zips: string;
+  phone: string;
+  email: string;
+  manager_name: string;
+  timezone: string;
+  notes: string;
+  active: boolean;
+};
+
+const EMPTY_LOCATION: LocationDraft = {
+  location_label: "",
+  office_name: "",
+  address: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  service_cities: "",
+  service_zips: "",
+  phone: "",
+  email: "",
+  manager_name: "",
+  timezone: "America/Chicago",
+  notes: "",
+  active: true,
+};
+
+function CompanyLocationsManager({
+  companyId,
+  token,
+  locations,
+  reload,
+  onOpenSchedule,
+  onOpenLeads,
+}: {
+  companyId: string;
+  token: string;
+  locations: Location[];
+  reload: () => Promise<void>;
+  onOpenSchedule: (locationId: string) => void;
+  onOpenLeads: (locationId: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<LocationDraft>(EMPTY_LOCATION);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const startCreate = () => {
+    setEditingId("new");
+    setDraft(EMPTY_LOCATION);
+    setError("");
+  };
+  const startEdit = (location: Location) => {
+    setEditingId(location.id);
+    setDraft({
+      location_label: location.location_label || "",
+      office_name: location.office_name || "",
+      address: location.address || "",
+      city: location.city || "",
+      state: location.state || "",
+      zip_code: location.zip_code || "",
+      service_cities: (location.service_cities || []).join(", "),
+      service_zips: (location.service_zips || []).join(", "),
+      phone: location.phone || "",
+      email: location.email || "",
+      manager_name: location.manager_name || "",
+      timezone: location.timezone || "America/Chicago",
+      notes: location.notes || "",
+      active: location.active !== false,
+    });
+    setError("");
+  };
+  const payload = () => ({
+    ...draft,
+    service_cities: splitList(draft.service_cities),
+    service_zips: splitList(draft.service_zips),
+  });
+  const save = async () => {
+    if (!draft.location_label.trim()) {
+      setError("Location or service-area name is required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const rpcName =
+      editingId === "new"
+        ? "create_company_portal_location"
+        : "update_company_portal_location";
+    const rpcArgs =
+      editingId === "new"
+        ? {
+            p_company_id: companyId,
+            p_access_token: token,
+            p_location: payload(),
+          }
+        : {
+            p_company_id: companyId,
+            p_access_token: token,
+            p_location_id: editingId,
+            p_patch: payload(),
+          };
+    const { error: saveError } = await supabase.rpc(rpcName, rpcArgs);
+    if (saveError) setError(rpcError(saveError));
+    else {
+      setSuccess(
+        editingId === "new" ? "Location created." : "Location updated.",
+      );
+      setEditingId(null);
+      setDraft(EMPTY_LOCATION);
+      await reload();
+      window.setTimeout(() => setSuccess(""), 2500);
+    }
+    setBusy(false);
+  };
+  const set = <K extends keyof LocationDraft>(
+    key: K,
+    value: LocationDraft[K],
+  ) => setDraft((current) => ({ ...current, [key]: value }));
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">Office & Service Locations</h2>
+          <p className="text-xs text-slate-500">
+            Add every office or market your company works in, then configure its
+            schedule and view only that location&apos;s leads.
+          </p>
+        </div>
+        <button
+          onClick={startCreate}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white"
+        >
+          <Plus size={15} /> Add Location
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+          {success}
+        </div>
+      )}
+
+      {editingId && (
+        <section className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="font-black">
+                {editingId === "new" ? "Add Location" : "Edit Location"}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Requirements/notes are specific to this office or service area.
+              </p>
+            </div>
+            <button
+              onClick={() => setEditingId(null)}
+              className="rounded-lg border px-3 py-2 text-xs font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <TextField
+              label="Location / Service Area Name *"
+              value={draft.location_label}
+              onChange={(value) => set("location_label", value)}
+            />
+            <TextField
+              label="Office Name"
+              value={draft.office_name}
+              onChange={(value) => set("office_name", value)}
+            />
+            <TextField
+              label="Office Phone"
+              value={draft.phone}
+              onChange={(value) => set("phone", value)}
+            />
+            <TextField
+              label="Office Email"
+              value={draft.email}
+              onChange={(value) => set("email", value)}
+            />
+            <div className="md:col-span-2">
+              <TextField
+                label="Office Address"
+                value={draft.address}
+                onChange={(value) => set("address", value)}
+              />
+            </div>
+            <TextField
+              label="City"
+              value={draft.city}
+              onChange={(value) => set("city", value)}
+            />
+            <TextField
+              label="State"
+              value={draft.state}
+              onChange={(value) => set("state", value)}
+            />
+            <TextField
+              label="ZIP"
+              value={draft.zip_code}
+              onChange={(value) => set("zip_code", value)}
+            />
+            <TextField
+              label="Location Manager"
+              value={draft.manager_name}
+              onChange={(value) => set("manager_name", value)}
+            />
+            <TextField
+              label="Timezone"
+              value={draft.timezone}
+              onChange={(value) => set("timezone", value)}
+            />
+            <TextField
+              label="Service Cities (comma separated)"
+              value={draft.service_cities}
+              onChange={(value) => set("service_cities", value)}
+            />
+            <TextField
+              label="Service ZIP Codes (comma separated)"
+              value={draft.service_zips}
+              onChange={(value) => set("service_zips", value)}
+            />
+            <div className="md:col-span-2 xl:col-span-3">
+              <TextArea
+                label="Location Requirements / Notes"
+                value={draft.notes}
+                onChange={(value) => set("notes", value)}
+              />
+            </div>
+            <Toggle
+              label="Location Active"
+              checked={draft.active}
+              onChange={(value) => set("active", value)}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button
+              disabled={busy}
+              onClick={() => void save()}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {busy ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Save size={15} />
+              )}
+              Save Location
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!locations.length ? (
+        <Empty text="No locations yet. Add the first office or service area." />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          {locations.map((location) => (
+            <article
+              key={location.id}
+              className={`rounded-2xl border bg-white p-4 shadow-sm ${location.active === false ? "opacity-60" : ""}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+                    <MapPin size={18} />
+                  </span>
+                  <div>
+                    <h3 className="font-black">{location.location_label}</h3>
+                    <p className="text-xs text-slate-500">
+                      {location.office_name || "Service area"}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-1 text-[10px] font-bold ${location.active === false ? "bg-slate-100 text-slate-500" : "bg-emerald-50 text-emerald-700"}`}
+                >
+                  {location.active === false ? "Inactive" : "Active"}
+                </span>
+              </div>
+              <div className="mt-3 space-y-1 text-xs text-slate-600">
+                <p>
+                  {[
+                    location.address,
+                    location.city,
+                    location.state,
+                    location.zip_code,
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "No office address entered"}
+                </p>
+                <p>
+                  <strong>Service:</strong>{" "}
+                  {(location.service_cities || []).join(", ") ||
+                    (location.service_zips || []).join(", ") ||
+                    "Not specified"}
+                </p>
+                <p>
+                  <strong>Manager:</strong> {location.manager_name || "—"}
+                </p>
+                {location.notes && (
+                  <p className="line-clamp-2" title={location.notes}>
+                    <strong>Requirements:</strong> {location.notes}
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => startEdit(location)}
+                  className="rounded-lg border px-3 py-2 text-xs font-bold"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onOpenSchedule(location.id)}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"
+                >
+                  Schedule
+                </button>
+                <button
+                  onClick={() => onOpenLeads(location.id)}
+                  className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700"
+                >
+                  View Leads
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CompanyLeadsSpreadsheet({
   companyId,
   token,
   filter,
   setFilter,
+  locations,
+  locationId,
+  setLocationId,
   openLead,
   activePackage,
 }: {
@@ -1419,6 +1809,9 @@ function CompanyLeadsSpreadsheet({
   token: string;
   filter: string;
   setFilter: (value: string) => void;
+  locations: Location[];
+  locationId: string;
+  setLocationId: (value: string) => void;
   openLead: (appointment: Appointment) => void;
   activePackage: CompanyDashboardSummary["active_package"];
 }) {
@@ -1445,11 +1838,12 @@ function CompanyLeadsSpreadsheet({
     setLoading(true);
     setError("");
     const { data: result, error: loadError } = await supabase.rpc(
-      "get_company_lead_spreadsheet",
+      "get_company_location_lead_spreadsheet",
       {
         p_company_id: companyId,
         p_access_token: token,
         p_filter: filter,
+        p_location_id: locationId || null,
         p_search: search || null,
         p_limit: 100,
         p_offset: offset,
@@ -1458,7 +1852,7 @@ function CompanyLeadsSpreadsheet({
     if (loadError) setError(rpcError(loadError));
     else setData(result as CompanyLeadSheetData);
     setLoading(false);
-  }, [companyId, filter, offset, search, token]);
+  }, [companyId, filter, locationId, offset, search, token]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -1520,6 +1914,29 @@ function CompanyLeadsSpreadsheet({
           remaining{" "}
           <span className="text-slate-400">(not yet delivered records)</span>
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3">
+        <MapPin size={15} className="text-blue-600" />
+        <label className="text-xs font-bold text-slate-600">Location</label>
+        <select
+          value={locationId}
+          onChange={(event) => {
+            setOffset(0);
+            setLocationId(event.target.value);
+          }}
+          className="rounded-lg border px-3 py-2 text-xs font-semibold"
+        >
+          <option value="">All locations</option>
+          {locations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {location.location_label}
+              {location.active === false ? " (Inactive)" : ""}
+            </option>
+          ))}
+        </select>
+        <span className="text-[11px] text-slate-400">
+          Counts and spreadsheet rows update for the selected office.
+        </span>
       </div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         {filterCards.map(([key, label, count, tone]) => (
@@ -1592,6 +2009,7 @@ function CompanyLeadsSpreadsheet({
                     "Phone",
                     "Property Address",
                     "City / State / ZIP",
+                    "Location",
                     "Service",
                     "Roof Age",
                     "Roof Type",
@@ -1649,6 +2067,9 @@ function CompanyLeadsSpreadsheet({
                         ]
                           .filter(Boolean)
                           .join(", ")}
+                      </td>
+                      <td className="border-b px-3 py-3 font-semibold">
+                        {appointment.location_label || "Company-wide"}
                       </td>
                       <td className="border-b px-3 py-3">
                         {appointment.lead.service_needed || "—"}
@@ -2868,4 +3289,15 @@ function numberOrBlank(value: unknown): string {
   return value === null || value === undefined || value === ""
     ? ""
     : String(value);
+}
+
+function splitList(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
 }

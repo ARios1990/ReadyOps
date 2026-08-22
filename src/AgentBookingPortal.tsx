@@ -190,7 +190,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     setLoading(true);
     setError('');
     const [{ data, error: rpcErr }, { data: locationTimezone }] = await Promise.all([
-      supabase.rpc('get_public_booking_portal', {
+      supabase.rpc('get_public_booking_portal_active_locations', {
         p_slug: slug,
         p_location_id: nextLocationId,
         p_start_date: startDate,
