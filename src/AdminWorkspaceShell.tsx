@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   BarChart3,
   Building2,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -26,14 +25,11 @@ type AdminSection =
   | "qc"
   | "companies"
   | "leads"
-  | "appointments"
   | "staff"
-  | "teams"
   | "active-users"
   | "reports"
   | "invoices"
-  | "payroll"
-  | "settings";
+  | "payroll";
 type SidebarItem = readonly [AdminSection, string, IconComponent, string];
 
 const SIDEBAR_STORAGE_KEY = "readyops-sidebar-collapsed";
@@ -44,7 +40,6 @@ const MAIN_ITEMS: readonly SidebarItem[] = [
   ["qc", "QC Queue", ShieldCheck, "/qc"],
   ["companies", "Companies & Scheduling", Building2, "/admin/operations"],
   ["leads", "Leads", FileText, "/admin/crm"],
-  ["appointments", "Appointments", CalendarDays, "/?view=appointments"],
 ] as const;
 
 const MANAGER_MAIN_ITEMS: readonly SidebarItem[] = [
@@ -53,13 +48,11 @@ const MANAGER_MAIN_ITEMS: readonly SidebarItem[] = [
 ] as const;
 
 const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
-  ["staff", "Agents & Managers", UsersRound, "/#readyops-staff"],
-  ["teams", "Teams", UsersRound, "/#readyops-staff"],
+  ["staff", "People & Teams", UsersRound, "/#readyops-staff"],
   ["active-users", "Active Users", Wifi, "/admin/active-users"],
   ["reports", "Reports", BarChart3, "/?view=reports"],
   ["invoices", "Invoices", WalletCards, "/?view=invoices"],
   ["payroll", "Payroll", CircleDollarSign, "/?view=payroll"],
-  ["settings", "Settings", Settings, "/"],
 ] as const;
 
 type Props = {
