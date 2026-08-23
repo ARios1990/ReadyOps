@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  LogOut, Building2, Users, RefreshCw, MapPin,
-  Shield, User, ChevronDown, Loader2, Settings, Search, Filter, Plus, UserPlus
+  LogOut, Building2, Users, RefreshCw,
+  User, ChevronDown, Loader2, Search, Filter
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useScheduleStore } from './useScheduleStore';
 import { ScheduleGrid } from './ScheduleGrid';
-import { AdminPanel } from './AdminPanel';
-import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
 import { addDays, formatDateShort, localDate, scheduleWeekStart } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
@@ -28,9 +26,6 @@ export function Dashboard() {
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('Active');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<string | undefined>(undefined);
-  const [adminView, setAdminView] = useState<'overview' | 'slots'>(() => ['appointments', 'slots'].includes(initialParams.get('view') || '') ? 'slots' : 'overview');
   const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState(() => scheduleWeekStart());
 
   useEffect(() => {
@@ -46,12 +41,6 @@ export function Dashboard() {
       window.removeEventListener('focus', refreshScheduleWeek);
     };
   }, []);
-
-  // Quick add modals
-  const [showAddLocation, setShowAddLocation] = useState(false);
-  const [locCompany, setLocCompany] = useState('');
-  const [locLabel, setLocLabel] = useState('');
-  const [locState, setLocState] = useState('');
 
   if (store.loading) {
     return (
@@ -126,20 +115,6 @@ export function Dashboard() {
     return acc;
   }, {} as Record<string, number>);
 
-  function openAdminTab(tab: string) {
-    setAdminTab(tab);
-    setShowAdmin(true);
-  }
-
-  async function handleAddLocation() {
-    if (!locCompany || !locLabel.trim()) return;
-    await store.addLocation(locCompany, locLabel.trim(), locState.trim() || null);
-    setShowAddLocation(false);
-    setLocCompany('');
-    setLocLabel('');
-    setLocState('');
-  }
-
   if (isAdmin) {
     return (
       <AdminReferenceDashboard
@@ -160,11 +135,9 @@ export function Dashboard() {
             <div className="border-l border-white/15 pl-3">
               <h1 className="text-sm font-bold text-white leading-tight">Operations Dashboard</h1>
               <p className="readyops-brand-subtitle text-xs">
-                {isAdmin ? 'Admin Dashboard -- Full Access' : (
-                  userTeam
-                    ? `Team: ${userTeam.name} (${userTeam.abbreviation})`
-                    : `Agent: ${profile?.display_name}`
-                )}
+                {userTeam
+                  ? `Team: ${userTeam.name} (${userTeam.abbreviation})`
+                  : `Agent: ${profile?.display_name}`}
               </p>
             </div>
           </div>
@@ -175,29 +148,15 @@ export function Dashboard() {
               <span className="text-xs text-green-700 font-medium">Live</span>
             </div>
 
-            {userTeam && !isAdmin && (
+            {userTeam && (
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${getTeamPillStyle(userTeam.abbreviation)}`}>
                 {userTeam.abbreviation}
               </div>
             )}
 
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
-              isAdmin ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
-            }`}>
-              {isAdmin ? <Shield size={13} /> : <User size={13} />}
-              {isAdmin ? 'Admin' : 'Agent'}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+              <User size={13} /> Agent
             </div>
-
-            {isAdmin && (
-              <button
-                onClick={() => { setAdminTab(undefined); setShowAdmin(!showAdmin); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  showAdmin ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Settings size={14} /> Manage
-              </button>
-            )}
 
             <ThemeToggle />
 
@@ -211,14 +170,9 @@ export function Dashboard() {
         </div>
       </header>
 
-      {/* Admin Panel */}
-      {showAdmin && isAdmin && (
-        <AdminPanel store={store} onClose={() => setShowAdmin(false)} initialTab={adminTab} />
-      )}
-
       <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-5">
         {/* Team scope notice for agents */}
-        {!isAdmin && userTeam && (
+        {userTeam && (
           <div className={`mb-4 px-4 py-3 rounded-xl border ${getTeamBannerStyle(userTeam.abbreviation)}`}>
             <div className="flex items-center gap-2">
               <Users size={16} />
@@ -230,114 +184,10 @@ export function Dashboard() {
           </div>
         )}
 
-        {!isAdmin && !userTeam && (
+        {!userTeam && (
           <div className="mb-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
             <p className="text-sm font-medium">Your account is not yet linked to an agent profile.</p>
             <p className="text-xs mt-1">Ask your admin to assign you to a team.</p>
-          </div>
-        )}
-
-        {isAdmin && (
-          <nav className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-            <button onClick={() => setAdminView('overview')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'overview' ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Overview</button>
-            <button onClick={() => { window.location.href = '/qc'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-50">QC Queue</button>
-            <button onClick={() => { window.location.href = '/admin/portals'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Companies & Packages</button>
-            <button onClick={() => setAdminView('slots')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'slots' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Appointments</button>
-          </nav>
-        )}
-
-        {isAdmin && adminView === 'overview' && (
-          <AdminOperationsHome onOpenAppointments={() => setAdminView('slots')} />
-        )}
-
-        {(!isAdmin || adminView === 'slots') && (<>
-        {/* Action Buttons (Admin) */}
-        {isAdmin && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => openAdminTab('add-company')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              <Plus size={13} /> Add Company
-            </button>
-            <button
-              onClick={() => openAdminTab('agents')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white rounded-lg text-xs font-medium hover:bg-teal-700 transition-colors shadow-sm"
-            >
-              <UserPlus size={13} /> Add Agent
-            </button>
-            <button
-              onClick={() => setShowAddLocation(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              <MapPin size={13} /> Add Location Row
-            </button>
-            <button
-              onClick={() => openAdminTab('companies')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
-            >
-              <Settings size={13} /> Edit Status
-            </button>
-          </div>
-        )}
-
-        {/* Add Location Modal */}
-        {showAddLocation && isAdmin && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-              <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin size={16} /> Add Location Row
-              </h3>
-              <p className="text-xs text-gray-500 mb-4">
-                Add a new location/service area row for a company. Each location gets its own time slot schedule.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Company *</label>
-                  <select
-                    value={locCompany}
-                    onChange={e => setLocCompany(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select company...</option>
-                    {store.companies.filter(c => c.account_status === 'Active').map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Location Label *</label>
-                  <input
-                    type="text"
-                    value={locLabel}
-                    onChange={e => setLocLabel(e.target.value)}
-                    placeholder="e.g. Amarillo TX, Round Rock TX"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
-                  <input
-                    type="text"
-                    value={locState}
-                    onChange={e => setLocState(e.target.value)}
-                    placeholder="e.g. TX"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 mt-5 justify-end">
-                <button
-                  onClick={() => setShowAddLocation(false)}
-                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                >Cancel</button>
-                <button
-                  onClick={handleAddLocation}
-                  disabled={!locCompany || !locLabel.trim()}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >Add Location</button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -490,7 +340,6 @@ export function Dashboard() {
             ? 'Appointments — manage weekly availability and current-week appointment capacity.'
             : 'Agent -- book open slots for your team\'s companies. Changes sync live.'}
         </div>
-        </>)}
       </main>
     </div>
   );

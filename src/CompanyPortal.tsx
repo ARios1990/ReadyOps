@@ -22,6 +22,7 @@ import {
   UserX,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { isLeadOutcome } from "./leadOutcome";
 import { PortalFormField, PortalFormSection } from "./DynamicLeadForm";
 import {
   addDays,
@@ -210,16 +211,8 @@ interface CompanyDashboardSummary {
   last_updated_at: string | null;
 }
 
-type Tab =
-  | "appointments"
-  | "leads"
-  | "locations"
-  | "schedule"
-  | "requirements"
-  | "forms"
-  | "reps"
-  | "audit"
-  | "reports";
+type Tab = "overview" | "leads" | "setup" | "reports";
+type SetupTab = "locations" | "schedule" | "requirements" | "forms" | "reps";
 const DAY_NAMES = [
   "Sunday",
   "Monday",
@@ -252,7 +245,8 @@ export function CompanyPortal({
   const [dashboard, setDashboard] = useState<CompanyDashboardSummary | null>(
     null,
   );
-  const [tab, setTab] = useState<Tab>("appointments");
+  const [tab, setTab] = useState<Tab>("overview");
+  const [setupTab, setSetupTab] = useState<SetupTab>("locations");
   const [companyLeadFilter, setCompanyLeadFilter] = useState("all");
   const [companyLeadLocationId, setCompanyLeadLocationId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -802,14 +796,9 @@ export function CompanyPortal({
         <nav className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
           {(
             [
-              ["appointments", "Appointments", CalendarDays],
+              ["overview", "Overview", CalendarDays],
               ["leads", "Leads", FileSpreadsheet],
-              ["locations", "Locations", MapPin],
-              ["schedule", "Schedule", CalendarDays],
-              ["requirements", "Requirements", ShieldCheck],
-              ["forms", "Forms", Clipboard],
-              ["reps", "Reps", Users],
-              ["audit", "Audit", ShieldCheck],
+              ["setup", "Company Setup", ShieldCheck],
               ["reports", "Reports", BarChart3],
             ] as [Tab, string, typeof CalendarDays][]
           ).map(([key, label, Icon]) => (
@@ -824,7 +813,25 @@ export function CompanyPortal({
           ))}
         </nav>
 
-        {tab === "appointments" && (
+        {tab === "setup" && (
+          <nav className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {(
+              [
+                ["locations", "Locations", MapPin],
+                ["schedule", "Schedule", CalendarDays],
+                ["requirements", "Requirements", ShieldCheck],
+                ["forms", "Forms", Clipboard],
+                ["reps", "Representatives", Users],
+              ] as [SetupTab, string, typeof CalendarDays][]
+            ).map(([key, label, Icon]) => (
+              <button key={key} onClick={() => setSetupTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold ${setupTab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"}`}>
+                <Icon size={14} />{label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {tab === "overview" && (
           <CompanyAppointmentsDashboard
             data={data}
             dashboard={dashboard}
@@ -860,7 +867,7 @@ export function CompanyPortal({
           />
         )}
 
-        {tab === "locations" && (
+        {tab === "setup" && setupTab === "locations" && (
           <CompanyLocationsManager
             companyId={companyId}
             token={token}
@@ -868,7 +875,7 @@ export function CompanyPortal({
             reload={load}
             onOpenSchedule={(locationId) => {
               setScheduleLocation(locationId);
-              setTab("schedule");
+              setSetupTab("schedule");
             }}
             onOpenLeads={(locationId) => {
               setCompanyLeadLocationId(locationId);
@@ -878,7 +885,7 @@ export function CompanyPortal({
           />
         )}
 
-        {tab === "requirements" && (
+        {tab === "setup" && setupTab === "requirements" && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <div>
@@ -1034,7 +1041,7 @@ export function CompanyPortal({
           </section>
         )}
 
-        {tab === "schedule" && (
+        {tab === "setup" && setupTab === "schedule" && (
           <section className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1190,7 +1197,7 @@ export function CompanyPortal({
           </section>
         )}
 
-        {tab === "forms" && (
+        {tab === "setup" && setupTab === "forms" && (
           <section className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5 flex items-center justify-between">
@@ -1315,7 +1322,7 @@ export function CompanyPortal({
           </section>
         )}
 
-        {tab === "reps" && (
+        {tab === "setup" && setupTab === "reps" && (
           <section className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="font-bold">Add Representative</h2>
@@ -1431,7 +1438,7 @@ export function CompanyPortal({
           <CompanyReports data={data} dashboard={dashboard} />
         )}
 
-        {tab === "audit" && (
+        {tab === "reports" && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-bold">Audit History</h2>
             <div className="mt-4 space-y-2">
@@ -1875,6 +1882,7 @@ function CompanyLeadsSpreadsheet({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
+    void refreshKey;
     setLoading(true);
     setError("");
     const { data: result, error: loadError } = await supabase.rpc(
@@ -2880,20 +2888,10 @@ function performanceFromAppointments(
   appointments: Appointment[],
 ): CompanyDashboardSummary["performance"] {
   const total = appointments.length;
-  const good = appointments.filter((item) =>
-    ["good_inspected", "good"].includes(
-      item.canonical_status || item.client_status,
-    ),
-  ).length;
-  const signed = appointments.filter((item) =>
-    ["signed_contract"].includes(item.canonical_status || item.client_status),
-  ).length;
-  const noShows = appointments.filter((item) =>
-    ["no_show"].includes(item.canonical_status || item.client_status),
-  ).length;
-  const bad = appointments.filter((item) =>
-    ["bad"].includes(item.canonical_status || item.client_status),
-  ).length;
+  const good = appointments.filter((item) => isLeadOutcome(item, "good")).length;
+  const signed = appointments.filter((item) => isLeadOutcome(item, "signed_contract")).length;
+  const noShows = appointments.filter((item) => isLeadOutcome(item, "no_show")).length;
+  const bad = appointments.filter((item) => isLeadOutcome(item, "bad")).length;
   return {
     total_leads: total,
     good_inspected: good,
