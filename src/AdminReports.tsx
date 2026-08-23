@@ -8,16 +8,21 @@ import { supabase } from './supabase';
 type Obj = Record<string, any>;
 type Tab = 'overview' | 'companies' | 'agents' | 'appointments' | 'financial';
 
+function isGood(row: Obj): boolean { return row.client_status === 'good' || ['good', 'good_inspected'].includes(String(row.canonical_status || '').toLowerCase()); }
+function isSigned(row: Obj): boolean { return [row.client_status, row.canonical_status, row.sales_outcome].some(value => String(value || '').toLowerCase() === 'signed_contract'); }
+function isBad(row: Obj): boolean { return row.client_status === 'bad' || row.canonical_status === 'bad' || row.sales_outcome === 'lost'; }
+function isNoShow(row: Obj): boolean { return row.client_status === 'no_show' || row.canonical_status === 'no_show' || String(row.attendance_status || '').includes('no_show'); }
+
 function isoDate(value: Date): string {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
 
-export function AdminReports() {
+export function AdminReports({ initialStatusFilter = 'all' }: { initialStatusFilter?: string }) {
   const [startDate, setStartDate] = useState(() => isoDate(new Date(Date.now() - 30 * 86400000)));
   const [endDate, setEndDate] = useState(() => isoDate(new Date()));
   const [companyId, setCompanyId] = useState('all');
   const [agentId, setAgentId] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [tab, setTab] = useState<Tab>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,7 +42,7 @@ export function AdminReports() {
       supabase.from('agents').select('id,name,team_id,active').order('name'),
       supabase.from('teams').select('id,name,abbreviation'),
       supabase.from('portal_leads').select('id,lead_code,company_id,agent_id,agent_name,qc_status,qualification_status,created_at'),
-      supabase.from('portal_appointments').select('id,lead_id,company_id,appointment_date,status,client_status,sales_outcome,attendance_status,inspection_status').gte('appointment_date', startDate).lte('appointment_date', endDate),
+      supabase.from('portal_appointments').select('id,lead_id,company_id,appointment_date,status,canonical_status,client_status,sales_outcome,attendance_status,inspection_status').gte('appointment_date', startDate).lte('appointment_date', endDate),
       supabase.from('invoices').select('id,company_id,total,status,period_start,period_end').gte('period_end', startDate).lte('period_start', endDate),
       supabase.from('payroll_entries').select('id,total_pay,payroll_period_id,payroll_periods!inner(week_start,week_end)').lte('payroll_periods.week_start', endDate).gte('payroll_periods.week_end', startDate),
     ]);
@@ -54,6 +59,7 @@ export function AdminReports() {
   }
 
   useEffect(() => { void load(); }, [startDate, endDate]);
+  useEffect(() => { setStatusFilter(initialStatusFilter); }, [initialStatusFilter]);
 
   const joined = useMemo<Obj[]>(() => {
     const leadMap = new Map(leads.map(l => [l.id, l]));
@@ -65,9 +71,10 @@ export function AdminReports() {
     if (agentId !== 'all' && row.lead?.agent_id !== agentId) return false;
     if (statusFilter === 'approved' && row.lead?.qc_status !== 'approved') return false;
     if (statusFilter === 'denied' && row.lead?.qc_status !== 'denied') return false;
-    if (statusFilter === 'good' && row.client_status !== 'good') return false;
-    if (statusFilter === 'no_show' && row.client_status !== 'no_show' && !String(row.attendance_status || '').includes('no_show')) return false;
-    if (statusFilter === 'signed_contract' && row.client_status !== 'signed_contract' && row.sales_outcome !== 'signed_contract') return false;
+    if (statusFilter === 'good' && !isGood(row)) return false;
+    if (statusFilter === 'bad' && !isBad(row)) return false;
+    if (statusFilter === 'no_show' && !isNoShow(row)) return false;
+    if (statusFilter === 'signed_contract' && !isSigned(row)) return false;
     return true;
   }), [joined, companyId, agentId, statusFilter]);
 
@@ -75,9 +82,9 @@ export function AdminReports() {
     total: filtered.length,
     approved: filtered.filter(r => r.lead?.qc_status === 'approved').length,
     denied: filtered.filter(r => r.lead?.qc_status === 'denied').length,
-    good: filtered.filter(r => r.client_status === 'good').length,
-    noShow: filtered.filter(r => r.client_status === 'no_show' || String(r.attendance_status || '').includes('no_show')).length,
-    signed: filtered.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length,
+    good: filtered.filter(isGood).length,
+    noShow: filtered.filter(isNoShow).length,
+    signed: filtered.filter(isSigned).length,
     completed: filtered.filter(r => r.status === 'completed' || r.inspection_status === 'completed').length,
     revenue: invoices.filter(i => i.status !== 'void' && (companyId === 'all' || i.company_id === companyId)).reduce((sum, i) => sum + Number(i.total || 0), 0),
     payroll: payrollEntries.reduce((sum, p) => sum + Number(p.total_pay || 0), 0),
@@ -90,9 +97,9 @@ export function AdminReports() {
       total: rows.length,
       approved: rows.filter(r => r.lead?.qc_status === 'approved').length,
       denied: rows.filter(r => r.lead?.qc_status === 'denied').length,
-      good: rows.filter(r => r.client_status === 'good').length,
-      noShow: rows.filter(r => r.client_status === 'no_show' || String(r.attendance_status || '').includes('no_show')).length,
-      signed: rows.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length,
+      good: rows.filter(isGood).length,
+      noShow: rows.filter(isNoShow).length,
+      signed: rows.filter(isSigned).length,
     };
   }).filter(r => r.total > 0), [companies, filtered]);
 
@@ -106,10 +113,10 @@ export function AdminReports() {
       total: rows.length,
       approved,
       denied: rows.filter(r => r.lead?.qc_status === 'denied').length,
-      good: rows.filter(r => r.client_status === 'good').length,
-      noShow: rows.filter(r => r.client_status === 'no_show' || String(r.attendance_status || '').includes('no_show')).length,
-      signed: rows.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length,
-      conversion: approved ? Math.round((rows.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length / approved) * 100) : 0,
+      good: rows.filter(isGood).length,
+      noShow: rows.filter(isNoShow).length,
+      signed: rows.filter(isSigned).length,
+      conversion: approved ? Math.round((rows.filter(isSigned).length / approved) * 100) : 0,
     };
   }).filter(r => r.total > 0), [agents, teams, filtered]);
 
@@ -142,7 +149,7 @@ export function AdminReports() {
       <label className="text-xs font-bold">Through<input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1 w-full rounded-lg border p-2"/></label>
       <label className="text-xs font-bold">Company<select value={companyId} onChange={e => setCompanyId(e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Companies</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label className="text-xs font-bold">Agent<select value={agentId} onChange={e => setAgentId(e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Agents</option>{agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
-      <label className="text-xs font-bold">Status<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Statuses</option><option value="approved">Approved</option><option value="denied">QC Denied</option><option value="good">Good</option><option value="no_show">No Show</option><option value="signed_contract">Signed Contract</option></select></label>
+      <label className="text-xs font-bold">Status<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Statuses</option><option value="approved">Approved</option><option value="denied">QC Denied</option><option value="good">Good</option><option value="bad">Bad</option><option value="no_show">No Show</option><option value="signed_contract">Signed Contract</option></select></label>
     </div></section>
 
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
