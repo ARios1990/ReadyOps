@@ -84,7 +84,7 @@ export function ResetPasswordPage() {
                     minLength={8}
                     required
                     placeholder="At least 8 characters"
-                    className="w-full px-4 py-2.5 pr-10 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="readyops-auth-input w-full px-4 py-2.5 pr-10 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <button
                     type="button"
@@ -107,7 +107,7 @@ export function ResetPasswordPage() {
                   minLength={8}
                   required
                   placeholder="Enter it again"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="readyops-auth-input w-full px-4 py-2.5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 

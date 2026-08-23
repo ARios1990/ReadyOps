@@ -397,6 +397,52 @@ html[data-theme='light'] .text-slate-400 {
   color: #667b95 !important;
 }
 
+/* Authentication fields must stay readable regardless of the saved theme or
+   browser autofill styling.  Keep this more specific than the global form
+   controls above so typed credentials never become white-on-white. */
+.readyops-auth-input {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a !important;
+  caret-color: #2563eb;
+  -webkit-text-fill-color: #0f172a;
+  color-scheme: light;
+}
+
+.readyops-auth-input::placeholder {
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b;
+  opacity: 1;
+}
+
+.readyops-auth-input:-webkit-autofill,
+.readyops-auth-input:-webkit-autofill:hover,
+.readyops-auth-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #2563eb;
+}
+
+html[data-theme='dark'] .readyops-auth-input {
+  background-color: #0a1a2d !important;
+  color: #eef4fb !important;
+  caret-color: #93c5fd;
+  -webkit-text-fill-color: #eef4fb;
+  color-scheme: dark;
+}
+
+html[data-theme='dark'] .readyops-auth-input::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8;
+}
+
+html[data-theme='dark'] .readyops-auth-input:-webkit-autofill,
+html[data-theme='dark'] .readyops-auth-input:-webkit-autofill:hover,
+html[data-theme='dark'] .readyops-auth-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #0a1a2d inset !important;
+  -webkit-text-fill-color: #eef4fb !important;
+  caret-color: #93c5fd;
+}
+
 .grid-cell {
   transition: all 0.15s ease;
   cursor: pointer;

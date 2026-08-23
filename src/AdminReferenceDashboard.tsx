@@ -13,10 +13,11 @@ import { AdminReports } from './AdminReports';
 import { AdminInvoices } from './AdminInvoices';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminSchedulingManager } from './AdminSchedulingManager';
+import { defaultReportDateRange, isLeadOutcome } from './leadOutcome';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
-type View = 'overview' | 'slots' | 'reports' | 'invoices' | 'payroll';
+type View = 'overview' | 'reports' | 'invoices' | 'payroll';
 type IconComponent = typeof Home;
 
 type CompanyOps = {
@@ -42,9 +43,6 @@ type Props = {
   store: ScheduleStore;
   profile: Profile | null;
   signOut: () => Promise<void> | void;
-  renderSlots: () => ReactNode;
-  selectedCompanyId?: string;
-  selectedLocationId?: string;
 };
 
 type SidebarItem = readonly [string, string, IconComponent];
@@ -57,17 +55,14 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['qc', 'QC Queue', ShieldCheck],
   ['companies', 'Companies & Scheduling', Building2],
   ['leads', 'Leads', FileText],
-  ['appointments', 'Appointments', CalendarDays],
 ] as const;
 
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
-  ['staff', 'Agents & Managers', UsersRound],
-  ['teams', 'Teams', UsersRound],
+  ['staff', 'People & Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
-  ['settings', 'Settings', Settings],
 ] as const;
 
 function getInitialSidebarCollapsed(): boolean {
@@ -75,8 +70,16 @@ function getInitialSidebarCollapsed(): boolean {
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
 }
 
-export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, selectedCompanyId, selectedLocationId }: Props) {
-  const [view, setView] = useState<View>('overview');
+function getInitialView(): View {
+  if (typeof window === 'undefined') return 'overview';
+  const requested = new URLSearchParams(window.location.search).get('view');
+  return requested === 'reports' || requested === 'invoices' || requested === 'payroll'
+    ? requested
+    : 'overview';
+}
+
+export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
+  const [view, setView] = useState<View>(getInitialView);
   const [staffTab, setStaffTab] = useState<StaffTab>('agents');
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
@@ -99,28 +102,41 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   const [schedulingLocationId, setSchedulingLocationId] = useState<string | undefined>();
   const [reportStatus, setReportStatus] = useState('all');
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('view');
+    if (requested === 'appointments' || requested === 'slots') {
+      const company = params.get('company');
+      window.location.replace(company ? `/admin/operations?company=${encodeURIComponent(company)}` : '/admin/operations');
+    }
+  }, []);
+
   async function refreshDashboard() {
     setLoadingOps(true);
-    const [profilesRes, opsRes, presenceRes, appointmentStatusRes, deniedRes] = await Promise.all([
+    const reportRange = defaultReportDateRange();
+    const [profilesRes, opsRes, presenceRes, appointmentStatusRes] = await Promise.all([
       supabase.from('profiles').select('*').order('display_name'),
       supabase.rpc('get_company_operations_overview'),
       supabase
         .from('company_portal_presence')
         .select('*', { count: 'exact', head: true })
         .gte('last_seen_at', new Date(Date.now() - 90_000).toISOString()),
-      supabase.from('portal_appointments').select('client_status,canonical_status,sales_outcome,attendance_status'),
-      supabase.from('portal_leads').select('*', { count: 'exact', head: true }).eq('qc_status', 'denied'),
+      supabase.from('portal_appointments').select('lead_id,client_status,canonical_status,sales_outcome,attendance_status').gte('appointment_date', reportRange.startDate).lte('appointment_date', reportRange.endDate),
     ]);
     if (profilesRes.data) setProfiles(profilesRes.data as Profile[]);
     if (opsRes.data) setOps(opsRes.data as CompanyOps[]);
     if (!presenceRes.error) setCompanyPortalsOnline(presenceRes.count || 0);
     if (!appointmentStatusRes.error) {
       const rows = appointmentStatusRes.data || [];
+      const leadIds = [...new Set(rows.map(row => row.lead_id).filter(Boolean))];
+      const deniedRes = leadIds.length
+        ? await supabase.from('portal_leads').select('*', { count: 'exact', head: true }).in('id', leadIds).eq('qc_status', 'denied')
+        : { count: 0, error: null };
       setOutcomes({
-        good: rows.filter(row => String(row.client_status || '').toLowerCase() === 'good' || ['good', 'good_inspected'].includes(String(row.canonical_status || '').toLowerCase())).length,
-        signed: rows.filter(row => [row.client_status, row.canonical_status, row.sales_outcome].some(value => String(value || '').toLowerCase() === 'signed_contract')).length,
-        bad: rows.filter(row => String(row.client_status || '').toLowerCase() === 'bad' || String(row.canonical_status || '').toLowerCase() === 'bad' || String(row.sales_outcome || '').toLowerCase() === 'lost').length,
-        noShow: rows.filter(row => String(row.client_status || '').toLowerCase() === 'no_show' || String(row.canonical_status || '').toLowerCase() === 'no_show' || String(row.attendance_status || '').toLowerCase().includes('no_show')).length,
+        good: rows.filter(row => isLeadOutcome(row, 'good')).length,
+        signed: rows.filter(row => isLeadOutcome(row, 'signed_contract')).length,
+        bad: rows.filter(row => isLeadOutcome(row, 'bad')).length,
+        noShow: rows.filter(row => isLeadOutcome(row, 'no_show')).length,
         denied: deniedRes.error ? 0 : deniedRes.count || 0,
       });
     }
@@ -213,14 +229,11 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     if (key === 'overview') setView('overview');
     else if (key === 'qc') window.location.href = '/qc';
     else if (key === 'companies') window.location.href = '/admin/operations';
-    else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
-    else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
     else if (key === 'reports') { setReportStatus('all'); setView('reports'); }
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
-    else if (key === 'settings') openManage('companies');
     else if (key === 'leads') window.location.href = '/admin/crm';
     else openManage();
   }
@@ -360,19 +373,19 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
             <section className="readyops-ref-metrics">
               <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note={companyPortalsOnline ? `${companyPortalsOnline} using portal now` : 'No portal activity now'} icon={Building2} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active'; }}/>
               <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'Needs review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=pending'; }}/>
-              <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Open denied leads' : 'No denied leads'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=denied'; }}/>
+              <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Last 30 days' : 'None in last 30 days'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => openReport('denied')}/>
               <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Open approved leads" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=approved'; }}/>
-              <MetricCard label="GOOD" value={outcomes.good} note="Client-marked good leads" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
-              <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Signed contracts" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
-              <MetricCard label="BAD" value={outcomes.bad} note="Bad or lost leads" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
-              <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Homeowner no shows" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
-              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/?view=appointments&scope=upcoming'; }}/>
+              <MetricCard label="GOOD" value={outcomes.good} note="Last 30 days" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
+              <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Last 30 days" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
+              <MetricCard label="BAD" value={outcomes.bad} note="Last 30 days" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
+              <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Last 30 days" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
+              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active-package'; }}/>
               <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=pending-payment'; }}/>
             </section>
 
             <section id="readyops-staff" className="readyops-ref-card readyops-ref-staff-card">
-              <div className="readyops-ref-card-heading"><h3>Agents & Managers</h3></div>
+              <div className="readyops-ref-card-heading"><h3>People & Teams</h3></div>
               <div className="readyops-ref-tabs">
                 <button className={staffTab === 'agents' ? 'active' : ''} onClick={() => setStaffTab('agents')}>All Agents</button>
                 <button className={staffTab === 'managers' ? 'active' : ''} onClick={() => setStaffTab('managers')}>Managers</button>
@@ -406,25 +419,8 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
             <AdminReports initialStatusFilter={reportStatus} />
           ) : view === 'invoices' ? (
             <AdminInvoices />
-          ) : view === 'payroll' ? (
-            <AdminPayroll />
           ) : (
-            <section className="readyops-ref-slots-view">
-              <PageHeader
-                title="Appointments"
-                subtitle="Scheduling"
-                actions={(
-                  <>
-                    <button className="readyops-ref-primary" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
-                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('locations', selectedLocationId)}><Pencil size={14}/> Edit Location</button>
-                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('company')}><Pencil size={14}/> Edit Company</button>
-                    <button className="readyops-ref-secondary" onClick={() => { window.location.href = '/admin/portals'; }}><Package size={14}/> Packages</button>
-                    <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Full Setup</button>
-                  </>
-                )}
-              />
-              {renderSlots()}
-            </section>
+            <AdminPayroll />
           )}
         </main>
       </div>
@@ -433,7 +429,6 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
         <AdminSchedulingManager
           store={store}
           initialMode={schedulingManagerMode}
-          initialCompanyId={selectedCompanyId}
           initialLocationId={schedulingLocationId}
           onClose={() => setShowSchedulingManager(false)}
         />
