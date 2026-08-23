@@ -549,12 +549,11 @@ export function CompanyPortal({
     appointment: Appointment,
     clientStatus: string,
   ) {
-    const note =
-      window.prompt(
-        "Inspector / company notes (optional)",
-        appointment.inspector_notes || "",
-      ) ??
-      (appointment.inspector_notes || "");
+    const note = window.prompt(
+      "Inspector / company notes (optional)",
+      appointment.inspector_notes || "",
+    );
+    if (note === null) return;
     setBusy(true);
     setError("");
     const { error: rpcErr } = await supabase.rpc(
