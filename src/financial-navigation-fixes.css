@@ -171,6 +171,124 @@ html[data-theme='dark'] .readyops-lead-spreadsheet-toolbar {
   scrollbar-gutter: stable;
 }
 
+/* QC Calendar typography and navy treatment. */
+[data-admin-section='qc'] .readyops-ref-page-header h2 {
+  color: #071a33;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.025em;
+}
+[data-admin-section='qc'] .readyops-ref-page-header p {
+  color: #425975 !important;
+  font-size: 13px !important;
+  font-weight: 600;
+}
+.readyops-qc-page {
+  color: #071a33;
+  font-size: 14px;
+}
+.readyops-qc-page > div.mb-4.rounded-xl {
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.readyops-qc-page .readyops-ref-metric {
+  min-height: 116px;
+  border-top: 4px solid #071a33;
+  background: rgba(255, 255, 255, .96);
+}
+.readyops-qc-page .readyops-ref-metric p {
+  color: #071a33;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+  opacity: 1;
+}
+.readyops-qc-page .readyops-ref-metric strong {
+  color: #071a33;
+  font-size: 31px;
+  font-weight: 900;
+}
+.readyops-qc-page select,
+.readyops-qc-page input {
+  min-height: 44px;
+  color: #071a33;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+.readyops-qc-page .readyops-qc-day-card {
+  min-height: 116px;
+  color: #071a33;
+}
+.readyops-qc-page .readyops-qc-day-card p,
+.readyops-qc-page .readyops-qc-day-card span {
+  font-size: 13px;
+  font-weight: 650;
+}
+.readyops-qc-page .readyops-qc-day-card strong {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 900;
+}
+.readyops-qc-page .readyops-qc-day-card span:last-child {
+  font-size: 11px;
+  font-weight: 800;
+}
+.readyops-qc-page .readyops-qc-day-card.is-active,
+.readyops-qc-page .readyops-qc-day-card.is-active p,
+.readyops-qc-page .readyops-qc-day-card.is-active strong,
+.readyops-qc-page .readyops-qc-day-card.is-active > span:not(:last-child) {
+  color: #ffffff;
+}
+.readyops-qc-page h3.text-xl {
+  color: #071a33;
+  font-size: 24px !important;
+}
+.readyops-qc-page h3.text-xl + p,
+.readyops-qc-page h4 + p {
+  font-size: 13px !important;
+  line-height: 1.45;
+}
+.readyops-qc-page h4 {
+  color: #071a33;
+  font-size: 18px;
+}
+.readyops-qc-page table {
+  font-size: 14px !important;
+}
+.readyops-qc-page table > thead > tr > th {
+  background: #071a33 !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+.readyops-qc-page table > tbody > tr > td {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.readyops-qc-page .min-h-64 p.font-bold {
+  color: #071a33;
+  font-size: 16px;
+}
+.readyops-qc-page .min-h-64 p.text-xs {
+  font-size: 13px !important;
+}
+html[data-theme='dark'] [data-admin-section='qc'] .readyops-ref-page-header h2,
+html[data-theme='dark'] .readyops-qc-page,
+html[data-theme='dark'] .readyops-qc-page h3.text-xl,
+html[data-theme='dark'] .readyops-qc-page h4,
+html[data-theme='dark'] .readyops-qc-page .readyops-ref-metric p,
+html[data-theme='dark'] .readyops-qc-page .readyops-ref-metric strong {
+  color: #f4f7fb;
+}
+html[data-theme='dark'] [data-admin-section='qc'] .readyops-ref-page-header p {
+  color: #a9bdd5 !important;
+}
+html[data-theme='dark'] .readyops-qc-page .readyops-ref-metric {
+  border-top-color: #4f8ee8;
+  background: rgba(17, 39, 64, .92);
+}
+
 .readyops-ref-main input,
 .readyops-ref-main select,
 .readyops-ref-main textarea {

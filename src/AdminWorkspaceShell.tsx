@@ -130,7 +130,7 @@ export function AdminWorkspaceShell({
     .join(" ");
 
   return (
-    <div className={shellClass}>
+    <div className={shellClass} data-admin-section={active}>
       <button
         type="button"
         className="readyops-ref-sidebar-backdrop"
