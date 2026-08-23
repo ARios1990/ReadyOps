@@ -13,6 +13,7 @@ import { AdminReports } from './AdminReports';
 import { AdminInvoices } from './AdminInvoices';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminSchedulingManager } from './AdminSchedulingManager';
+import { defaultReportDateRange, isLeadOutcome } from './leadOutcome';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
@@ -112,26 +113,30 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
 
   async function refreshDashboard() {
     setLoadingOps(true);
-    const [profilesRes, opsRes, presenceRes, appointmentStatusRes, deniedRes] = await Promise.all([
+    const reportRange = defaultReportDateRange();
+    const [profilesRes, opsRes, presenceRes, appointmentStatusRes] = await Promise.all([
       supabase.from('profiles').select('*').order('display_name'),
       supabase.rpc('get_company_operations_overview'),
       supabase
         .from('company_portal_presence')
         .select('*', { count: 'exact', head: true })
         .gte('last_seen_at', new Date(Date.now() - 90_000).toISOString()),
-      supabase.from('portal_appointments').select('client_status,canonical_status,sales_outcome,attendance_status'),
-      supabase.from('portal_leads').select('*', { count: 'exact', head: true }).eq('qc_status', 'denied'),
+      supabase.from('portal_appointments').select('lead_id,client_status,canonical_status,sales_outcome,attendance_status').gte('appointment_date', reportRange.startDate).lte('appointment_date', reportRange.endDate),
     ]);
     if (profilesRes.data) setProfiles(profilesRes.data as Profile[]);
     if (opsRes.data) setOps(opsRes.data as CompanyOps[]);
     if (!presenceRes.error) setCompanyPortalsOnline(presenceRes.count || 0);
     if (!appointmentStatusRes.error) {
       const rows = appointmentStatusRes.data || [];
+      const leadIds = [...new Set(rows.map(row => row.lead_id).filter(Boolean))];
+      const deniedRes = leadIds.length
+        ? await supabase.from('portal_leads').select('*', { count: 'exact', head: true }).in('id', leadIds).eq('qc_status', 'denied')
+        : { count: 0, error: null };
       setOutcomes({
-        good: rows.filter(row => String(row.client_status || '').toLowerCase() === 'good' || ['good', 'good_inspected'].includes(String(row.canonical_status || '').toLowerCase())).length,
-        signed: rows.filter(row => [row.client_status, row.canonical_status, row.sales_outcome].some(value => String(value || '').toLowerCase() === 'signed_contract')).length,
-        bad: rows.filter(row => String(row.client_status || '').toLowerCase() === 'bad' || String(row.canonical_status || '').toLowerCase() === 'bad' || String(row.sales_outcome || '').toLowerCase() === 'lost').length,
-        noShow: rows.filter(row => String(row.client_status || '').toLowerCase() === 'no_show' || String(row.canonical_status || '').toLowerCase() === 'no_show' || String(row.attendance_status || '').toLowerCase().includes('no_show')).length,
+        good: rows.filter(row => isLeadOutcome(row, 'good')).length,
+        signed: rows.filter(row => isLeadOutcome(row, 'signed_contract')).length,
+        bad: rows.filter(row => isLeadOutcome(row, 'bad')).length,
+        noShow: rows.filter(row => isLeadOutcome(row, 'no_show')).length,
         denied: deniedRes.error ? 0 : deniedRes.count || 0,
       });
     }
@@ -368,12 +373,12 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
             <section className="readyops-ref-metrics">
               <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note={companyPortalsOnline ? `${companyPortalsOnline} using portal now` : 'No portal activity now'} icon={Building2} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active'; }}/>
               <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'Needs review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=pending'; }}/>
-              <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Open denied leads' : 'No denied leads'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=denied'; }}/>
+              <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Last 30 days' : 'None in last 30 days'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => openReport('denied')}/>
               <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Open approved leads" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=approved'; }}/>
-              <MetricCard label="GOOD" value={outcomes.good} note="Client-marked good leads" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
-              <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Signed contracts" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
-              <MetricCard label="BAD" value={outcomes.bad} note="Bad or lost leads" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
-              <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Homeowner no shows" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
+              <MetricCard label="GOOD" value={outcomes.good} note="Last 30 days" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
+              <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Last 30 days" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
+              <MetricCard label="BAD" value={outcomes.bad} note="Last 30 days" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
+              <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Last 30 days" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
               <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active-package'; }}/>
               <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=pending-payment'; }}/>
