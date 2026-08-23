@@ -16,7 +16,7 @@ import { AdminSchedulingManager } from './AdminSchedulingManager';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
-type View = 'overview' | 'slots' | 'reports' | 'invoices' | 'payroll';
+type View = 'overview' | 'reports' | 'invoices' | 'payroll';
 type IconComponent = typeof Home;
 
 type CompanyOps = {
@@ -42,9 +42,6 @@ type Props = {
   store: ScheduleStore;
   profile: Profile | null;
   signOut: () => Promise<void> | void;
-  renderSlots: () => ReactNode;
-  selectedCompanyId?: string;
-  selectedLocationId?: string;
 };
 
 type SidebarItem = readonly [string, string, IconComponent];
@@ -57,17 +54,14 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['qc', 'QC Queue', ShieldCheck],
   ['companies', 'Companies & Scheduling', Building2],
   ['leads', 'Leads', FileText],
-  ['appointments', 'Appointments', CalendarDays],
 ] as const;
 
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
-  ['staff', 'Agents & Managers', UsersRound],
-  ['teams', 'Teams', UsersRound],
+  ['staff', 'People & Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
-  ['settings', 'Settings', Settings],
 ] as const;
 
 function getInitialSidebarCollapsed(): boolean {
@@ -75,8 +69,16 @@ function getInitialSidebarCollapsed(): boolean {
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
 }
 
-export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, selectedCompanyId, selectedLocationId }: Props) {
-  const [view, setView] = useState<View>('overview');
+function getInitialView(): View {
+  if (typeof window === 'undefined') return 'overview';
+  const requested = new URLSearchParams(window.location.search).get('view');
+  return requested === 'reports' || requested === 'invoices' || requested === 'payroll'
+    ? requested
+    : 'overview';
+}
+
+export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
+  const [view, setView] = useState<View>(getInitialView);
   const [staffTab, setStaffTab] = useState<StaffTab>('agents');
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
@@ -98,6 +100,15 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   const [schedulingManagerMode, setSchedulingManagerMode] = useState<'company' | 'locations'>('locations');
   const [schedulingLocationId, setSchedulingLocationId] = useState<string | undefined>();
   const [reportStatus, setReportStatus] = useState('all');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('view');
+    if (requested === 'appointments' || requested === 'slots') {
+      const company = params.get('company');
+      window.location.replace(company ? `/admin/operations?company=${encodeURIComponent(company)}` : '/admin/operations');
+    }
+  }, []);
 
   async function refreshDashboard() {
     setLoadingOps(true);
@@ -213,14 +224,11 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     if (key === 'overview') setView('overview');
     else if (key === 'qc') window.location.href = '/qc';
     else if (key === 'companies') window.location.href = '/admin/operations';
-    else if (key === 'slots' || key === 'appointments') setView('slots');
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
-    else if (key === 'teams') { setView('overview'); setStaffTab('team'); scrollStaff(); }
     else if (key === 'reports') { setReportStatus('all'); setView('reports'); }
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
-    else if (key === 'settings') openManage('companies');
     else if (key === 'leads') window.location.href = '/admin/crm';
     else openManage();
   }
@@ -366,13 +374,13 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
               <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Signed contracts" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
               <MetricCard label="BAD" value={outcomes.bad} note="Bad or lost leads" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
               <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Homeowner no shows" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
-              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/?view=appointments&scope=upcoming'; }}/>
+              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active-package'; }}/>
               <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=pending-payment'; }}/>
             </section>
 
             <section id="readyops-staff" className="readyops-ref-card readyops-ref-staff-card">
-              <div className="readyops-ref-card-heading"><h3>Agents & Managers</h3></div>
+              <div className="readyops-ref-card-heading"><h3>People & Teams</h3></div>
               <div className="readyops-ref-tabs">
                 <button className={staffTab === 'agents' ? 'active' : ''} onClick={() => setStaffTab('agents')}>All Agents</button>
                 <button className={staffTab === 'managers' ? 'active' : ''} onClick={() => setStaffTab('managers')}>Managers</button>
@@ -406,25 +414,8 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
             <AdminReports initialStatusFilter={reportStatus} />
           ) : view === 'invoices' ? (
             <AdminInvoices />
-          ) : view === 'payroll' ? (
-            <AdminPayroll />
           ) : (
-            <section className="readyops-ref-slots-view">
-              <PageHeader
-                title="Appointments"
-                subtitle="Scheduling"
-                actions={(
-                  <>
-                    <button className="readyops-ref-primary" onClick={() => openSchedulingManager('locations')}><Plus size={14}/> Add Location</button>
-                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('locations', selectedLocationId)}><Pencil size={14}/> Edit Location</button>
-                    <button className="readyops-ref-secondary" onClick={() => openSchedulingManager('company')}><Pencil size={14}/> Edit Company</button>
-                    <button className="readyops-ref-secondary" onClick={() => { window.location.href = '/admin/portals'; }}><Package size={14}/> Packages</button>
-                    <button className="readyops-ref-secondary" onClick={() => openManage('companies')}><Settings size={14}/> Full Setup</button>
-                  </>
-                )}
-              />
-              {renderSlots()}
-            </section>
+            <AdminPayroll />
           )}
         </main>
       </div>
@@ -433,7 +424,6 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
         <AdminSchedulingManager
           store={store}
           initialMode={schedulingManagerMode}
-          initialCompanyId={selectedCompanyId}
           initialLocationId={schedulingLocationId}
           onClose={() => setShowSchedulingManager(false)}
         />
