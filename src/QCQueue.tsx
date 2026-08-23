@@ -70,14 +70,13 @@ const EMPTY_REFS: RefData = {
 };
 const EMPTY_QUEUE: QueueData = { days: [], summary: {}, rows: [] };
 const DAY_MS = 86_400_000;
+// City, state, and ZIP stay on each lead for search/filtering, but the QC form
+// shows the complete canonical address once instead of repeating its parts.
 const QC_FIELDS = [
   ["service_needed", "Services Needed"],
   ["full_name", "Full Name"],
   ["phone_number", "Phone"],
   ["address", "Address"],
-  ["city", "City"],
-  ["state", "State"],
-  ["zip_code", "ZIP"],
   ["email", "Email"],
   ["language", "Language"],
   ["last_checked_on", "Last Checked On"],
@@ -1210,10 +1209,8 @@ function CompanyGroup({
                       {formatTime(String(row.appointment.start_time))}
                     </td>
                     <td className="font-bold">{row.lead.full_name}</td>
-                    <td className="max-w-[250px] truncate">
-                      {[row.lead.address, row.lead.city, row.lead.state]
-                        .filter(Boolean)
-                        .join(", ")}
+                    <td className="min-w-[320px] max-w-[460px] whitespace-normal break-words leading-5">
+                      {row.lead.address || "—"}
                     </td>
                     <td>
                       {row.agent?.name || row.lead.agent_name || "Unassigned"}
