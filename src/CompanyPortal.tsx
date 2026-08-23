@@ -13,6 +13,7 @@ import {
   ImageUp,
   Loader2,
   MapPin,
+  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -22,6 +23,7 @@ import {
   UserRoundCheck,
   Users,
   UserX,
+  X,
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { isLeadOutcome } from "./leadOutcome";
@@ -255,6 +257,8 @@ export function CompanyPortal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [editingCompanyName, setEditingCompanyName] = useState(false);
+  const [companyNameDraft, setCompanyNameDraft] = useState("");
   const [selectedLead, setSelectedLead] = useState<Appointment | null>(null);
   const [companyLeadRefreshKey, setCompanyLeadRefreshKey] = useState(0);
   const [settingsDraft, setSettingsDraft] = useState<SettingsRecord | null>(
@@ -345,6 +349,36 @@ export function CompanyPortal({
     if (rpcErr) setError(rpcError(rpcErr));
     else {
       notify(message);
+      await load();
+    }
+    setBusy(false);
+  }
+
+  async function saveCompanyName() {
+    const companyName = companyNameDraft.trim();
+    if (!companyName) {
+      setError("Company name cannot be blank.");
+      return;
+    }
+    if (companyName.length > 120) {
+      setError("Company name must be 120 characters or fewer.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    const { error: rpcErr } = await supabase.rpc(
+      "update_company_portal_name",
+      {
+        p_company_id: companyId,
+        p_access_token: token,
+        p_company_name: companyName,
+      },
+    );
+    if (rpcErr) setError(rpcError(rpcErr));
+    else {
+      setEditingCompanyName(false);
+      notify("Company name updated.");
       await load();
     }
     setBusy(false);
@@ -743,9 +777,69 @@ export function CompanyPortal({
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                 Company Management
               </p>
-              <h1 className="truncate text-lg font-black text-slate-950">
-                {data.company.name}
-              </h1>
+              {editingCompanyName ? (
+                <form
+                  className="flex min-w-0 items-center gap-1.5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveCompanyName();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    aria-label="Company name"
+                    value={companyNameDraft}
+                    maxLength={120}
+                    onChange={(event) =>
+                      setCompanyNameDraft(event.target.value)
+                    }
+                    className="min-w-0 max-w-[320px] rounded-lg border border-blue-300 bg-white px-2.5 py-1 text-base font-black text-slate-950 outline-none ring-blue-100 focus:ring-4"
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy || !companyNameDraft.trim()}
+                    aria-label="Save company name"
+                    className="rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Save size={15} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label="Cancel company name edit"
+                    onClick={() => {
+                      setEditingCompanyName(false);
+                      setCompanyNameDraft("");
+                      setError("");
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <X size={15} />
+                  </button>
+                </form>
+              ) : (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h1 className="truncate text-lg font-black text-slate-950">
+                    {data.company.name}
+                  </h1>
+                  <button
+                    type="button"
+                    aria-label="Edit company name"
+                    onClick={() => {
+                      setCompanyNameDraft(data.company.name);
+                      setEditingCompanyName(true);
+                      setError("");
+                    }}
+                    className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              )}
             </div>
             <CompanyLogo
               company={dashboard?.company || data.company}
