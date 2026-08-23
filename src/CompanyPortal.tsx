@@ -2048,12 +2048,12 @@ function CompanyLeadsSpreadsheet({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-left text-[10px] uppercase tracking-wide text-white">
                 <tr>
                   {[
+                    "Homeowner",
                     "Appointment Date",
                     "Time",
-                    "Homeowner",
                     "Phone",
                     "Property Address",
                     "City / State / ZIP",
@@ -2071,7 +2071,7 @@ function CompanyLeadsSpreadsheet({
                   ].map((label, index, labels) => (
                     <th
                       key={label}
-                      className={`border-b px-3 py-3 ${index === 0 ? "sticky left-0 z-20 bg-slate-50" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-50" : ""}`}
+                      className={`border-b border-slate-800 px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[180px] bg-slate-950 shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-950 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
                     >
                       {label}
                     </th>
@@ -2090,16 +2090,16 @@ function CompanyLeadsSpreadsheet({
                     <tr
                       key={appointment.id}
                       onClick={() => openLead(appointment)}
-                      className="cursor-pointer hover:bg-blue-50/40"
+                      className="group cursor-pointer hover:bg-blue-50/40"
                     >
-                      <td className="sticky left-0 z-[1] border-b border-r bg-white px-3 py-3 font-black text-blue-700">
+                      <td className="sticky left-0 z-[1] min-w-[180px] border-b border-r bg-white px-3 py-3 font-black shadow-[4px_0_8px_-6px_rgba(15,23,42,0.35)] group-hover:bg-blue-50">
+                        {appointment.lead.full_name}
+                      </td>
+                      <td className="border-b px-3 py-3 font-black text-blue-700">
                         {appointment.appointment_date}
                       </td>
                       <td className="border-b px-3 py-3 font-bold">
                         {formatTime(appointment.start_time)}
-                      </td>
-                      <td className="border-b px-3 py-3 font-black">
-                        {appointment.lead.full_name}
                       </td>
                       <td className="border-b px-3 py-3">
                         {appointment.lead.phone_number}
