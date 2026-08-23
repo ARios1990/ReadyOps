@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign,
+  Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
   ShieldCheck, Trash2, UsersRound, WalletCards, BarChart3, Wifi,
 } from 'lucide-react';
@@ -40,6 +40,7 @@ type Props = {
 type SidebarItem = readonly [string, string, IconComponent];
 
 const SIDEBAR_STORAGE_KEY = 'readyops-sidebar-collapsed';
+const TOPBAR_STORAGE_KEY = 'readyops-topbar-collapsed';
 
 const SIDEBAR_MAIN: readonly SidebarItem[] = [
   ['overview', 'Overview', Home],
@@ -70,6 +71,9 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
+  const [topbarCollapsed, setTopbarCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.localStorage.getItem(TOPBAR_STORAGE_KEY) === '1',
+  );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 900);
   const [showManage, setShowManage] = useState(false);
@@ -115,6 +119,10 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0');
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(TOPBAR_STORAGE_KEY, topbarCollapsed ? '1' : '0');
+  }, [topbarCollapsed]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -189,7 +197,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
     else if (key === 'payroll') setView('payroll');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'settings') openManage('companies');
-    else if (key === 'leads') { setView('overview'); scrollStaff(); }
+    else if (key === 'leads') window.location.href = '/admin/crm';
     else openManage();
   }
 
@@ -244,6 +252,7 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
   const shellClasses = [
     'readyops-ref-shell',
     sidebarCollapsed ? 'is-sidebar-collapsed' : '',
+    topbarCollapsed ? 'is-topbar-collapsed' : '',
     mobileSidebarOpen ? 'is-mobile-sidebar-open' : '',
   ].filter(Boolean).join(' ');
 
@@ -293,6 +302,16 @@ export function AdminReferenceDashboard({ store, profile, signOut, renderSlots, 
             </div>
           </div>
         </header>
+        <button
+          type="button"
+          className="readyops-topbar-edge-toggle"
+          onClick={() => setTopbarCollapsed(value => !value)}
+          title={topbarCollapsed ? 'Show top header' : 'Hide top header'}
+          aria-label={topbarCollapsed ? 'Show top header' : 'Hide top header'}
+          aria-expanded={!topbarCollapsed}
+        >
+          {topbarCollapsed ? <ChevronDown size={15}/> : <ChevronUp size={15}/>}
+        </button>
 
         <main className="readyops-ref-main">
           {view === 'overview' ? <>

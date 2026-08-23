@@ -18,6 +18,51 @@
 .readyops-sidebar-edge-toggle:hover { transform: scale(1.06); background: var(--readyops-surface-2); }
 html[data-theme='dark'] .readyops-sidebar-edge-toggle { background: #10243c; border-color: #35506f; color: #eaf2fb; }
 
+.readyops-ref-topbar {
+  transition: height 200ms ease, padding 200ms ease, opacity 150ms ease, transform 200ms ease, border-color 150ms ease;
+}
+.readyops-topbar-edge-toggle {
+  position: fixed;
+  right: 18px;
+  top: calc(var(--ref-topbar) - 14px);
+  z-index: 80;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--readyops-border);
+  background: var(--readyops-surface);
+  color: var(--readyops-text);
+  box-shadow: 0 6px 18px rgba(5, 22, 43, .16);
+  transition: top 200ms ease, transform 160ms ease, background 160ms ease;
+}
+.readyops-topbar-edge-toggle:hover {
+  transform: scale(1.06);
+  background: var(--readyops-surface-2);
+}
+.readyops-ref-shell.is-topbar-collapsed .readyops-ref-topbar {
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  transform: translateY(-100%);
+  overflow: hidden;
+  border-bottom-color: transparent;
+  pointer-events: none;
+}
+.readyops-ref-shell.is-topbar-collapsed .readyops-topbar-edge-toggle {
+  top: 6px;
+}
+.readyops-ref-shell.is-topbar-collapsed .readyops-ref-scene {
+  inset-block-start: 0;
+}
+html[data-theme='dark'] .readyops-topbar-edge-toggle {
+  background: #10243c;
+  border-color: #35506f;
+  color: #eaf2fb;
+}
+
 .readyops-ref-main input,
 .readyops-ref-main select,
 .readyops-ref-main textarea {
@@ -30,4 +75,5 @@ html[data-theme='dark'] .readyops-ref-main .bg-slate-50 { background-color: #122
 
 @media (max-width: 899px) {
   .readyops-sidebar-edge-toggle { display: none; }
+  .readyops-topbar-edge-toggle { right: 10px; }
 }

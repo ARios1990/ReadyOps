@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleDollarSign,
   FileText,
   Home,
@@ -36,6 +37,7 @@ type AdminSection =
 type SidebarItem = readonly [AdminSection, string, IconComponent, string];
 
 const SIDEBAR_STORAGE_KEY = "readyops-sidebar-collapsed";
+const TOPBAR_STORAGE_KEY = "readyops-topbar-collapsed";
 
 const MAIN_ITEMS: readonly SidebarItem[] = [
   ["overview", "Overview", Home, "/"],
@@ -80,6 +82,9 @@ export function AdminWorkspaceShell({
   const [collapsed, setCollapsed] = useState(
     () => window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1",
   );
+  const [topbarCollapsed, setTopbarCollapsed] = useState(
+    () => window.localStorage.getItem(TOPBAR_STORAGE_KEY) === "1",
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 900);
@@ -87,6 +92,13 @@ export function AdminWorkspaceShell({
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      TOPBAR_STORAGE_KEY,
+      topbarCollapsed ? "1" : "0",
+    );
+  }, [topbarCollapsed]);
 
   useEffect(() => {
     const onResize = () => {
@@ -111,6 +123,7 @@ export function AdminWorkspaceShell({
   const shellClass = [
     "readyops-ref-shell",
     collapsed ? "is-sidebar-collapsed" : "",
+    topbarCollapsed ? "is-topbar-collapsed" : "",
     mobileOpen ? "is-mobile-sidebar-open" : "",
   ]
     .filter(Boolean)
@@ -218,6 +231,16 @@ export function AdminWorkspaceShell({
             </div>
           </div>
         </header>
+        <button
+          type="button"
+          className="readyops-topbar-edge-toggle"
+          onClick={() => setTopbarCollapsed((value) => !value)}
+          title={topbarCollapsed ? "Show top header" : "Hide top header"}
+          aria-label={topbarCollapsed ? "Show top header" : "Hide top header"}
+          aria-expanded={!topbarCollapsed}
+        >
+          {topbarCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
 
         <main className="readyops-ref-main">
           <div className="readyops-ref-page-header">
