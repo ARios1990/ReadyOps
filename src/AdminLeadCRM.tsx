@@ -459,8 +459,8 @@ export function AdminLeadCRM() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+      <section className="readyops-lead-spreadsheet rounded-2xl border bg-white shadow-sm">
+        <div className="readyops-lead-spreadsheet-toolbar flex flex-wrap items-center justify-between gap-3 border-b p-4">
           <div>
             <h3 className="font-black">All Companies Lead Spreadsheet</h3>
             <p className="text-xs text-slate-500">
@@ -488,20 +488,20 @@ export function AdminLeadCRM() {
           </div>
         </div>
         {loading ? (
-          <div className="grid min-h-72 place-items-center">
+          <div className="grid min-h-0 flex-1 place-items-center">
             <Loader2 className="animate-spin text-blue-600" />
           </div>
         ) : !data.rows.length ? (
-          <div className="grid min-h-72 place-items-center text-center">
+          <div className="grid min-h-0 flex-1 place-items-center text-center">
             <div>
               <FileText className="mx-auto text-slate-300" size={34} />
               <p className="mt-3 font-bold">No leads match these filters.</p>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="readyops-lead-spreadsheet-scroll">
             <table className="w-full min-w-[3500px] border-separate border-spacing-0 text-xs">
-              <thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+              <thead className="readyops-lead-spreadsheet-columns sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
                   {[
                     "Lead ID",

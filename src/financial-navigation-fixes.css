@@ -63,6 +63,41 @@ html[data-theme='dark'] .readyops-topbar-edge-toggle {
   color: #eaf2fb;
 }
 
+.readyops-ref-shell {
+  --readyops-visible-topbar: var(--ref-topbar);
+}
+.readyops-ref-shell.is-topbar-collapsed {
+  --readyops-visible-topbar: 0px;
+}
+.readyops-lead-spreadsheet {
+  display: flex;
+  min-height: 520px;
+  height: calc(100vh - var(--readyops-visible-topbar) - 24px);
+  flex-direction: column;
+  overflow: hidden;
+}
+.readyops-lead-spreadsheet-toolbar {
+  position: relative;
+  z-index: 35;
+  flex: 0 0 auto;
+  background: var(--readyops-surface);
+  box-shadow: 0 3px 10px rgba(5, 22, 43, .05);
+}
+.readyops-lead-spreadsheet-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.readyops-lead-spreadsheet-columns {
+  z-index: 30;
+  box-shadow: 0 2px 0 var(--readyops-border);
+}
+html[data-theme='dark'] .readyops-lead-spreadsheet-toolbar {
+  background: #0f2238;
+}
+
 .readyops-ref-main input,
 .readyops-ref-main select,
 .readyops-ref-main textarea {
@@ -76,4 +111,8 @@ html[data-theme='dark'] .readyops-ref-main .bg-slate-50 { background-color: #122
 @media (max-width: 899px) {
   .readyops-sidebar-edge-toggle { display: none; }
   .readyops-topbar-edge-toggle { right: 10px; }
+  .readyops-lead-spreadsheet {
+    min-height: 440px;
+    height: calc(100dvh - var(--readyops-visible-topbar) - 12px);
+  }
 }
