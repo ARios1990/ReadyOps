@@ -853,6 +853,8 @@ export function CompanyPortal({
             locationId={companyLeadLocationId}
             setLocationId={setCompanyLeadLocationId}
             openLead={setSelectedLead}
+            busy={busy}
+            updateLeadOutcome={updateLeadOutcome}
             activePackage={dashboard?.active_package || null}
             refreshKey={companyLeadRefreshKey}
           />
@@ -1832,6 +1834,8 @@ function CompanyLeadsSpreadsheet({
   locationId,
   setLocationId,
   openLead,
+  busy,
+  updateLeadOutcome,
   activePackage,
   refreshKey,
 }: {
@@ -1843,6 +1847,11 @@ function CompanyLeadsSpreadsheet({
   locationId: string;
   setLocationId: (value: string) => void;
   openLead: (appointment: Appointment) => void;
+  busy: boolean;
+  updateLeadOutcome: (
+    appointment: Appointment,
+    clientStatus: string,
+  ) => Promise<void>;
   activePackage: CompanyDashboardSummary["active_package"];
   refreshKey: number;
 }) {
@@ -2123,8 +2132,30 @@ function CompanyLeadsSpreadsheet({
                       <td className="border-b px-3 py-3">
                         {appointment.representative_name || "Unassigned"}
                       </td>
-                      <td className="border-b px-3 py-3">
-                        <StatusChip status={status} />
+                      <td
+                        className="border-b px-3 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <select
+                          aria-label={`Update ${appointment.lead.full_name} lead status`}
+                          value={appointment.company_action || "pending"}
+                          disabled={busy}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) =>
+                            void updateLeadOutcome(
+                              appointment,
+                              event.target.value,
+                            )
+                          }
+                          className={`cursor-pointer rounded-md border px-3 py-2 text-xs font-black disabled:cursor-wait disabled:opacity-50 ${leadStatusClasses(status)}`}
+                        >
+                          <option value="pending">Pending</option>
+                          {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td
                         className="max-w-[280px] truncate border-b px-3 py-3"
