@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { ArrowLeft, Eye, EyeOff, KeyRound, LogIn, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, KeyRound, LogIn, Mail, UserPlus } from 'lucide-react';
 import { READYOPS_LOGO_DATA_URI } from './brand';
 
-type AuthMode = 'sign-in' | 'forgot-password';
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
 export function LoginPage() {
-  const { signIn, requestPasswordReset } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const [mode, setMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const isSignUp = mode === 'sign-up';
   const isForgotPassword = mode === 'forgot-password';
 
   function changeMode(nextMode: AuthMode) {
@@ -38,6 +40,9 @@ export function LoginPage() {
         } else {
           setMessage('If an account exists for that email, a secure password reset link is on the way.');
         }
+      } else if (isSignUp) {
+        const { error } = await signUp(email.trim(), password, displayName.trim() || email.trim());
+        if (error) setError(error);
       } else {
         const { error } = await signIn(email.trim(), password);
         if (error) setError(error);
@@ -56,7 +61,9 @@ export function LoginPage() {
           <p className="text-slate-400 mt-2">
             {isForgotPassword
               ? 'Recover access to your account'
-              : 'Sign in to manage your schedule'}
+              : isSignUp
+                ? 'Create your agent account'
+                : 'Sign in to manage your schedule'}
           </p>
         </div>
 
@@ -69,19 +76,54 @@ export function LoginPage() {
             >
               <ArrowLeft size={16} /> Back to sign in
             </button>
-          ) : <div className="mb-6 flex items-center justify-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm font-medium text-slate-200"><ShieldCheck size={16} /> Staff access only</div>}
+          ) : (
+            <div className="flex bg-white/5 rounded-lg p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => changeMode('sign-in')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                  !isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => changeMode('sign-up')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                  isSignUp ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Display Name</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                autoComplete="email"
                 placeholder="you@example.com"
                 required
-                className="readyops-auth-input w-full px-4 py-2.5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -92,11 +134,10 @@ export function LoginPage() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password"
                   placeholder="Min 6 characters"
                   required
                   minLength={6}
-                  className="readyops-auth-input w-full px-4 py-2.5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
                 />
                 <button
                   type="button"
@@ -107,7 +148,15 @@ export function LoginPage() {
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <button type="button" onClick={() => changeMode('forgot-password')} className="mt-2 text-sm font-medium text-blue-300 hover:text-blue-200">Forgot password?</button>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => changeMode('forgot-password')}
+                  className="mt-2 text-sm font-medium text-blue-300 hover:text-blue-200"
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>}
 
             {error && (
@@ -131,6 +180,8 @@ export function LoginPage() {
                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : isForgotPassword ? (
                 <><Mail size={18} /> Send Reset Link</>
+              ) : isSignUp ? (
+                <><UserPlus size={18} /> Create Account</>
               ) : (
                 <><LogIn size={18} /> Sign In</>
               )}
@@ -141,7 +192,7 @@ export function LoginPage() {
         <p className="text-center text-xs text-slate-500 mt-4">
           {isForgotPassword
             ? <><KeyRound size={13} className="inline mr-1" />Reset links expire and can only be used once.</>
-            : 'Accounts are created and linked by a ReadyOps administrator.'}
+            : 'New accounts are created as agents. An admin assigns access and teams.'}
         </p>
       </div>
     </div>

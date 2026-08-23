@@ -112,8 +112,6 @@ async function fetchForecast(latitude: number, longitude: number): Promise<Recor
   return result;
 }
 
-// Weather hooks are intentionally colocated with the small display components they power.
-// eslint-disable-next-line react-refresh/only-export-components
 export function useWeeklyWeather({
   city,
   state,
@@ -185,7 +183,6 @@ export function useWeeklyWeather({
   return { daily, locationLabel, loading, error, hasLocation: Boolean(search) };
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAppointmentWeather({
   date,
   city,

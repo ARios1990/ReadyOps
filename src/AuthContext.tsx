@@ -8,6 +8,7 @@ interface AuthState {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -60,6 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message || null };
   }
 
+  async function signUp(email: string, password: string, displayName: string) {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName } },
+    });
+    return { error: error?.message || null };
+  }
+
   async function requestPasswordReset(email: string) {
     const redirectTo = new URL('/reset-password', window.location.origin).toString();
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
@@ -83,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       signIn,
+      signUp,
       requestPasswordReset,
       updatePassword,
       signOut,
@@ -92,8 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// The provider hook is intentionally exported alongside its context provider.
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
-  LogOut, Building2, Users, RefreshCw,
-  User, ChevronDown, Loader2, Search, Filter
+  LogOut, Building2, Users, RefreshCw, MapPin,
+  Shield, User, ChevronDown, Loader2, Settings, Search, Filter, Plus, UserPlus
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useScheduleStore } from './useScheduleStore';
 import { ScheduleGrid } from './ScheduleGrid';
+import { AdminPanel } from './AdminPanel';
+import { AdminOperationsHome } from './AdminOperationsHome';
 import { DAYS, ScheduleRow } from './types';
 import { addDays, formatDateShort, localDate, scheduleWeekStart } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
@@ -23,9 +25,14 @@ export function Dashboard() {
     return DAYS.some(day => day === today) ? today : 'Monday';
   });
   const [selectedCompany, setSelectedCompany] = useState<string>(() => initialParams.get('company') || 'all');
+  const [selectedLocation, setSelectedLocation] = useState<string>(() => initialParams.get('location') || 'all');
+  const [selectedRep, setSelectedRep] = useState<string>('all');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('Active');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminTab, setAdminTab] = useState<string | undefined>(undefined);
+  const [adminView, setAdminView] = useState<'overview' | 'slots'>(() => ['appointments', 'slots'].includes(initialParams.get('view') || '') ? 'slots' : 'overview');
   const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState(() => scheduleWeekStart());
 
   useEffect(() => {
@@ -41,6 +48,12 @@ export function Dashboard() {
       window.removeEventListener('focus', refreshScheduleWeek);
     };
   }, []);
+
+  // Quick add modals
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [locCompany, setLocCompany] = useState('');
+  const [locLabel, setLocLabel] = useState('');
+  const [locState, setLocState] = useState('');
 
   if (store.loading) {
     return (
@@ -81,6 +94,9 @@ export function Dashboard() {
       rows = rows.filter(r => r.companyId === selectedCompany);
     }
 
+    if (selectedLocation !== 'all') rows = rows.filter(row => row.locationId === selectedLocation);
+    if (selectedRep !== 'all') rows = rows.filter(row => row.assignedAgentIds.includes(selectedRep));
+
     if (!isAdmin && userTeam) {
       rows = rows.filter(r => {
         const teamsList = store.getCompanyTeams(r.companyId);
@@ -115,12 +131,68 @@ export function Dashboard() {
     return acc;
   }, {} as Record<string, number>);
 
+  function openAdminTab(tab: string) {
+    setAdminTab(tab);
+    setShowAdmin(true);
+  }
+
+  async function handleAddLocation() {
+    if (!locCompany || !locLabel.trim()) return;
+    await store.addLocation(locCompany, locLabel.trim(), locState.trim() || null);
+    setShowAddLocation(false);
+    setLocCompany('');
+    setLocLabel('');
+    setLocState('');
+  }
+
   if (isAdmin) {
     return (
       <AdminReferenceDashboard
         store={store}
         profile={profile}
         signOut={signOut}
+        renderSlots={() => (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search companies..." className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-[210px]" />
+              </div>
+              <div className="relative">
+                <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select value={selectedCompany} onChange={e => { setSelectedCompany(e.target.value); setSelectedLocation('all'); }} className="pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 appearance-none min-w-[220px]"><option value="all">All Companies</option>{store.companies.filter(c => statusFilter === 'all' || c.account_status === statusFilter).map(c => <option key={c.id} value={c.id}>{c.name}{c.state ? ` - ${c.state}` : ''}</option>)}</select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)} className="pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 appearance-none min-w-[190px]"><option value="all">All Locations</option>{store.locations.filter(location => location.active !== false && (selectedCompany === 'all' || location.company_id === selectedCompany)).map(location => <option key={location.id} value={location.id}>{location.location_label}</option>)}</select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} className="pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 appearance-none min-w-[160px]"><option value="all">All Teams</option>{store.teams.map(t => <option key={t.id} value={t.id}>{t.abbreviation} - {t.name}</option>)}</select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select value={selectedRep} onChange={e => setSelectedRep(e.target.value)} className="pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 appearance-none min-w-[170px]"><option value="all">All Reps</option>{store.agents.filter(agent => agent.active !== false).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 appearance-none min-w-[130px]"><option value="all">All Status</option><option value="Active">Active</option><option value="Pause">Pause</option><option value="Prospect">Prospect</option><option value="No Longer Working">No Longer Working</option></select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              <button onClick={() => store.refetch()} className="flex items-center gap-1.5 px-3 py-2 text-gray-500 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50"><RefreshCw size={14}/> Refresh</button>
+              <div className="ml-auto flex items-center gap-4 text-sm text-gray-500"><span>{filteredRows.length} rows</span><span>{dayBookingCounts[activeDay] || 0} occupied</span></div>
+            </div>
+            <div className="flex gap-0.5 bg-gray-100 p-1 rounded-xl overflow-x-auto">{DAYS.map(day => { const isActive = activeDay === day; const count = dayBookingCounts[day] || 0; return <button key={day} onClick={() => setActiveDay(day)} className={`px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap ${isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'}`}><span>{day}</span><span className="ml-1 text-[10px] text-gray-400">{formatDateShort(localDate(addDays(scheduleWeekAnchor, DAYS.indexOf(day))))}</span>{count > 0 && <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}`}>{count}</span>}</button>; })}</div>
+            <div className="flex flex-wrap gap-2">{store.teams.map(team => <span key={team.id} className={`text-[10px] font-bold px-2 py-1 rounded ${getTeamPillColor(team.abbreviation)}`}>{team.abbreviation}</span>)}<span className="text-[10px] px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-600 font-medium">Green = Open</span><span className="text-[10px] px-2 py-1 rounded bg-red-600 border border-red-700 text-white font-medium">Red = Weekly block or current-week appointment</span></div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"><ScheduleGrid rows={filteredRows} companies={store.companies} locations={store.locations} isBooked={store.isBooked} isCompanyWideBooked={store.isCompanyWideBooked} isScheduleExceptionBlocked={store.isScheduleExceptionBlocked} isPortalBooked={store.isPortalBooked} getCompanyTeams={store.getCompanyTeams} onToggle={store.toggleBooking} onStatusChange={store.updateCompanyStatus} canEdit={canEdit} isAdmin={true} activeDay={activeDay} /></div>
+          </div>
+        )}
+        selectedCompanyId={selectedCompany === 'all' ? undefined : selectedCompany}
+        selectedLocationId={selectedLocation === 'all' ? undefined : selectedLocation}
       />
     );
   }
@@ -135,9 +207,11 @@ export function Dashboard() {
             <div className="border-l border-white/15 pl-3">
               <h1 className="text-sm font-bold text-white leading-tight">Operations Dashboard</h1>
               <p className="readyops-brand-subtitle text-xs">
-                {userTeam
-                  ? `Team: ${userTeam.name} (${userTeam.abbreviation})`
-                  : `Agent: ${profile?.display_name}`}
+                {isAdmin ? 'Admin Dashboard -- Full Access' : (
+                  userTeam
+                    ? `Team: ${userTeam.name} (${userTeam.abbreviation})`
+                    : `Agent: ${profile?.display_name}`
+                )}
               </p>
             </div>
           </div>
@@ -148,15 +222,29 @@ export function Dashboard() {
               <span className="text-xs text-green-700 font-medium">Live</span>
             </div>
 
-            {userTeam && (
+            {userTeam && !isAdmin && (
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${getTeamPillStyle(userTeam.abbreviation)}`}>
                 {userTeam.abbreviation}
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-              <User size={13} /> Agent
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
+              isAdmin ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+            }`}>
+              {isAdmin ? <Shield size={13} /> : <User size={13} />}
+              {isAdmin ? 'Admin' : 'Agent'}
             </div>
+
+            {isAdmin && (
+              <button
+                onClick={() => { setAdminTab(undefined); setShowAdmin(!showAdmin); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  showAdmin ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Settings size={14} /> Manage
+              </button>
+            )}
 
             <ThemeToggle />
 
@@ -170,9 +258,14 @@ export function Dashboard() {
         </div>
       </header>
 
+      {/* Admin Panel */}
+      {showAdmin && isAdmin && (
+        <AdminPanel store={store} onClose={() => setShowAdmin(false)} initialTab={adminTab} />
+      )}
+
       <main className="max-w-[1800px] mx-auto px-4 sm:px-6 py-5">
         {/* Team scope notice for agents */}
-        {userTeam && (
+        {!isAdmin && userTeam && (
           <div className={`mb-4 px-4 py-3 rounded-xl border ${getTeamBannerStyle(userTeam.abbreviation)}`}>
             <div className="flex items-center gap-2">
               <Users size={16} />
@@ -184,10 +277,114 @@ export function Dashboard() {
           </div>
         )}
 
-        {!userTeam && (
+        {!isAdmin && !userTeam && (
           <div className="mb-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
             <p className="text-sm font-medium">Your account is not yet linked to an agent profile.</p>
             <p className="text-xs mt-1">Ask your admin to assign you to a team.</p>
+          </div>
+        )}
+
+        {isAdmin && (
+          <nav className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+            <button onClick={() => setAdminView('overview')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'overview' ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Overview</button>
+            <button onClick={() => { window.location.href = '/qc'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-50">QC Queue</button>
+            <button onClick={() => { window.location.href = '/admin/portals'; }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Companies & Packages</button>
+            <button onClick={() => setAdminView('slots')} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${adminView === 'slots' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Appointments</button>
+          </nav>
+        )}
+
+        {isAdmin && adminView === 'overview' && (
+          <AdminOperationsHome onOpenAppointments={() => setAdminView('slots')} />
+        )}
+
+        {(!isAdmin || adminView === 'slots') && (<>
+        {/* Action Buttons (Admin) */}
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => openAdminTab('add-company')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <Plus size={13} /> Add Company
+            </button>
+            <button
+              onClick={() => openAdminTab('agents')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white rounded-lg text-xs font-medium hover:bg-teal-700 transition-colors shadow-sm"
+            >
+              <UserPlus size={13} /> Add Agent
+            </button>
+            <button
+              onClick={() => setShowAddLocation(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <MapPin size={13} /> Add Location Row
+            </button>
+            <button
+              onClick={() => openAdminTab('companies')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
+            >
+              <Settings size={13} /> Edit Status
+            </button>
+          </div>
+        )}
+
+        {/* Add Location Modal */}
+        {showAddLocation && isAdmin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+              <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <MapPin size={16} /> Add Location Row
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Add a new location/service area row for a company. Each location gets its own time slot schedule.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Company *</label>
+                  <select
+                    value={locCompany}
+                    onChange={e => setLocCompany(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select company...</option>
+                    {store.companies.filter(c => c.account_status === 'Active').map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Location Label *</label>
+                  <input
+                    type="text"
+                    value={locLabel}
+                    onChange={e => setLocLabel(e.target.value)}
+                    placeholder="e.g. Amarillo TX, Round Rock TX"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={locState}
+                    onChange={e => setLocState(e.target.value)}
+                    placeholder="e.g. TX"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-5 justify-end">
+                <button
+                  onClick={() => setShowAddLocation(false)}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >Cancel</button>
+                <button
+                  onClick={handleAddLocation}
+                  disabled={!locCompany || !locLabel.trim()}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >Add Location</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -340,6 +537,7 @@ export function Dashboard() {
             ? 'Appointments — manage weekly availability and current-week appointment capacity.'
             : 'Agent -- book open slots for your team\'s companies. Changes sync live.'}
         </div>
+        </>)}
       </main>
     </div>
   );
