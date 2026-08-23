@@ -98,6 +98,79 @@ html[data-theme='dark'] .readyops-lead-spreadsheet-toolbar {
   background: #0f2238;
 }
 
+.readyops-operations-workspace {
+  display: flex;
+  min-height: 600px;
+  height: calc(100vh - var(--readyops-visible-topbar) - 24px);
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+.readyops-operations-filters,
+.readyops-operations-table-title {
+  position: relative;
+  z-index: 35;
+  flex: 0 0 auto;
+  background: var(--readyops-surface);
+}
+.readyops-operations-table {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+.readyops-operations-table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Shared spreadsheet treatment approved for the ReadyOps admin data pages. */
+.readyops-ref-main table > thead,
+.readyops-ref-main table > thead > tr,
+.readyops-ref-main table > thead > tr > th {
+  background-color: #071a33 !important;
+  color: #ffffff !important;
+}
+.readyops-ref-main table > thead > tr > th {
+  min-height: 50px;
+  padding-top: 15px !important;
+  padding-bottom: 15px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.25;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.readyops-data-table-head {
+  box-shadow: 0 2px 0 rgba(5, 22, 43, .2), 0 5px 14px rgba(5, 22, 43, .12);
+}
+.readyops-reports-results {
+  display: flex;
+  min-height: 460px;
+  height: calc(100vh - var(--readyops-visible-topbar) - 24px);
+  flex-direction: column;
+  overflow: hidden;
+}
+.readyops-reports-tabs {
+  position: relative;
+  z-index: 35;
+  flex: 0 0 auto;
+  background: var(--readyops-surface);
+  box-shadow: 0 2px 0 var(--readyops-border);
+}
+.readyops-reports-results-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .readyops-ref-main input,
 .readyops-ref-main select,
 .readyops-ref-main textarea {
@@ -113,6 +186,14 @@ html[data-theme='dark'] .readyops-ref-main .bg-slate-50 { background-color: #122
   .readyops-topbar-edge-toggle { right: 10px; }
   .readyops-lead-spreadsheet {
     min-height: 440px;
+    height: calc(100dvh - var(--readyops-visible-topbar) - 12px);
+  }
+  .readyops-operations-workspace {
+    min-height: 520px;
+    height: calc(100dvh - var(--readyops-visible-topbar) - 12px);
+  }
+  .readyops-reports-results {
+    min-height: 420px;
     height: calc(100dvh - var(--readyops-visible-topbar) - 12px);
   }
 }

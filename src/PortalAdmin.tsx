@@ -20,7 +20,19 @@ type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type PackageDraft = { lead_target: string; amount_per_lead: string; package_total: string; payment_date: string; payment_status: string };
 type SlugEditorState = { companyId: string; companyName: string; value: string };
 type CompanyStatusFilter = 'active' | 'active-package' | 'pending-payment' | 'all';
+type DateRange = { start: string; end: string };
+type CompanyOutcome = { total: number; qcPending: number; qcDenied: number; good: number; signed: number; bad: number; noShow: number };
 const EMPTY_PACKAGE: PackageDraft = { lead_target: '', amount_per_lead: '', package_total: '', payment_date: '', payment_status: 'pending' };
+const EMPTY_OUTCOME: CompanyOutcome = { total: 0, qcPending: 0, qcDenied: 0, good: 0, signed: 0, bad: 0, noShow: 0 };
+
+function currentWeekRange(): DateRange {
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + (today.getDay() === 0 ? -6 : 1 - today.getDay()));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { start: localDate(monday), end: localDate(sunday) };
+}
 
 function initialStatusFilter(): CompanyStatusFilter {
   if (typeof window === 'undefined') return 'active';
@@ -60,7 +72,8 @@ export function PortalAdmin() {
   const [locationFilter, setLocationFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState(() => localDate(new Date()));
+  const [dateRange, setDateRange] = useState<DateRange>(currentWeekRange);
+  const [outcomeRows, setOutcomeRows] = useState<Obj[]>([]);
   const [pkg, setPkg] = useState<PackageDraft>(EMPTY_PACKAGE);
   const [packageAllLocations, setPackageAllLocations] = useState(true);
   const [packageLocationIds, setPackageLocationIds] = useState<string[]>([]);
@@ -70,10 +83,10 @@ export function PortalAdmin() {
   const [slugEditor, setSlugEditor] = useState<SlugEditorState | null>(null);
   const [slugSaving, setSlugSaving] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(rangeStart = dateRange.start, rangeEnd = dateRange.end) {
+    if (!companies.length) setLoading(true);
     setError('');
-    const [companyRes, agentRes, locationRes, assignmentRes, scopeRes, representativeRes, settingsRes] = await Promise.all([
+    const [companyRes, agentRes, locationRes, assignmentRes, scopeRes, representativeRes, settingsRes, outcomeRes] = await Promise.all([
       supabase.rpc('get_company_operations_overview'),
       supabase.from('agents').select('id,name,email,portal_slug,access_token,active').order('name'),
       supabase.from('company_locations').select('*').order('sort_order').order('location_label'),
@@ -81,10 +94,19 @@ export function PortalAdmin() {
       supabase.from('company_package_locations').select('*'),
       supabase.from('company_representatives').select('id,company_id,location_id,name,email,phone,active').order('name'),
       supabase.from('company_portal_settings').select('company_id,requirements_short,requirements_detail,qualification_rules'),
+      supabase.from('portal_appointments').select('company_id,lead_id,appointment_date,canonical_status,client_status,sales_outcome,attendance_status').gte('appointment_date', rangeStart).lte('appointment_date', rangeEnd),
     ]);
-    const firstError = companyRes.error || agentRes.error || locationRes.error || assignmentRes.error || scopeRes.error || representativeRes.error || settingsRes.error;
+    const firstError = companyRes.error || agentRes.error || locationRes.error || assignmentRes.error || scopeRes.error || representativeRes.error || settingsRes.error || outcomeRes.error;
     if (firstError) setError(rpcError(firstError));
     else {
+      const appointments = (outcomeRes.data || []) as Obj[];
+      const leadIds = [...new Set(appointments.map(item => String(item.lead_id || '')).filter(Boolean))];
+      let qcByLead = new Map<string, string>();
+      if (leadIds.length) {
+        const { data: leadStatuses, error: leadStatusError } = await supabase.from('portal_leads').select('id,qc_status').in('id', leadIds);
+        if (leadStatusError) setError(rpcError(leadStatusError));
+        else qcByLead = new Map((leadStatuses || []).map(item => [String(item.id), String(item.qc_status || '')]));
+      }
       setCompanies((companyRes.data || []) as Obj[]);
       setAgents((agentRes.data || []) as Obj[]);
       setLocations((locationRes.data || []) as CompanyLocation[]);
@@ -92,6 +114,7 @@ export function PortalAdmin() {
       setPackageScopes((scopeRes.data || []) as Obj[]);
       setRepresentatives((representativeRes.data || []) as Obj[]);
       setSettings((settingsRes.data || []) as Obj[]);
+      setOutcomeRows(appointments.map(item => ({ ...item, qc_status: qcByLead.get(String(item.lead_id)) || '' })));
     }
     setLoading(false);
   }
@@ -122,12 +145,42 @@ export function PortalAdmin() {
     return matchesStatus && matchesSearch && matchesCompany && matchesLocation && matchesTeam && matchesAgent;
   }), [agentFilter, companies, companyFilter, filter, locationAgents, locationFilter, locations, search, store, teamFilter]);
 
+  const outcomesByCompany = useMemo(() => {
+    const result: Record<string, CompanyOutcome> = {};
+    const seenLeadIds = new Map<string, Set<string>>();
+    outcomeRows.forEach(row => {
+      const companyId = String(row.company_id || '');
+      const leadId = String(row.lead_id || '');
+      if (!companyId || !leadId) return;
+      const companySeen = seenLeadIds.get(companyId) || new Set<string>();
+      if (companySeen.has(leadId)) return;
+      companySeen.add(leadId);
+      seenLeadIds.set(companyId, companySeen);
+
+      const outcome = result[companyId] || { ...EMPTY_OUTCOME };
+      const qcStatus = String(row.qc_status || '').toLowerCase();
+      const clientStatus = String(row.client_status || '').toLowerCase();
+      const canonicalStatus = String(row.canonical_status || '').toLowerCase();
+      const salesOutcome = String(row.sales_outcome || '').toLowerCase();
+      const attendanceStatus = String(row.attendance_status || '').toLowerCase();
+      outcome.total += 1;
+      if (['pending', 'in_review', 'needs_correction'].includes(qcStatus)) outcome.qcPending += 1;
+      if (qcStatus === 'denied') outcome.qcDenied += 1;
+      if (clientStatus === 'good' || ['good', 'good_inspected'].includes(canonicalStatus)) outcome.good += 1;
+      if (clientStatus === 'signed_contract' || canonicalStatus === 'signed_contract' || salesOutcome === 'signed_contract') outcome.signed += 1;
+      if (clientStatus === 'bad' || canonicalStatus === 'bad' || salesOutcome === 'lost') outcome.bad += 1;
+      if (clientStatus === 'no_show' || canonicalStatus === 'no_show' || attendanceStatus.includes('no_show')) outcome.noShow += 1;
+      result[companyId] = outcome;
+    });
+    return result;
+  }, [outcomeRows]);
+
   const totals = useMemo(() => ({
     companies: visible.length,
-    qc: visible.reduce((count, company) => count + Number(company.qc_pending || 0), 0),
+    qc: visible.reduce((count, company) => count + (outcomesByCompany[company.company_id]?.qcPending || 0), 0),
     remaining: visible.reduce((count, company) => count + Number(company.package?.pending_leads || 0), 0),
     pendingPayments: visible.filter(company => company.package?.payment_status === 'pending').length,
-  }), [visible]);
+  }), [outcomesByCompany, visible]);
 
   async function toggleCompany(company: Obj) {
     if (expanded === company.company_id) { setExpanded(''); return; }
@@ -246,14 +299,16 @@ export function PortalAdmin() {
       {message && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">{message}</div>}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<Building2 />} label="Active / Incomplete Companies" value={totals.companies} /><Metric icon={<ShieldCheck />} label="QC Pending" value={totals.qc} /><Metric icon={<PackageCheck />} label="Package Leads Remaining" value={totals.remaining} /><Metric icon={<WalletCards />} label="Pending Payments" value={totals.pendingPayments} /></section>
       <section id="company-signup" className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="flex-1"><h2 className="font-bold">New Company Signup Link</h2><p className="text-xs text-slate-500">Send this secure onboarding link to a new client. Their submission creates the company, portal links, default schedule, and optional package.</p></div><input value={inviteName} onChange={event => setInviteName(event.target.value)} placeholder="Company name (optional)" className="rounded-lg border px-3 py-2 text-sm" /><button onClick={() => void createInvite()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Link2 size={14} /> Create Signup Link</button></div>{inviteLink && <div className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3"><input readOnly value={inviteLink} className="min-w-0 flex-1 bg-transparent text-xs" /><button onClick={() => void copyText(inviteLink)} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"><Clipboard size={13} className="mr-1 inline" />Copy</button></div>}</section>
-      <section className="rounded-2xl border bg-white p-3"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1.45fr_repeat(6,minmax(120px,1fr))_auto]"><label className="relative"><Search size={14} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search companies…" className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs" /></label><select value={companyFilter} onChange={event => { setCompanyFilter(event.target.value); setLocationFilter(''); }} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Companies</option>{companies.map(company => <option key={company.company_id} value={company.company_id}>{company.company_name}</option>)}</select><select value={locationFilter} onChange={event => setLocationFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Locations</option>{locations.filter(item => item.active !== false && (!companyFilter || item.company_id === companyFilter)).map(item => <option key={item.id} value={item.id}>{item.location_label}</option>)}</select><select value={teamFilter} onChange={event => setTeamFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Teams</option>{store.teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</select><select value={agentFilter} onChange={event => setAgentFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Reps</option>{agents.filter(agent => agent.active !== false).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><select value={filter} onChange={event => setFilter(event.target.value as CompanyStatusFilter)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="active">Active Companies</option><option value="active-package">Active Packages</option><option value="pending-payment">Pending Payment</option><option value="all">All Statuses</option></select><input aria-label="Appointment date" type="date" value={appointmentDate} onChange={event => setAppointmentDate(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold" /><button onClick={() => void Promise.all([load(), store.refetch()])} className="readyops-ref-secondary"><RefreshCw size={14} /> Refresh</button></div><p className="mt-2 text-right text-xs font-semibold text-slate-500">{visible.length} companies • {store.portalAppointments.length} occupied appointments this week</p></section>
-      <section id="company-list" className="rounded-2xl border bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-bold">Companies & Scheduling</h2><p className="text-xs text-slate-500">Expand a company for locations, packages, scheduling, reps, qualifications, and sent appointments.</p></div></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[1350px] text-sm"><thead><tr className="text-left text-[10px] uppercase text-slate-400"><th className="p-3">Company</th><th>Total Leads</th><th>QC Pending</th><th>Approved</th><th>Scheduled</th><th>Locations</th><th>Package</th><th>Remaining</th><th>Payment</th><th>Links & Slug</th></tr></thead><tbody>{visible.map(company => {
+      <div className="readyops-operations-workspace">
+      <section className="readyops-operations-filters rounded-2xl border bg-white p-3"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1.45fr_repeat(5,minmax(120px,1fr))_minmax(250px,1.55fr)_auto]"><label className="relative"><Search size={14} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search companies…" className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs" /></label><select value={companyFilter} onChange={event => { setCompanyFilter(event.target.value); setLocationFilter(''); }} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Companies</option>{companies.map(company => <option key={company.company_id} value={company.company_id}>{company.company_name}</option>)}</select><select value={locationFilter} onChange={event => setLocationFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Locations</option>{locations.filter(item => item.active !== false && (!companyFilter || item.company_id === companyFilter)).map(item => <option key={item.id} value={item.id}>{item.location_label}</option>)}</select><select value={teamFilter} onChange={event => setTeamFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Teams</option>{store.teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</select><select value={agentFilter} onChange={event => setAgentFilter(event.target.value)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="">All Reps</option>{agents.filter(agent => agent.active !== false).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><select value={filter} onChange={event => setFilter(event.target.value as CompanyStatusFilter)} className="h-10 rounded-lg border px-3 text-xs font-semibold"><option value="active">Active Companies</option><option value="active-package">Active Packages</option><option value="pending-payment">Pending Payment</option><option value="all">All Statuses</option></select><div className="flex h-10 items-center rounded-lg border px-2"><input aria-label="From date" type="date" max={dateRange.end} value={dateRange.start} onChange={event => { const next = { ...dateRange, start: event.target.value }; setDateRange(next); void load(next.start, next.end); }} className="min-w-0 flex-1 border-0 px-1 text-[11px] font-semibold" /><span className="px-1 text-slate-400">→</span><input aria-label="Through date" type="date" min={dateRange.start} value={dateRange.end} onChange={event => { const next = { ...dateRange, end: event.target.value }; setDateRange(next); void load(next.start, next.end); }} className="min-w-0 flex-1 border-0 px-1 text-[11px] font-semibold" /></div><button onClick={() => void Promise.all([load(dateRange.start, dateRange.end), store.refetch()])} className="readyops-ref-secondary"><RefreshCw size={14} /> Refresh</button></div><p className="mt-2 text-right text-xs font-semibold text-slate-500">{visible.length} companies • {outcomeRows.length} appointments in selected range</p></section>
+      <section id="company-list" className="readyops-operations-table rounded-2xl border bg-white"><div className="readyops-operations-table-title flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-bold">Companies & Scheduling</h2><p className="text-xs text-slate-500">Expand a company for locations, packages, scheduling, reps, qualifications, and sent appointments.</p></div></div>
+        <div className="readyops-operations-table-scroll"><table className="w-full min-w-[1780px] text-sm"><thead className="readyops-data-table-head sticky top-0 z-30"><tr className="text-left"><th className="p-3">Company</th><th>Total Leads</th><th>QC Pending</th><th>QC Denied</th><th>Good</th><th>Signed Contract</th><th>Bad</th><th>No Show</th><th>Locations</th><th>Package</th><th>Remaining</th><th>Payment</th><th>Links & Slug</th></tr></thead><tbody>{visible.map(company => {
           const companyLocations = locations.filter(item => item.company_id === company.company_id);
           const activeScopeIds = packageScopes.filter(scope => scope.package_id === company.package?.id).map(scope => scope.location_id);
-          return <CompanyRow key={company.company_id} company={company} locations={companyLocations} expanded={expanded === company.company_id} onToggle={() => void toggleCompany(company)} detail={detail} agents={agents} locationAgents={locationAgents} representatives={representatives.filter(rep => rep.company_id === company.company_id)} settings={settings.find(item => item.company_id === company.company_id)} activeScopeIds={activeScopeIds} pkg={pkg} setPkg={setPkg} packageAllLocations={packageAllLocations} setPackageAllLocations={setPackageAllLocations} packageLocationIds={packageLocationIds} setPackageLocationIds={setPackageLocationIds} onCreatePackage={() => void createPackage(company.company_id)} onEditLocation={locationId => setManager({ companyId: company.company_id, mode: 'locations', locationId: locationId || undefined })} onEditCompany={() => setManager({ companyId: company.company_id, mode: 'company' })} onEditSlug={() => openSlugEditor(company)} onDuplicate={item => void duplicateLocation(item)} onSetActive={(item, active) => void setLocationActive(item, active)} store={store} appointmentDate={appointmentDate} />;
+          return <CompanyRow key={company.company_id} company={company} outcome={outcomesByCompany[company.company_id] || EMPTY_OUTCOME} locations={companyLocations} expanded={expanded === company.company_id} onToggle={() => void toggleCompany(company)} detail={detail} agents={agents} locationAgents={locationAgents} representatives={representatives.filter(rep => rep.company_id === company.company_id)} settings={settings.find(item => item.company_id === company.company_id)} activeScopeIds={activeScopeIds} pkg={pkg} setPkg={setPkg} packageAllLocations={packageAllLocations} setPackageAllLocations={setPackageAllLocations} packageLocationIds={packageLocationIds} setPackageLocationIds={setPackageLocationIds} onCreatePackage={() => void createPackage(company.company_id)} onEditLocation={locationId => setManager({ companyId: company.company_id, mode: 'locations', locationId: locationId || undefined })} onEditCompany={() => setManager({ companyId: company.company_id, mode: 'company' })} onEditSlug={() => openSlugEditor(company)} onDuplicate={item => void duplicateLocation(item)} onSetActive={(item, active) => void setLocationActive(item, active)} store={store} appointmentDate={dateRange.end} />;
         })}</tbody></table></div>
       </section>
+      </div>
       <ReadyModeAgentTools agents={agents} companies={companies} />
     </div>
     {manager && <AdminSchedulingManager store={store} initialMode={manager.mode} initialCompanyId={manager.companyId} initialLocationId={manager.locationId} onClose={() => { setManager(null); void load(); }} />}
@@ -262,18 +317,28 @@ export function PortalAdmin() {
 }
 
 type CompanyRowProps = {
-  company: Obj; locations: CompanyLocation[]; expanded: boolean; onToggle: () => void; detail: Obj[]; agents: Obj[]; locationAgents: Obj[]; representatives: Obj[]; settings?: Obj; activeScopeIds: string[]; pkg: PackageDraft; setPkg: (value: PackageDraft) => void; packageAllLocations: boolean; setPackageAllLocations: (value: boolean) => void; packageLocationIds: string[]; setPackageLocationIds: (value: string[]) => void; onCreatePackage: () => void; onEditLocation: (locationId: string) => void; onEditCompany: () => void; onEditSlug: () => void; onDuplicate: (item: CompanyLocation) => void; onSetActive: (item: CompanyLocation, active: boolean) => void; store: ScheduleStore; appointmentDate: string;
+  company: Obj; outcome: CompanyOutcome; locations: CompanyLocation[]; expanded: boolean; onToggle: () => void; detail: Obj[]; agents: Obj[]; locationAgents: Obj[]; representatives: Obj[]; settings?: Obj; activeScopeIds: string[]; pkg: PackageDraft; setPkg: (value: PackageDraft) => void; packageAllLocations: boolean; setPackageAllLocations: (value: boolean) => void; packageLocationIds: string[]; setPackageLocationIds: (value: string[]) => void; onCreatePackage: () => void; onEditLocation: (locationId: string) => void; onEditCompany: () => void; onEditSlug: () => void; onDuplicate: (item: CompanyLocation) => void; onSetActive: (item: CompanyLocation, active: boolean) => void; store: ScheduleStore; appointmentDate: string;
 };
 
+function CountPill({ value, tone }: { value: number; tone: 'amber' | 'red' | 'green' | 'purple' }) {
+  const tones = {
+    amber: 'bg-amber-100 text-amber-700',
+    red: 'bg-red-100 text-red-700',
+    green: 'bg-emerald-100 text-emerald-700',
+    purple: 'bg-violet-100 text-violet-700',
+  };
+  return <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-extrabold ${tones[tone]}`}>{value}</span>;
+}
+
 function CompanyRow(props: CompanyRowProps) {
-  const { company, locations, expanded, onToggle, detail, agents, locationAgents, representatives, settings, activeScopeIds, pkg, setPkg, packageAllLocations, setPackageAllLocations, packageLocationIds, setPackageLocationIds, onCreatePackage, onEditLocation, onEditCompany, onEditSlug, onDuplicate, onSetActive, store, appointmentDate } = props;
+  const { company, outcome, locations, expanded, onToggle, detail, agents, locationAgents, representatives, settings, activeScopeIds, pkg, setPkg, packageAllLocations, setPackageAllLocations, packageLocationIds, setPackageLocationIds, onCreatePackage, onEditLocation, onEditCompany, onEditSlug, onDuplicate, onSetActive, store, appointmentDate } = props;
   const publicSlug = String(company.public_slug || '').trim();
   const agentLink = company.agent_link ? `${location.origin}${company.agent_link}` : '';
   const companyLink = company.company_link ? `${location.origin}${company.company_link}` : '';
   const activeLocations = locations.filter(item => item.active !== false);
   return <>
-    <tr onClick={onToggle} className="cursor-pointer border-t hover:bg-blue-50/30"><td className="p-3"><div className="flex items-center gap-2">{expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}<div><div className="font-bold">{company.company_name}</div><div className="text-[11px] text-slate-400">{company.state || ''} • {company.account_status}</div></div></div></td><td>{company.total_leads}</td><td><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">{company.qc_pending}</span></td><td>{company.approved_leads}</td><td>{company.scheduled_upcoming}</td><td>{activeLocations.length}</td><td>{company.package ? `${company.package.delivered_leads}/${company.package.lead_target}` : 'No active package'}</td><td className="font-bold">{company.package?.pending_leads ?? '—'}</td><td>{company.package ? <div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${company.package.payment_status === 'complete' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{company.package.payment_status === 'complete' ? 'PAID' : 'PENDING'}</span><div className="mt-1 text-[10px] text-slate-400">{company.package.payment_date || 'No date'}</div></div> : '—'}</td><td onClick={event => event.stopPropagation()}><div className="flex flex-wrap gap-1"><button disabled={!agentLink} onClick={() => void copyText(agentLink)} title={agentLink ? 'Copy agent booking link' : 'Add a slug before copying the booking link'} className="rounded border p-1.5 disabled:cursor-not-allowed disabled:opacity-40"><Clipboard size={12} /></button><button disabled={!companyLink} onClick={() => companyLink && window.open(companyLink, '_blank', 'noopener,noreferrer')} title={companyLink ? 'Open company portal' : 'Add a slug before opening the company portal'} className="rounded bg-slate-900 p-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={12} /></button><button onClick={onEditSlug} title={publicSlug ? `Edit slug: ${publicSlug}` : 'Add company slug'} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-bold text-blue-700"><Link2 size={12} /> {publicSlug ? 'Edit Slug' : 'Add Slug'}</button></div>{publicSlug && <div className="mt-1 max-w-48 truncate font-mono text-[9px] text-slate-400" title={publicSlug}>{publicSlug}</div>}</td></tr>
-    {expanded && <tr className="border-t bg-slate-50"><td colSpan={10} className="p-4"><div className="space-y-4">
+    <tr onClick={onToggle} className="cursor-pointer border-t hover:bg-blue-50/30"><td className="p-3"><div className="flex items-center gap-2">{expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}<div><div className="font-bold">{company.company_name}</div><div className="text-[11px] text-slate-400">{company.state || ''} • {company.account_status}</div></div></div></td><td className="text-center font-bold">{outcome.total}</td><td className="text-center"><CountPill value={outcome.qcPending} tone="amber" /></td><td className="text-center"><CountPill value={outcome.qcDenied} tone="red" /></td><td className="text-center"><CountPill value={outcome.good} tone="green" /></td><td className="text-center"><CountPill value={outcome.signed} tone="purple" /></td><td className="text-center"><CountPill value={outcome.bad} tone="red" /></td><td className="text-center"><CountPill value={outcome.noShow} tone="amber" /></td><td className="text-center">{activeLocations.length}</td><td>{company.package ? `${company.package.delivered_leads}/${company.package.lead_target}` : 'No active package'}</td><td className="text-center font-bold">{company.package?.pending_leads ?? '—'}</td><td>{company.package ? <div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${company.package.payment_status === 'complete' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{company.package.payment_status === 'complete' ? 'PAID' : 'PENDING'}</span><div className="mt-1 text-[10px] text-slate-400">{company.package.payment_date || 'No date'}</div></div> : '—'}</td><td onClick={event => event.stopPropagation()}><div className="flex flex-wrap gap-1"><button disabled={!agentLink} onClick={() => void copyText(agentLink)} title={agentLink ? 'Copy agent booking link' : 'Add a slug before copying the booking link'} className="rounded border p-1.5 disabled:cursor-not-allowed disabled:opacity-40"><Clipboard size={12} /></button><button disabled={!companyLink} onClick={() => companyLink && window.open(companyLink, '_blank', 'noopener,noreferrer')} title={companyLink ? 'Open company portal' : 'Add a slug before opening the company portal'} className="rounded bg-slate-900 p-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={12} /></button><button onClick={onEditSlug} title={publicSlug ? `Edit slug: ${publicSlug}` : 'Add company slug'} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-bold text-blue-700"><Link2 size={12} /> {publicSlug ? 'Edit Slug' : 'Add Slug'}</button></div>{publicSlug && <div className="mt-1 max-w-48 truncate font-mono text-[9px] text-slate-400" title={publicSlug}>{publicSlug}</div>}</td></tr>
+    {expanded && <tr className="border-t bg-slate-50"><td colSpan={13} className="p-4"><div className="space-y-4">
       <CompanyAvailabilityGrid company={company} locations={activeLocations} store={store} appointmentDate={appointmentDate} onEditLocation={onEditLocation} />
       <section className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[1fr_auto]"><div><h3 className="font-bold">Overview</h3><p className="mt-1 text-xs text-slate-500">{company.contact_name || 'No contact'} • {company.phone || 'No phone'} • {company.email || 'No email'}</p></div><button onClick={onEditCompany} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold"><Pencil size={13} /> Edit Company</button></section>
       <LocationSection company={company} locations={locations} agents={agents} locationAgents={locationAgents} onEditLocation={onEditLocation} onDuplicate={onDuplicate} onSetActive={onSetActive} />
