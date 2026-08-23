@@ -4,6 +4,8 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clipboard,
   Download,
   ExternalLink,
@@ -26,12 +28,12 @@ import { isLeadOutcome } from "./leadOutcome";
 import { PortalFormField, PortalFormSection } from "./DynamicLeadForm";
 import {
   addDays,
+  calendarWeekStart,
   copyText,
   formatDateLong,
   formatTime,
   localDate,
   rpcError,
-  startOfWeek,
 } from "./portalUtils";
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
@@ -279,8 +281,11 @@ export function CompanyPortal({
 
   useCompanyPortalPresence(companyId, token, tab);
 
-  const windowStart = localDate(addDays(startOfWeek(), -7));
-  const windowEnd = localDate(addDays(startOfWeek(), 28));
+  const selectedWeekStart = calendarWeekStart(
+    new Date(`${selectedDay}T12:00:00`),
+  );
+  const windowStart = localDate(addDays(selectedWeekStart, -7));
+  const windowEnd = localDate(addDays(selectedWeekStart, 28));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -522,7 +527,8 @@ export function CompanyPortal({
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
-      notify("Representative assignment updated.");
+      setCompanyLeadRefreshKey((value) => value + 1);
+      notify("Inspector assignment updated.");
       await load();
     }
     setBusy(false);
@@ -861,6 +867,8 @@ export function CompanyPortal({
             setLocationId={setCompanyLeadLocationId}
             openLead={setSelectedLead}
             busy={busy}
+            representatives={data.representatives}
+            assignRep={assignRep}
             updateLeadOutcome={updateLeadOutcome}
             activePackage={dashboard?.active_package || null}
             refreshKey={companyLeadRefreshKey}
@@ -1842,6 +1850,8 @@ function CompanyLeadsSpreadsheet({
   setLocationId,
   openLead,
   busy,
+  representatives,
+  assignRep,
   updateLeadOutcome,
   activePackage,
   refreshKey,
@@ -1855,6 +1865,8 @@ function CompanyLeadsSpreadsheet({
   setLocationId: (value: string) => void;
   openLead: (appointment: Appointment) => void;
   busy: boolean;
+  representatives: Representative[];
+  assignRep: (appointmentId: string, repId: string) => Promise<void>;
   updateLeadOutcome: (
     appointment: Appointment,
     clientStatus: string,
@@ -1878,6 +1890,9 @@ function CompanyLeadsSpreadsheet({
   });
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [representativeId, setRepresentativeId] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1892,6 +1907,9 @@ function CompanyLeadsSpreadsheet({
         p_access_token: token,
         p_filter: filter,
         p_location_id: locationId || null,
+        p_representative_id: representativeId || null,
+        p_start_date: startDate || null,
+        p_end_date: endDate || null,
         p_search: search || null,
         p_limit: 100,
         p_offset: offset,
@@ -1900,7 +1918,18 @@ function CompanyLeadsSpreadsheet({
     if (loadError) setError(rpcError(loadError));
     else setData(result as CompanyLeadSheetData);
     setLoading(false);
-  }, [companyId, filter, locationId, offset, refreshKey, search, token]);
+  }, [
+    companyId,
+    endDate,
+    filter,
+    locationId,
+    offset,
+    refreshKey,
+    representativeId,
+    search,
+    startDate,
+    token,
+  ]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -1963,28 +1992,90 @@ function CompanyLeadsSpreadsheet({
           <span className="text-slate-400">(not yet delivered records)</span>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3">
-        <MapPin size={15} className="text-blue-600" />
-        <label className="text-xs font-bold text-slate-600">Location</label>
-        <select
-          value={locationId}
-          onChange={(event) => {
+      <div className="grid gap-3 rounded-xl border bg-white p-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_180px_auto]">
+        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+          <span className="flex items-center gap-1">
+            <MapPin size={13} className="text-blue-600" /> Location
+          </span>
+          <select
+            value={locationId}
+            onChange={(event) => {
+              setOffset(0);
+              setLocationId(event.target.value);
+            }}
+            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+          >
+            <option value="">All locations</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.location_label}
+                {location.active === false ? " (Inactive)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+          <span className="flex items-center gap-1">
+            <UserRoundCheck size={13} className="text-blue-600" /> Inspector
+          </span>
+          <select
+            value={representativeId}
+            onChange={(event) => {
+              setOffset(0);
+              setRepresentativeId(event.target.value);
+            }}
+            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+          >
+            <option value="">All inspectors</option>
+            {representatives.map((representative) => (
+              <option key={representative.id} value={representative.id}>
+                {representative.name}
+                {representative.active === false ? " (Inactive)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+          Start Date
+          <input
+            type="date"
+            value={startDate}
+            onChange={(event) => {
+              const value = event.target.value;
+              setOffset(0);
+              setStartDate(value);
+              if (value && endDate && endDate < value) setEndDate(value);
+            }}
+            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+          />
+        </label>
+        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+          End Date
+          <input
+            type="date"
+            min={startDate || undefined}
+            value={endDate}
+            onChange={(event) => {
+              setOffset(0);
+              setEndDate(event.target.value);
+            }}
+            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={!locationId && !representativeId && !startDate && !endDate}
+          onClick={() => {
             setOffset(0);
-            setLocationId(event.target.value);
+            setLocationId("");
+            setRepresentativeId("");
+            setStartDate("");
+            setEndDate("");
           }}
-          className="rounded-lg border px-3 py-2 text-xs font-semibold"
+          className="self-end rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <option value="">All locations</option>
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.location_label}
-              {location.active === false ? " (Inactive)" : ""}
-            </option>
-          ))}
-        </select>
-        <span className="text-[11px] text-slate-400">
-          Counts and spreadsheet rows update for the selected office.
-        </span>
+          Clear Filters
+        </button>
       </div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         {filterCards.map(([key, label, count, tone]) => (
@@ -2048,7 +2139,7 @@ function CompanyLeadsSpreadsheet({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-950 text-left text-[10px] uppercase tracking-wide text-white">
+              <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
                 <tr>
                   {[
                     "Homeowner",
@@ -2064,14 +2155,14 @@ function CompanyLeadsSpreadsheet({
                     "Insurance",
                     "Carrier",
                     "Damage / Hail",
-                    "Inspector",
+                    "Inspector Assignment",
                     "Lead Status",
                     "Client Notes",
                     "Action",
                   ].map((label, index, labels) => (
                     <th
                       key={label}
-                      className={`border-b border-slate-800 px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[180px] bg-slate-950 shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-950 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
+                      className={`border-b border-[#17314d] px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[180px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
                     >
                       {label}
                     </th>
@@ -2137,8 +2228,34 @@ function CompanyLeadsSpreadsheet({
                       <td className="border-b px-3 py-3">
                         {String(form.visible_damage || form.hail_size || "—")}
                       </td>
-                      <td className="border-b px-3 py-3">
-                        {appointment.representative_name || "Unassigned"}
+                      <td
+                        className="border-b px-3 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <select
+                          aria-label={`Assign inspector for ${appointment.lead.full_name}`}
+                          value={appointment.representative_id || ""}
+                          disabled={busy}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) =>
+                            void assignRep(appointment.id, event.target.value)
+                          }
+                          className="min-w-[170px] cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold disabled:cursor-wait disabled:opacity-50"
+                        >
+                          <option value="">Unassigned</option>
+                          {representatives
+                            .filter(
+                              (rep) =>
+                                rep.active ||
+                                rep.id === appointment.representative_id,
+                            )
+                            .map((rep) => (
+                              <option key={rep.id} value={rep.id}>
+                                {rep.name}
+                                {rep.active ? "" : " (Inactive)"}
+                              </option>
+                            ))}
+                        </select>
                       </td>
                       <td
                         className="border-b px-3 py-3"
@@ -2249,9 +2366,15 @@ function CompanyAppointmentsDashboard({
   const fallbackPerformance = performanceFromAppointments(delivered);
   const performance = dashboard?.performance || fallbackPerformance;
   const pkg = dashboard?.active_package;
-  const days = Array.from({ length: 7 }, (_, index) =>
-    localDate(addDays(startOfWeek(new Date(`${selectedDay}T12:00:00`)), index)),
+  const visibleWeekStart = calendarWeekStart(
+    new Date(`${selectedDay}T12:00:00`),
   );
+  const visibleWeekEnd = addDays(visibleWeekStart, 6);
+  const days = Array.from({ length: 7 }, (_, index) =>
+    localDate(addDays(visibleWeekStart, index)),
+  );
+  const moveWeek = (weeks: number) =>
+    setSelectedDay(localDate(addDays(visibleWeekStart, weeks * 7)));
   const selectedAppointments = delivered
     .filter((appointment) => appointment.appointment_date === selectedDay)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
@@ -2476,9 +2599,49 @@ function CompanyAppointmentsDashboard({
       </section>
 
       <section className="rounded-2xl border bg-white p-3 shadow-sm">
-        <p className="mb-2 text-xs font-bold text-slate-500">
-          Select a day to view its leads
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold text-slate-600">
+              Select a day to view its leads
+            </p>
+            <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+              {visibleWeekStart.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}{" "}
+              –{" "}
+              {visibleWeekEnd.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => moveWeek(-1)}
+              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
+            >
+              <ChevronLeft size={14} /> Previous Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDay(localDate(new Date()))}
+              className="rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => moveWeek(1)}
+              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
+            >
+              Next Week <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
           {days.map((day) => {
             const date = new Date(`${day}T12:00:00`);
@@ -2613,8 +2776,11 @@ function CompanyAppointmentRow({
           </p>
         </div>
         <div className="space-y-2 border-l pl-4">
-          <p className="text-[10px] font-bold text-slate-500">Rep Assignment</p>
+          <p className="text-[10px] font-bold text-slate-500">
+            Inspector Assignment
+          </p>
           <select
+            aria-label={`Assign inspector for ${appointment.lead.full_name}`}
             value={appointment.representative_id || ""}
             onChange={(event) =>
               void assignRep(appointment.id, event.target.value)
@@ -2624,10 +2790,14 @@ function CompanyAppointmentRow({
           >
             <option value="">Unassigned</option>
             {representatives
-              .filter((rep) => rep.active)
+              .filter(
+                (rep) =>
+                  rep.active || rep.id === appointment.representative_id,
+              )
               .map((rep) => (
                 <option key={rep.id} value={rep.id}>
                   {rep.name}
+                  {rep.active ? "" : " (Inactive)"}
                 </option>
               ))}
           </select>
