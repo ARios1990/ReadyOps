@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
 import { supabase } from './supabase';
 
+// Report joins intentionally accept flexible Supabase row shapes across legacy
+// and current database responses.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = Record<string, any>;
 type Tab = 'overview' | 'companies' | 'agents' | 'appointments' | 'financial';
 
@@ -72,6 +75,7 @@ export function AdminReports() {
     total: filtered.length,
     approved: filtered.filter(r => r.lead?.qc_status === 'approved').length,
     denied: filtered.filter(r => r.lead?.qc_status === 'denied').length,
+    good: filtered.filter(r => r.client_status === 'good').length,
     noShow: filtered.filter(r => r.client_status === 'no_show' || String(r.attendance_status || '').includes('no_show')).length,
     signed: filtered.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length,
     completed: filtered.filter(r => r.status === 'completed' || r.inspection_status === 'completed').length,
@@ -102,6 +106,7 @@ export function AdminReports() {
       total: rows.length,
       approved,
       denied: rows.filter(r => r.lead?.qc_status === 'denied').length,
+      good: rows.filter(r => r.client_status === 'good').length,
       noShow: rows.filter(r => r.client_status === 'no_show' || String(r.attendance_status || '').includes('no_show')).length,
       signed: rows.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length,
       conversion: approved ? Math.round((rows.filter(r => r.client_status === 'signed_contract' || r.sales_outcome === 'signed_contract').length / approved) * 100) : 0,
@@ -115,11 +120,12 @@ export function AdminReports() {
       Agent: r.lead?.agent_name || '',
       Lead_ID: r.lead?.lead_code || '',
       QC: r.lead?.qc_status || '',
+      Good: r.client_status === 'good' ? 'Yes' : '',
       Client_Status: r.client_status || '',
       Appointment_Status: r.status || '',
       Sales_Outcome: r.sales_outcome || '',
     }));
-    const headers = Object.keys(rows[0] || { Date: '', Company: '', Agent: '', Lead_ID: '', QC: '', Client_Status: '', Appointment_Status: '', Sales_Outcome: '' });
+    const headers = Object.keys(rows[0] || { Date: '', Company: '', Agent: '', Lead_ID: '', QC: '', Good: '', Client_Status: '', Appointment_Status: '', Sales_Outcome: '' });
     const csv = [headers.join(','), ...rows.map(row => headers.map(h => `"${String((row as Obj)[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = `readyops-report-${startDate}-to-${endDate}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -140,12 +146,12 @@ export function AdminReports() {
     </div></section>
 
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-      <Kpi label="Total Leads" value={metrics.total}/><Kpi label="Approved" value={metrics.approved}/><Kpi label="QC Denied" value={metrics.denied}/><Kpi label="No Shows" value={metrics.noShow}/><Kpi label="Signed" value={metrics.signed}/><Kpi label="Completed" value={metrics.completed}/><Kpi label="Revenue" value={money(metrics.revenue)}/><Kpi label="Payroll Cost" value={money(metrics.payroll)}/>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-9">
+      <Kpi label="Total Leads" value={metrics.total}/><Kpi label="Approved" value={metrics.approved}/><Kpi label="QC Denied" value={metrics.denied}/><Kpi label="Good" value={metrics.good}/><Kpi label="No Shows" value={metrics.noShow}/><Kpi label="Signed" value={metrics.signed}/><Kpi label="Completed" value={metrics.completed}/><Kpi label="Revenue" value={money(metrics.revenue)}/><Kpi label="Payroll Cost" value={money(metrics.payroll)}/>
     </section>
 
-    <section className="readyops-ref-card overflow-hidden"><div className="readyops-ref-tabs">{(['overview','companies','agents','appointments','financial'] as Tab[]).map(key => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{key[0].toUpperCase() + key.slice(1)}</button>)}</div>
-      {loading ? <div className="p-10 text-center text-sm opacity-60">Loading reports…</div> : tab === 'companies' ? <CompanyTable rows={companyRows}/> : tab === 'agents' ? <AgentTable rows={agentRows}/> : tab === 'appointments' ? <AppointmentTable rows={filtered} companies={companies}/> : tab === 'financial' ? <Financial revenue={metrics.revenue} payroll={metrics.payroll}/> : <Overview companyRows={companyRows} agentRows={agentRows}/>} 
+    <section className="readyops-ref-card readyops-reports-results"><div className="readyops-ref-tabs readyops-reports-tabs">{(['overview','companies','agents','appointments','financial'] as Tab[]).map(key => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{key[0].toUpperCase() + key.slice(1)}</button>)}</div>
+      <div className="readyops-reports-results-scroll">{loading ? <div className="p-10 text-center text-sm opacity-60">Loading reports…</div> : tab === 'companies' ? <CompanyTable rows={companyRows}/> : tab === 'agents' ? <AgentTable rows={agentRows}/> : tab === 'appointments' ? <AppointmentTable rows={filtered} companies={companies}/> : tab === 'financial' ? <Financial revenue={metrics.revenue} payroll={metrics.payroll} good={metrics.good}/> : <Overview companyRows={companyRows} agentRows={agentRows}/>}</div>
     </section>
   </div>;
 }
@@ -153,8 +159,8 @@ export function AdminReports() {
 function Kpi({label,value}:{label:string;value:string|number}){return <div className="readyops-ref-card p-4"><p className="text-[10px] font-extrabold uppercase opacity-60">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>}
 function money(v:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v)}
 function CompanyTable({rows}:{rows:Obj[]}){return <Table headers={['Company','Delivered','Approved','QC Denied','Good','No Show','Signed']} rows={rows.map(r=>[r.name,r.total,r.approved,r.denied,r.good,r.noShow,r.signed])}/>}
-function AgentTable({rows}:{rows:Obj[]}){return <Table headers={['Agent','Team','Leads','Approved','QC Denied','No Show','Signed','Conversion']} rows={rows.map(r=>[r.name,r.team,r.total,r.approved,r.denied,r.noShow,r.signed,`${r.conversion}%`])}/>}
-function AppointmentTable({rows,companies}:{rows:Obj[];companies:Obj[]}){return <Table headers={['Date','Company','Agent','Lead ID','QC','Client Status','Appointment','Sales']} rows={rows.map(r=>[r.appointment_date,r.lead?.qc_status==='denied'?'QC Denied':companies.find(c=>c.id===r.company_id)?.name||'—',r.lead?.agent_name||'—',r.lead?.lead_code||'—',r.lead?.qc_status||'—',r.client_status||'—',r.status||'—',r.sales_outcome||'—'])}/>}
-function Financial({revenue,payroll}:{revenue:number;payroll:number}){return <div className="grid gap-4 p-5 md:grid-cols-3"><Kpi label="Invoice Revenue" value={money(revenue)}/><Kpi label="Payroll Cost" value={money(payroll)}/><Kpi label="Gross Before Other Costs" value={money(revenue-payroll)}/></div>}
+function AgentTable({rows}:{rows:Obj[]}){return <Table headers={['Agent','Team','Leads','Approved','QC Denied','Good','No Show','Signed','Conversion']} rows={rows.map(r=>[r.name,r.team,r.total,r.approved,r.denied,r.good,r.noShow,r.signed,`${r.conversion}%`])}/>}
+function AppointmentTable({rows,companies}:{rows:Obj[];companies:Obj[]}){return <Table headers={['Date','Company','Agent','Lead ID','QC','Good','Client Status','Appointment','Sales']} rows={rows.map(r=>[r.appointment_date,r.lead?.qc_status==='denied'?'QC Denied':companies.find(c=>c.id===r.company_id)?.name||'—',r.lead?.agent_name||'—',r.lead?.lead_code||'—',r.lead?.qc_status||'—',r.client_status==='good'?'Yes':'—',r.client_status||'—',r.status||'—',r.sales_outcome||'—'])}/>}
+function Financial({revenue,payroll,good}:{revenue:number;payroll:number;good:number}){return <div className="grid gap-4 p-5 md:grid-cols-4"><Kpi label="Good Leads" value={good}/><Kpi label="Invoice Revenue" value={money(revenue)}/><Kpi label="Payroll Cost" value={money(payroll)}/><Kpi label="Gross Before Other Costs" value={money(revenue-payroll)}/></div>}
 function Overview({companyRows,agentRows}:{companyRows:Obj[];agentRows:Obj[]}){return <div className="grid gap-5 p-5 xl:grid-cols-2"><div><h3 className="mb-3 font-bold">Company Performance</h3><CompanyTable rows={companyRows.slice(0,10)}/></div><div><h3 className="mb-3 font-bold">Agent Performance</h3><AgentTable rows={agentRows.slice(0,10)}/></div></div>}
-function Table({headers,rows}:{headers:string[];rows:(string|number)[][]}){return <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="bg-slate-50 text-left text-[10px] uppercase opacity-60">{headers.map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i} className="border-t">{r.map((v,j)=><td key={j} className="px-4 py-3">{String(v).replace(/_/g,' ')}</td>)}</tr>):<tr><td colSpan={headers.length} className="p-8 text-center opacity-50">No records for this filter.</td></tr>}</tbody></table></div>}
+function Table({headers,rows}:{headers:string[];rows:(string|number)[][]}){return <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="readyops-data-table-head sticky top-0 z-30"><tr className="text-left">{headers.map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i} className="border-t">{r.map((v,j)=><td key={j} className="px-4 py-3">{String(v).replace(/_/g,' ')}</td>)}</tr>):<tr><td colSpan={headers.length} className="p-8 text-center opacity-50">No records for this filter.</td></tr>}</tbody></table></div>}
