@@ -534,7 +534,15 @@ export function AdminLeadCRM() {
                   ].map((label, index, labels) => (
                     <th
                       key={label}
-                      className={`whitespace-nowrap border-b px-3 py-3 ${index === 0 ? "sticky left-0 z-20 bg-slate-50" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-slate-50" : ""}`}
+                      className={`whitespace-nowrap border-b px-3 py-3 ${
+                        index === 0
+                          ? "sticky left-0 z-40 w-[116px] min-w-[116px] max-w-[116px] bg-slate-50"
+                          : index === 1
+                            ? "sticky left-[116px] z-40 w-[100px] min-w-[100px] max-w-[100px] bg-slate-50"
+                            : index === 2
+                              ? "sticky left-[216px] z-40 w-[160px] min-w-[160px] max-w-[160px] border-r bg-slate-50 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)]"
+                              : ""
+                      } ${index === labels.length - 1 ? "sticky right-0 z-40 bg-slate-50" : ""}`}
                     >
                       {label}
                     </th>
@@ -589,15 +597,17 @@ function LeadRow({
   return (
     <tr
       onClick={onOpen}
-      className="cursor-pointer border-t align-top hover:bg-blue-50/50"
+      className="group cursor-pointer border-t align-top hover:bg-blue-50/50"
     >
-      <Cell className="sticky left-0 z-10 border-r bg-white font-black text-blue-700">
+      <Cell className="sticky left-0 z-20 w-[116px] min-w-[116px] max-w-[116px] bg-white font-black text-blue-700 group-hover:bg-blue-50">
         {row.lead.lead_code || shortId(row.lead.id)}
       </Cell>
-      <Cell>
+      <Cell className="sticky left-[116px] z-20 w-[100px] min-w-[100px] max-w-[100px] bg-white group-hover:bg-blue-50">
         <Status value={primaryStatus(row)} />
       </Cell>
-      <Cell className="font-bold">{value(row.lead.full_name)}</Cell>
+      <Cell className="sticky left-[216px] z-20 w-[160px] min-w-[160px] max-w-[160px] border-r bg-white font-bold shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)] group-hover:bg-blue-50">
+        {value(row.lead.full_name)}
+      </Cell>
       <Cell>{value(row.lead.phone_number)}</Cell>
       <Cell>{value(row.lead.email)}</Cell>
       <Cell className="max-w-[260px]">{value(row.lead.address)}</Cell>
