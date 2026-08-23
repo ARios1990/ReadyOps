@@ -742,6 +742,7 @@ export function QCQueue() {
       }
       actions={actions}
     >
+      <div className="readyops-qc-page">
       {error && <Notice tone="red" text={error} />}
       {message && <Notice tone="blue" text={message} />}
       <div
@@ -950,7 +951,7 @@ export function QCQueue() {
                 setSelectedDate(day.date);
                 if (search) setSearchScope("selected_day");
               }}
-              className={`rounded-xl border p-3 text-center shadow-sm transition ${active ? "border-blue-600 bg-blue-600 text-white" : "bg-white hover:border-blue-300"}`}
+              className={`readyops-qc-day-card rounded-xl border p-3 text-center shadow-sm transition ${active ? "is-active border-[#071a33] bg-[#071a33] text-white" : "bg-white hover:border-blue-300"}`}
             >
               <p className="text-xs">
                 {date.toLocaleDateString(undefined, { weekday: "long" })}
@@ -1078,6 +1079,7 @@ export function QCQueue() {
           deleteLead={deleteLead}
         />
       )}
+      </div>
     </AdminWorkspaceShell>
   );
 }
