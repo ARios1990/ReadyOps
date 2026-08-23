@@ -229,6 +229,17 @@ const DAY_NAMES = [
   "Friday",
   "Saturday",
 ];
+const COMPANY_LEAD_ACTIONS = [
+  ["contacted", "Contacted"],
+  ["confirmed", "Confirmed"],
+  ["inspected", "Inspected"],
+  ["no_show", "No Show"],
+  ["rescheduled", "Rescheduled"],
+  ["estimate_given", "Estimate Given"],
+  ["claim_filed", "Claim Filed"],
+  ["signed_contract", "Signed Contract"],
+  ["lost", "Lost"],
+] as const;
 
 export function CompanyPortal({
   companyId,
@@ -249,6 +260,7 @@ export function CompanyPortal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedLead, setSelectedLead] = useState<Appointment | null>(null);
+  const [companyLeadRefreshKey, setCompanyLeadRefreshKey] = useState(0);
   const [settingsDraft, setSettingsDraft] = useState<SettingsRecord | null>(
     null,
   );
@@ -528,7 +540,7 @@ export function CompanyPortal({
   ) {
     setBusy(true);
     setError("");
-    const { error: rpcErr } = await supabase.rpc(
+    const { data: updated, error: rpcErr } = await supabase.rpc(
       "company_update_appointment_status",
       {
         p_company_id: companyId,
@@ -539,6 +551,13 @@ export function CompanyPortal({
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
+      const updatedAppointment = updated as Partial<Appointment> | null;
+      setSelectedLead((current) =>
+        current?.id === appointmentId && updatedAppointment
+          ? { ...current, ...updatedAppointment }
+          : current,
+      );
+      setCompanyLeadRefreshKey((value) => value + 1);
       notify("Appointment status updated.");
       await load();
     }
@@ -556,7 +575,7 @@ export function CompanyPortal({
     if (note === null) return;
     setBusy(true);
     setError("");
-    const { error: rpcErr } = await supabase.rpc(
+    const { data: updated, error: rpcErr } = await supabase.rpc(
       "company_update_lead_outcome",
       {
         p_company_id: companyId,
@@ -568,6 +587,13 @@ export function CompanyPortal({
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
+      const updatedAppointment = updated as Partial<Appointment> | null;
+      setSelectedLead((current) =>
+        current?.id === appointment.id && updatedAppointment
+          ? { ...current, ...updatedAppointment }
+          : current,
+      );
+      setCompanyLeadRefreshKey((value) => value + 1);
       notify("Lead outcome updated.");
       await load();
     }
@@ -828,6 +854,7 @@ export function CompanyPortal({
             setLocationId={setCompanyLeadLocationId}
             openLead={setSelectedLead}
             activePackage={dashboard?.active_package || null}
+            refreshKey={companyLeadRefreshKey}
           />
         )}
 
@@ -1438,6 +1465,9 @@ export function CompanyPortal({
           appointment={selectedLead}
           companyId={companyId}
           token={token}
+          busy={busy}
+          updateAppointmentStatus={updateAppointmentStatus}
+          updateLeadOutcome={updateLeadOutcome}
           onClose={() => setSelectedLead(null)}
         />
       )}
@@ -1803,6 +1833,7 @@ function CompanyLeadsSpreadsheet({
   setLocationId,
   openLead,
   activePackage,
+  refreshKey,
 }: {
   companyId: string;
   token: string;
@@ -1813,6 +1844,7 @@ function CompanyLeadsSpreadsheet({
   setLocationId: (value: string) => void;
   openLead: (appointment: Appointment) => void;
   activePackage: CompanyDashboardSummary["active_package"];
+  refreshKey: number;
 }) {
   const [data, setData] = useState<CompanyLeadSheetData>({
     rows: [],
@@ -1851,7 +1883,7 @@ function CompanyLeadsSpreadsheet({
     if (loadError) setError(rpcError(loadError));
     else setData(result as CompanyLeadSheetData);
     setLoading(false);
-  }, [companyId, filter, locationId, offset, search, token]);
+  }, [companyId, filter, locationId, offset, refreshKey, search, token]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -2509,17 +2541,6 @@ function CompanyAppointmentRow({
   ]
     .filter(Boolean)
     .join(" • ");
-  const actions = [
-    ["contacted", "Contacted"],
-    ["confirmed", "Confirmed"],
-    ["inspected", "Inspected"],
-    ["no_show", "No Show"],
-    ["rescheduled", "Rescheduled"],
-    ["estimate_given", "Estimate Given"],
-    ["claim_filed", "Claim Filed"],
-    ["signed_contract", "Signed Contract"],
-    ["lost", "Lost"],
-  ] as const;
   return (
     <article className="rounded-2xl border bg-white p-4 shadow-sm">
       <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr_1fr_1fr]">
@@ -2605,7 +2626,7 @@ function CompanyAppointmentRow({
         <span className="mr-1 self-center text-[10px] font-black uppercase tracking-wide text-slate-400">
           Quick update
         </span>
-        {actions.map(([value, label]) => (
+        {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
           <button
             key={value}
             disabled={busy}
@@ -3085,14 +3106,31 @@ function LeadModal({
   appointment,
   companyId,
   token,
+  busy,
+  updateAppointmentStatus,
+  updateLeadOutcome,
   onClose,
 }: {
   appointment: Appointment;
   companyId: string;
   token: string;
+  busy: boolean;
+  updateAppointmentStatus: (
+    appointmentId: string,
+    status: string,
+  ) => Promise<void>;
+  updateLeadOutcome: (
+    appointment: Appointment,
+    clientStatus: string,
+  ) => Promise<void>;
   onClose: () => void;
 }) {
   const lead = appointment.lead;
+  const currentStatus =
+    appointment.company_action ||
+    appointment.canonical_status ||
+    appointment.client_status ||
+    appointment.status;
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4"
@@ -3102,7 +3140,13 @@ function LeadModal({
         className="mx-auto my-8 max-w-3xl rounded-2xl bg-white p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+              Company Lead
+            </p>
+            <h2 className="text-xl font-black">{lead.full_name}</h2>
+          </div>
           <button
             onClick={onClose}
             className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold"
@@ -3110,6 +3154,59 @@ function LeadModal({
             Close
           </button>
         </div>
+        <section className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+                Current Lead Status
+              </p>
+              <div className="mt-2">
+                <StatusChip status={currentStatus} />
+              </div>
+            </div>
+            <label className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+              Appointment Status
+              <select
+                value={appointment.status}
+                onChange={(event) =>
+                  void updateAppointmentStatus(
+                    appointment.id,
+                    event.target.value,
+                  )
+                }
+                disabled={busy}
+                className="mt-1 block min-w-44 rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-800"
+              >
+                <option value="confirmed">Confirmed</option>
+                <option value="assigned">Assigned</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 border-t border-blue-100 pt-3">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-500">
+              Quick Status Update
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void updateLeadOutcome(appointment, value)}
+                  className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold disabled:opacity-50 ${appointment.company_action === value ? "border-blue-600 bg-blue-600 text-white" : "bg-white text-slate-700 hover:border-blue-300"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500">
+              Each update can include inspector/company notes and is saved to
+              the ReadyOps audit history.
+            </p>
+          </div>
+        </section>
         <ClientLeadTemplate lead={lead} appointment={appointment} />
         <div className="mt-3">
           <AppointmentWeatherBadge
