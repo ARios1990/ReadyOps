@@ -78,9 +78,10 @@ export function LoginPage() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
                 placeholder="you@example.com"
                 required
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="readyops-auth-input w-full px-4 py-2.5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -91,10 +92,11 @@ export function LoginPage() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   placeholder="Min 6 characters"
                   required
                   minLength={6}
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                  className="readyops-auth-input w-full px-4 py-2.5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
                 />
                 <button
                   type="button"
