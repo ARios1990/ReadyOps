@@ -38,6 +38,16 @@ import { useScheduleStore } from "./useScheduleStore";
 import { TIME_SLOTS, formatTimeAmPm, type CompanyLocation } from "./types";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
+import {
+  activeOpenLeads,
+  hasActivePackage,
+  isPendingPackage as pkgIsPending,
+  packageDelivered,
+  packagePaymentState,
+  packageRemaining,
+  packageTarget,
+  totalLeads as canonicalTotalLeads,
+} from "./companyMetrics";
 
 // Admin RPC payloads are intentionally flexible because several legacy and
 // current database response shapes are rendered on this operations screen.
@@ -152,12 +162,6 @@ export function PortalAdmin() {
   const [agentFilter, setAgentFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>(currentWeekRange);
   const [outcomeRows, setOutcomeRows] = useState<Obj[]>([]);
-  const [totalLeadsByCompany, setTotalLeadsByCompany] = useState<
-    Record<string, number>
-  >({});
-  const [openLeadsByCompany, setOpenLeadsByCompany] = useState<
-    Record<string, number>
-  >({});
   const [stateFilter, setStateFilter] = useState("");
   const [leadActivityFilter, setLeadActivityFilter] =
     useState<LeadActivityFilter>("all");
@@ -264,58 +268,6 @@ export function PortalAdmin() {
           qc_status: qcByLead.get(String(item.lead_id)) || "",
         })),
       );
-      const { data: allTimeRows, error: allTimeError } = await supabase
-        .from("portal_appointments")
-        .select("company_id,lead_id,status,canonical_status");
-      if (allTimeError) setError(rpcError(allTimeError));
-      else {
-        const uniqueLeadsByCompany = new Map<string, Set<string>>();
-        const openLeadStatuses = new Map<string, Map<string, boolean>>();
-        const TERMINAL_APPT_STATUS = new Set([
-          "cancelled",
-          "rescheduled",
-          "draft",
-          "qc_denied",
-        ]);
-        const TERMINAL_CANONICAL = new Set([
-          "signed_contract",
-          "good",
-          "bad",
-          "no_show",
-        ]);
-        (allTimeRows || []).forEach((row) => {
-          const companyId = String(row.company_id || "");
-          const leadId = String(row.lead_id || "");
-          if (!companyId || !leadId) return;
-          const set = uniqueLeadsByCompany.get(companyId) || new Set<string>();
-          set.add(leadId);
-          uniqueLeadsByCompany.set(companyId, set);
-          const status = String(row.status || "").toLowerCase();
-          const canonical = String(row.canonical_status || "").toLowerCase();
-          const isOpen =
-            !TERMINAL_APPT_STATUS.has(status) &&
-            !TERMINAL_CANONICAL.has(canonical);
-          const leadOpenMap =
-            openLeadStatuses.get(companyId) || new Map<string, boolean>();
-          const previous = leadOpenMap.get(leadId);
-          leadOpenMap.set(leadId, previous ? true : isOpen);
-          openLeadStatuses.set(companyId, leadOpenMap);
-        });
-        const counts: Record<string, number> = {};
-        uniqueLeadsByCompany.forEach((set, companyId) => {
-          counts[companyId] = set.size;
-        });
-        const openCounts: Record<string, number> = {};
-        openLeadStatuses.forEach((leadMap, companyId) => {
-          let openTotal = 0;
-          leadMap.forEach((isOpen) => {
-            if (isOpen) openTotal += 1;
-          });
-          openCounts[companyId] = openTotal;
-        });
-        setTotalLeadsByCompany(counts);
-        setOpenLeadsByCompany(openCounts);
-      }
     }
     setLoading(false);
   }
@@ -350,9 +302,8 @@ export function PortalAdmin() {
         const companyTeams = store.getCompanyTeams(company.company_id);
         const matchesStatus =
           filter === "all" ||
-          (filter === "pending-payment" &&
-            company.package?.payment_status === "pending") ||
-          (filter === "active-package" && company.active_package) ||
+          (filter === "pending-payment" && pkgIsPending(company)) ||
+          (filter === "active-package" && hasActivePackage(company)) ||
           (filter === "active" && company.account_status === "Active");
         const matchesSearch =
           !search.trim() ||
@@ -374,10 +325,8 @@ export function PortalAdmin() {
                 link.location_id === item.id && link.agent_id === agentFilter,
             ),
           );
-        const totalLeadsCount =
-          totalLeadsByCompany[company.company_id] ?? 0;
-        const openLeadsCount =
-          openLeadsByCompany[company.company_id] ?? 0;
+        const totalLeadsCount = canonicalTotalLeads(company);
+        const openLeadsCount = activeOpenLeads(company);
         const matchesState =
           !stateFilter ||
           String(company.state || "").toLowerCase() ===
@@ -387,19 +336,11 @@ export function PortalAdmin() {
           (leadActivityFilter === "has_leads" && totalLeadsCount > 0) ||
           (leadActivityFilter === "no_leads" && totalLeadsCount === 0) ||
           (leadActivityFilter === "active_leads" && openLeadsCount > 0);
-        const packageStatus = String(
-          company.package?.payment_status || "",
-        ).toLowerCase();
-        const isPendingPackage =
-          !!company.package &&
-          ["pending", "unpaid", "not_yet_active", "awaiting_payment"].includes(
-            packageStatus,
-          );
         const matchesPackage =
           packageFilter === "all" ||
-          (packageFilter === "active" && !!company.active_package) ||
-          (packageFilter === "pending" && isPendingPackage) ||
-          (packageFilter === "none" && !company.package);
+          (packageFilter === "active" && hasActivePackage(company)) ||
+          (packageFilter === "pending" && pkgIsPending(company)) ||
+          (packageFilter === "none" && !hasActivePackage(company));
         return (
           matchesStatus &&
           matchesSearch &&
@@ -421,13 +362,11 @@ export function PortalAdmin() {
       locationAgents,
       locationFilter,
       locations,
-      openLeadsByCompany,
       packageFilter,
       search,
       stateFilter,
       store,
       teamFilter,
-      totalLeadsByCompany,
     ],
   );
 
@@ -471,7 +410,7 @@ export function PortalAdmin() {
         0,
       ),
       pendingPayments: visible.filter(
-        (company) => company.package?.payment_status === "pending",
+        (company) => pkgIsPending(company),
       ).length,
     }),
     [outcomesByCompany, visible],
@@ -1085,9 +1024,7 @@ export function PortalAdmin() {
                         outcome={
                           outcomesByCompany[company.company_id] || EMPTY_OUTCOME
                         }
-                        totalLeads={
-                          totalLeadsByCompany[company.company_id] ?? 0
-                        }
+                        totalLeads={canonicalTotalLeads(company)}
                         locations={companyLocations}
                         expanded={expanded === company.company_id}
                         onToggle={() => void toggleCompany(company)}
@@ -1425,21 +1362,23 @@ function CompanyRow(props: CompanyRowProps) {
         <td className="text-center">{activeLocations.length}</td>
         <td>
           {company.package
-            ? `${company.package.delivered_leads}/${company.package.lead_target}`
+            ? `${packageDelivered(company)}/${packageTarget(company)}`
             : "No active package"}
         </td>
         <td className="text-center font-bold">
-          {company.package?.pending_leads ?? "—"}
+          {company.package ? packageRemaining(company) : "—"}
         </td>
         <td>
           {company.package ? (
             <div>
               <span
-                className={`rounded-full px-2 py-1 text-[10px] font-bold ${company.package.payment_status === "complete" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
+                className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                  packagePaymentState(company) === "paid"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-red-100 text-red-700"
+                }`}
               >
-                {company.package.payment_status === "complete"
-                  ? "PAID"
-                  : "PENDING"}
+                {packagePaymentState(company) === "paid" ? "PAID" : "PENDING"}
               </span>
               <div className="mt-1 text-[10px] text-slate-400">
                 {company.package.payment_date || "No date"}
@@ -2160,8 +2099,7 @@ function PackageSection({
       {company.package && (
         <div className="mt-2 rounded-lg bg-blue-50 p-3 text-xs">
           <strong>{company.package.package_name}</strong> •{" "}
-          {company.package.delivered_leads}/{company.package.lead_target}{" "}
-          delivered
+          {packageDelivered(company)}/{packageTarget(company)} delivered
           <div className="mt-1 text-blue-700">
             Scope:{" "}
             {activeScopeIds.length
