@@ -16,10 +16,12 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
   UsersRound,
   WalletCards,
+  X,
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { isLeadOutcome } from "./leadOutcome";
@@ -57,6 +59,19 @@ type SlugEditorState = {
 type CompanyStatusFilter =
   "active" | "active-package" | "pending-payment" | "all";
 type DateRange = { start: string; end: string };
+type LeadActivityFilter = "all" | "has_leads" | "no_leads" | "active_leads";
+type PackageFilter = "all" | "active" | "pending" | "none";
+type CompanyOverviewDraft = {
+  name: string;
+  state: string;
+  account_status: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  website: string;
+  requirements_note: string;
+  notes: string;
+};
 type CompanyOutcome = {
   total: number;
   qcPending: number;
@@ -140,6 +155,13 @@ export function PortalAdmin() {
   const [totalLeadsByCompany, setTotalLeadsByCompany] = useState<
     Record<string, number>
   >({});
+  const [openLeadsByCompany, setOpenLeadsByCompany] = useState<
+    Record<string, number>
+  >({});
+  const [stateFilter, setStateFilter] = useState("");
+  const [leadActivityFilter, setLeadActivityFilter] =
+    useState<LeadActivityFilter>("all");
+  const [packageFilter, setPackageFilter] = useState<PackageFilter>("all");
   const [pkg, setPkg] = useState<PackageDraft>(EMPTY_PACKAGE);
   const [packageAllLocations, setPackageAllLocations] = useState(true);
   const [packageLocationIds, setPackageLocationIds] = useState<string[]>([]);
@@ -244,10 +266,23 @@ export function PortalAdmin() {
       );
       const { data: allTimeRows, error: allTimeError } = await supabase
         .from("portal_appointments")
-        .select("company_id,lead_id");
+        .select("company_id,lead_id,status,canonical_status");
       if (allTimeError) setError(rpcError(allTimeError));
       else {
         const uniqueLeadsByCompany = new Map<string, Set<string>>();
+        const openLeadStatuses = new Map<string, Map<string, boolean>>();
+        const TERMINAL_APPT_STATUS = new Set([
+          "cancelled",
+          "rescheduled",
+          "draft",
+          "qc_denied",
+        ]);
+        const TERMINAL_CANONICAL = new Set([
+          "signed_contract",
+          "good",
+          "bad",
+          "no_show",
+        ]);
         (allTimeRows || []).forEach((row) => {
           const companyId = String(row.company_id || "");
           const leadId = String(row.lead_id || "");
@@ -255,12 +290,31 @@ export function PortalAdmin() {
           const set = uniqueLeadsByCompany.get(companyId) || new Set<string>();
           set.add(leadId);
           uniqueLeadsByCompany.set(companyId, set);
+          const status = String(row.status || "").toLowerCase();
+          const canonical = String(row.canonical_status || "").toLowerCase();
+          const isOpen =
+            !TERMINAL_APPT_STATUS.has(status) &&
+            !TERMINAL_CANONICAL.has(canonical);
+          const leadOpenMap =
+            openLeadStatuses.get(companyId) || new Map<string, boolean>();
+          const previous = leadOpenMap.get(leadId);
+          leadOpenMap.set(leadId, previous ? true : isOpen);
+          openLeadStatuses.set(companyId, leadOpenMap);
         });
         const counts: Record<string, number> = {};
         uniqueLeadsByCompany.forEach((set, companyId) => {
           counts[companyId] = set.size;
         });
+        const openCounts: Record<string, number> = {};
+        openLeadStatuses.forEach((leadMap, companyId) => {
+          let openTotal = 0;
+          leadMap.forEach((isOpen) => {
+            if (isOpen) openTotal += 1;
+          });
+          openCounts[companyId] = openTotal;
+        });
         setTotalLeadsByCompany(counts);
+        setOpenLeadsByCompany(openCounts);
       }
     }
     setLoading(false);
@@ -320,13 +374,42 @@ export function PortalAdmin() {
                 link.location_id === item.id && link.agent_id === agentFilter,
             ),
           );
+        const totalLeadsCount =
+          totalLeadsByCompany[company.company_id] ?? 0;
+        const openLeadsCount =
+          openLeadsByCompany[company.company_id] ?? 0;
+        const matchesState =
+          !stateFilter ||
+          String(company.state || "").toLowerCase() ===
+            stateFilter.toLowerCase();
+        const matchesLeadActivity =
+          leadActivityFilter === "all" ||
+          (leadActivityFilter === "has_leads" && totalLeadsCount > 0) ||
+          (leadActivityFilter === "no_leads" && totalLeadsCount === 0) ||
+          (leadActivityFilter === "active_leads" && openLeadsCount > 0);
+        const packageStatus = String(
+          company.package?.payment_status || "",
+        ).toLowerCase();
+        const isPendingPackage =
+          !!company.package &&
+          ["pending", "unpaid", "not_yet_active", "awaiting_payment"].includes(
+            packageStatus,
+          );
+        const matchesPackage =
+          packageFilter === "all" ||
+          (packageFilter === "active" && !!company.active_package) ||
+          (packageFilter === "pending" && isPendingPackage) ||
+          (packageFilter === "none" && !company.package);
         return (
           matchesStatus &&
           matchesSearch &&
           matchesCompany &&
           matchesLocation &&
           matchesTeam &&
-          matchesAgent
+          matchesAgent &&
+          matchesState &&
+          matchesLeadActivity &&
+          matchesPackage
         );
       }),
     [
@@ -334,12 +417,17 @@ export function PortalAdmin() {
       companies,
       companyFilter,
       filter,
+      leadActivityFilter,
       locationAgents,
       locationFilter,
       locations,
+      openLeadsByCompany,
+      packageFilter,
       search,
+      stateFilter,
       store,
       teamFilter,
+      totalLeadsByCompany,
     ],
   );
 
@@ -388,6 +476,47 @@ export function PortalAdmin() {
     }),
     [outcomesByCompany, visible],
   );
+
+  const stateOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          companies
+            .map((company) => String(company.state || "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [companies],
+  );
+
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    (companyFilter ? 1 : 0) +
+    (locationFilter ? 1 : 0) +
+    (teamFilter ? 1 : 0) +
+    (agentFilter ? 1 : 0) +
+    (filter !== "active" ? 1 : 0) +
+    (stateFilter ? 1 : 0) +
+    (leadActivityFilter !== "all" ? 1 : 0) +
+    (packageFilter !== "all" ? 1 : 0);
+
+  function clearFilters() {
+    setSearch("");
+    setCompanyFilter("");
+    setLocationFilter("");
+    setTeamFilter("");
+    setAgentFilter("");
+    setFilter("active");
+    setStateFilter("");
+    setLeadActivityFilter("all");
+    setPackageFilter("all");
+  }
+
+  useEffect(() => {
+    if (expanded && !visible.some((c) => c.company_id === expanded)) {
+      setExpanded("");
+    }
+  }, [expanded, visible]);
 
   async function toggleCompany(company: Obj) {
     if (expanded === company.company_id) {
@@ -790,6 +919,47 @@ export function PortalAdmin() {
                 <option value="pending-payment">Pending Payment</option>
                 <option value="all">All Statuses</option>
               </select>
+              <select
+                aria-label="Filter by state"
+                value={stateFilter}
+                onChange={(event) => setStateFilter(event.target.value)}
+                className="h-10 rounded-lg border px-3 text-xs font-semibold"
+              >
+                <option value="">All States</option>
+                {stateOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter by lead activity"
+                value={leadActivityFilter}
+                onChange={(event) =>
+                  setLeadActivityFilter(
+                    event.target.value as LeadActivityFilter,
+                  )
+                }
+                className="h-10 rounded-lg border px-3 text-xs font-semibold"
+              >
+                <option value="all">Any Lead Activity</option>
+                <option value="has_leads">Has Any Leads</option>
+                <option value="no_leads">No Leads</option>
+                <option value="active_leads">Active Open Leads</option>
+              </select>
+              <select
+                aria-label="Filter by package"
+                value={packageFilter}
+                onChange={(event) =>
+                  setPackageFilter(event.target.value as PackageFilter)
+                }
+                className="h-10 rounded-lg border px-3 text-xs font-semibold"
+              >
+                <option value="all">Any Package</option>
+                <option value="active">Active Package</option>
+                <option value="pending">Pending Package</option>
+                <option value="none">No Package</option>
+              </select>
               <div className="flex h-10 items-center rounded-lg border px-2">
                 <input
                   aria-label="From date"
@@ -829,10 +999,20 @@ export function PortalAdmin() {
                 <RefreshCw size={14} /> Refresh
               </button>
             </div>
-            <p className="mt-2 text-right text-xs font-semibold text-slate-500">
-              {visible.length} companies • {outcomeRows.length} appointments in
-              selected range
-            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                >
+                  Clear filters ({activeFilterCount})
+                </button>
+              )}
+              <p className="text-xs font-semibold text-slate-500">
+                {visible.length} companies • {outcomeRows.length} appointments
+                in selected range
+              </p>
+            </div>
           </section>
           <section
             id="company-list"
@@ -867,6 +1047,28 @@ export function PortalAdmin() {
                   </tr>
                 </thead>
                 <tbody>
+                  {visible.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={13}
+                        className="p-8 text-center text-sm text-slate-500"
+                      >
+                        No companies match the current filters.
+                        {activeFilterCount > 0 && (
+                          <>
+                            {" "}
+                            <button
+                              onClick={clearFilters}
+                              className="font-bold text-blue-600 underline"
+                            >
+                              Clear filters
+                            </button>
+                            {" to see all companies."}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                   {visible.map((company) => {
                     const companyLocations = locations.filter(
                       (item) => item.company_id === company.company_id,
@@ -921,6 +1123,7 @@ export function PortalAdmin() {
                             mode: "company",
                           })
                         }
+                        onCompanyUpdated={() => void load()}
                         onEditSlug={() => openSlugEditor(company)}
                         onDuplicate={(item) => void duplicateLocation(item)}
                         onSetActive={(item, active) =>
@@ -1048,6 +1251,7 @@ type CompanyRowProps = {
   onCreatePackage: () => void;
   onEditLocation: (locationId: string) => void;
   onEditCompany: () => void;
+  onCompanyUpdated: () => void | Promise<void>;
   onEditSlug: () => void;
   onDuplicate: (item: CompanyLocation) => void;
   onSetActive: (item: CompanyLocation, active: boolean) => void;
@@ -1100,6 +1304,7 @@ function CompanyRow(props: CompanyRowProps) {
     onCreatePackage,
     onEditLocation,
     onEditCompany,
+    onCompanyUpdated,
     onEditSlug,
     onDuplicate,
     onSetActive,
@@ -1114,6 +1319,73 @@ function CompanyRow(props: CompanyRowProps) {
     ? `${location.origin}${company.company_link}`
     : "";
   const activeLocations = locations.filter((item) => item.active !== false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [draft, setDraft] = useState<CompanyOverviewDraft>(() => ({
+    name: String(company.company_name || ""),
+    state: String(company.state || ""),
+    account_status: String(company.account_status || "Active"),
+    contact_name: String(company.contact_name || ""),
+    phone: String(company.phone || ""),
+    email: String(company.email || ""),
+    website: String(company.website || ""),
+    requirements_note: String(company.requirements_note || ""),
+    notes: String(company.notes || ""),
+  }));
+
+  function resetDraft() {
+    setDraft({
+      name: String(company.company_name || ""),
+      state: String(company.state || ""),
+      account_status: String(company.account_status || "Active"),
+      contact_name: String(company.contact_name || ""),
+      phone: String(company.phone || ""),
+      email: String(company.email || ""),
+      website: String(company.website || ""),
+      requirements_note: String(company.requirements_note || ""),
+      notes: String(company.notes || ""),
+    });
+    setSaveError("");
+  }
+
+  async function handleSaveOverview() {
+    const trimmedName = draft.name.trim();
+    if (!trimmedName) {
+      setSaveError("Company name is required.");
+      return;
+    }
+    if (
+      draft.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
+    ) {
+      setSaveError("Please enter a valid email or leave it blank.");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    const { error: updateError } = await supabase
+      .from("roster_companies")
+      .update({
+        name: trimmedName,
+        state: draft.state.trim() || null,
+        account_status: draft.account_status || "Active",
+        contact_name: draft.contact_name.trim() || null,
+        phone: draft.phone.trim() || null,
+        email: draft.email.trim() || null,
+        website: draft.website.trim() || null,
+        requirements_note: draft.requirements_note.trim() || null,
+        notes: draft.notes.trim() || null,
+      })
+      .eq("id", company.company_id);
+    setSaving(false);
+    if (updateError) {
+      setSaveError(updateError.message || "Failed to save company details.");
+      return;
+    }
+    setEditing(false);
+    await onCompanyUpdated();
+  }
   return (
     <>
       <tr
@@ -1237,21 +1509,191 @@ function CompanyRow(props: CompanyRowProps) {
                 appointmentDate={appointmentDate}
                 onEditLocation={onEditLocation}
               />
-              <section className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[1fr_auto]">
-                <div>
-                  <h3 className="font-bold">Overview</h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {company.contact_name || "No contact"} •{" "}
-                    {company.phone || "No phone"} •{" "}
-                    {company.email || "No email"}
-                  </p>
+              <section className="rounded-xl border bg-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold">Overview</h3>
+                    {!editing && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {company.contact_name || "No contact"} •{" "}
+                        {company.phone || "No phone"} •{" "}
+                        {company.email || "No email"}
+                      </p>
+                    )}
+                  </div>
+                  {editing ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          resetDraft();
+                          setEditing(false);
+                        }}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-50"
+                      >
+                        <X size={13} /> Cancel
+                      </button>
+                      <button
+                        onClick={() => void handleSaveOverview()}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                      >
+                        {saving ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Save size={13} />
+                        )}
+                        {saving ? "Saving…" : "Save Changes"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          resetDraft();
+                          setEditing(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold"
+                      >
+                        <Pencil size={13} /> Edit Company
+                      </button>
+                      <button
+                        onClick={onEditCompany}
+                        className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold text-slate-500"
+                        title="Open full company manager (locations, packages, reps)"
+                      >
+                        Advanced…
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={onEditCompany}
-                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold"
-                >
-                  <Pencil size={13} /> Edit Company
-                </button>
+                {editing && (
+                  <div className="mt-4 space-y-3">
+                    {saveError && (
+                      <div
+                        role="alert"
+                        className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-semibold text-red-700"
+                      >
+                        {saveError}
+                      </div>
+                    )}
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Company name
+                        <input
+                          value={draft.name}
+                          onChange={(event) =>
+                            setDraft({ ...draft, name: event.target.value })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="Company name"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        State
+                        <input
+                          value={draft.state}
+                          onChange={(event) =>
+                            setDraft({ ...draft, state: event.target.value })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="e.g. Texas"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Account status
+                        <select
+                          value={draft.account_status}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              account_status: event.target.value,
+                            })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs font-semibold"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Paused">Paused</option>
+                          <option value="Incomplete">Incomplete</option>
+                          <option value="Inactive">Inactive</option>
+                        </select>
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Primary contact
+                        <input
+                          value={draft.contact_name}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              contact_name: event.target.value,
+                            })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="Contact name"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Phone
+                        <input
+                          value={draft.phone}
+                          onChange={(event) =>
+                            setDraft({ ...draft, phone: event.target.value })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="(555) 555-5555"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Email
+                        <input
+                          value={draft.email}
+                          onChange={(event) =>
+                            setDraft({ ...draft, email: event.target.value })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="team@company.com"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
+                        Website
+                        <input
+                          value={draft.website}
+                          onChange={(event) =>
+                            setDraft({ ...draft, website: event.target.value })
+                          }
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="https://"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
+                        Qualification notes
+                        <textarea
+                          value={draft.requirements_note}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              requirements_note: event.target.value,
+                            })
+                          }
+                          className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
+                          placeholder="Lead qualification requirements shared with the sales team…"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
+                        Internal notes
+                        <textarea
+                          value={draft.notes}
+                          onChange={(event) =>
+                            setDraft({ ...draft, notes: event.target.value })
+                          }
+                          className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
+                          placeholder="Notes visible only to admins…"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
               </section>
               <LocationSection
                 company={company}

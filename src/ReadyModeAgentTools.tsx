@@ -1,4 +1,5 @@
-import { Clipboard } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Clipboard, Eye, EyeOff } from "lucide-react";
 import { copyText } from "./portalUtils";
 
 type Obj = Record<string, unknown>;
@@ -8,23 +9,70 @@ interface ReadyModeAgentToolsProps {
   companies: Obj[];
 }
 
+const STORAGE_KEY = "readyops.safe-embed.collapsed";
+
+function readInitialCollapsed(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "true") return true;
+    if (stored === "false") return false;
+  } catch {
+    // ignore storage errors (private mode, quota, etc.)
+  }
+  return true;
+}
+
 /** ReadyMode-safe HTML embed with no JavaScript. */
 export function ReadyModeAgentTools(props: ReadyModeAgentToolsProps) {
   void props;
+  const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed);
   const appOrigin = window.location.origin.replace(/\/+$/, "");
   const output = buildSafeEmbed(appOrigin);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }, [collapsed]);
+
+  const panelId = "readymode-safe-embed-panel";
+
   return (
     <section className="rounded-2xl border bg-white">
-      <div className="border-b p-4">
-        <h2 className="font-bold">ReadyMode Safe Embed</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Recommended for ReadyMode. This version contains HTML only — no
-          JavaScript or script tags.
-        </p>
+      <div className="flex items-center justify-between gap-3 border-b p-4">
+        <div>
+          <h2 className="font-bold">ReadyMode Safe Embed</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Recommended for ReadyMode. This version contains HTML only — no
+            JavaScript or script tags.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-expanded={!collapsed}
+          aria-controls={panelId}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          {collapsed ? <Eye size={13} /> : <EyeOff size={13} />}
+          {collapsed ? "Show" : "Hide"}
+          {collapsed ? (
+            <ChevronDown size={13} className="opacity-60" />
+          ) : (
+            <ChevronUp size={13} className="opacity-60" />
+          )}
+        </button>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div
+        id={panelId}
+        hidden={collapsed}
+        aria-hidden={collapsed}
+        className="space-y-4 p-4"
+      >
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
           Each ReadyMode campaign keeps one Campaign Variable named{" "}
           <strong>ReadyOpsSlug</strong>. Example: Battle-Axe Roofing - Colorado
