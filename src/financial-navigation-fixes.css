@@ -288,6 +288,17 @@ html[data-theme='dark'] .readyops-qc-page .readyops-ref-metric {
   border-top-color: #4f8ee8;
   background: rgba(17, 39, 64, .92);
 }
+html[data-theme='dark'] .readyops-qc-page .readyops-qc-day-card:not(.is-active) {
+  background: #10243c !important;
+  border-color: #35506f !important;
+  color: #f8fafc !important;
+}
+html[data-theme='dark'] .readyops-qc-page .readyops-qc-day-card:not(.is-active) p,
+html[data-theme='dark'] .readyops-qc-page .readyops-qc-day-card:not(.is-active) strong,
+html[data-theme='dark'] .readyops-qc-page .readyops-qc-day-card:not(.is-active) > span:not(:last-child) {
+  color: #f8fafc !important;
+}
+
 
 .readyops-ref-main input,
 .readyops-ref-main select,
