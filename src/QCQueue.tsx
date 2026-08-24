@@ -142,6 +142,7 @@ export function QCQueue() {
       "approved",
       "needs_correction",
       "denied",
+      "needs_review",
     ].includes(initialParams.get("status") || "")
       ? initialParams.get("status")!
       : "all",
@@ -242,6 +243,29 @@ export function QCQueue() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    // When the Overview dashboard sends the operator here with `?status=needs_review`,
+    // jump to the week that actually contains an actionable lead. The queue's default
+    // is the current week, which is often empty even when the all-time card shows a
+    // count. `get_qc_needs_review_focus` returns the soonest future appointment (or
+    // the most recent past one) that matches the umbrella predicate the dashboard uses.
+    if (initialParams.get("status") !== "needs_review") return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("get_qc_needs_review_focus");
+      if (cancelled || error) return;
+      const focus = (data as { focus_date?: string | null } | null)?.focus_date;
+      if (!focus) return;
+      const [y, m, d] = focus.split("-").map(Number);
+      if (!y || !m || !d) return;
+      setWeek(weekStart(new Date(y, m - 1, d)));
+      setSelectedDate(focus);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const channel = supabase
       .channel("readyops-qc-calendar-live")
@@ -880,6 +904,7 @@ export function QCQueue() {
             emptyValue="all"
             label="All QC Statuses"
             options={[
+              ["needs_review", "Needs Review (all pending)"],
               ["pending", "Pending QC"],
               ["in_review", "In Review"],
               ["manager_approved", "Awaiting Final QC"],

@@ -14,6 +14,7 @@ import { AdminInvoices } from './AdminInvoices';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminSchedulingManager } from './AdminSchedulingManager';
 import { defaultReportDateRange, isLeadOutcome } from './leadOutcome';
+import { isPendingPackage as pkgIsPending } from './companyMetrics';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
@@ -181,7 +182,7 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
     approved: ops.reduce((sum, c) => sum + Number(c.approved_leads || 0), 0),
     appointments: ops.reduce((sum, c) => sum + Number(c.scheduled_upcoming || 0), 0),
     packages: ops.filter(c => c.active_package).length,
-    payments: ops.filter(c => c.package?.payment_status === 'pending').length,
+    payments: ops.filter(c => pkgIsPending(c)).length,
   }), [ops, store.companies]);
 
   const agentRows = useMemo(() => {
@@ -372,14 +373,14 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
 
             <section className="readyops-ref-metrics">
               <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note={companyPortalsOnline ? `${companyPortalsOnline} using portal now` : 'No portal activity now'} icon={Building2} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active'; }}/>
-              <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'Needs review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=pending'; }}/>
+              <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'All leads awaiting review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=needs_review'; }}/>
               <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Last 30 days' : 'None in last 30 days'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => openReport('denied')}/>
-              <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Open approved leads" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=approved'; }}/>
+              <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Delivered leads, all time" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="GOOD" value={outcomes.good} note="Last 30 days" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
               <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Last 30 days" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
               <MetricCard label="BAD" value={outcomes.bad} note="Last 30 days" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
               <MetricCard label="NO SHOWS" value={outcomes.noShow} note="Last 30 days" icon={UserX} tone="orange" loading={loadingOps} onClick={() => openReport('no_show')}/>
-              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="Today & Tomorrow" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
+              <MetricCard label="UPCOMING APPOINTMENTS" value={metrics.appointments} note="All upcoming" icon={CalendarDays} tone="purple" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="ACTIVE PACKAGES" value={metrics.packages} note={metrics.packages ? 'Packages running' : 'No active packages'} icon={Package} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active-package'; }}/>
               <MetricCard label="PENDING PAYMENTS" value={metrics.payments} note={metrics.payments ? 'Follow up required' : 'All caught up'} icon={CircleDollarSign} tone="red" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=pending-payment'; }}/>
             </section>
