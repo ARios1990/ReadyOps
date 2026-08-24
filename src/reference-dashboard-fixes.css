@@ -187,3 +187,58 @@
     margin-left: 0;
   }
 }
+
+/* Shared horizontal scroll frame: adds a synchronized top scrollbar
+   so tables wider than their card are usable without scrolling past
+   any expanded/detail content to reach the native scrollbar. */
+.readyops-hscroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.readyops-hscroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  scrollbar-width: thin;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(226, 232, 240, 0.9));
+  transition: opacity 120ms ease, height 120ms ease;
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.readyops-hscroll-top[data-overflow="false"] {
+  height: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.readyops-hscroll-top:focus-visible {
+  outline: 2px solid rgb(37, 99, 235);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.readyops-hscroll-top-track {
+  height: 1px;
+  min-width: 1px;
+}
+
+.readyops-hscroll-body {
+  overflow-x: auto;
+  overflow-y: visible;
+  min-width: 0;
+}
+
+.readyops-hscroll-body:focus-visible {
+  outline: 2px solid rgb(37, 99, 235);
+  outline-offset: -2px;
+}
+

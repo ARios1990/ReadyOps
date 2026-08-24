@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase";
 import { defaultReportDateRange, isLeadOutcome } from "./leadOutcome";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 
 // Report joins intentionally accept flexible Supabase row shapes across legacy
 // and current database responses.
@@ -546,7 +547,7 @@ function Table({
   rows: (string | number)[][];
 }) {
   return (
-    <div className="overflow-x-auto">
+    <HorizontalScrollFrame ariaLabel="Report table horizontal scroll">
       <table className="w-full min-w-[760px] text-sm">
         <thead className="readyops-data-table-head sticky top-0 z-30">
           <tr className="text-left">
@@ -580,6 +581,6 @@ function Table({
           )}
         </tbody>
       </table>
-    </div>
+    </HorizontalScrollFrame>
   );
 }

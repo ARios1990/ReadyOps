@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
 import {
   buildExternalFormUrl,
@@ -1173,7 +1174,7 @@ function CompanyGroup({
         )}
       </header>
       {open && (
-        <div className="overflow-x-auto border-t">
+        <HorizontalScrollFrame className="border-t" ariaLabel="QC queue horizontal scroll">
           <table className="w-full min-w-[1120px] text-xs">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
@@ -1268,7 +1269,7 @@ function CompanyGroup({
               })}
             </tbody>
           </table>
-        </div>
+        </HorizontalScrollFrame>
       )}
     </section>
   );

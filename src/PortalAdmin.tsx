@@ -35,6 +35,7 @@ import { AdminSchedulingManager } from "./AdminSchedulingManager";
 import { useScheduleStore } from "./useScheduleStore";
 import { TIME_SLOTS, formatTimeAmPm, type CompanyLocation } from "./types";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 
 // Admin RPC payloads are intentionally flexible because several legacy and
 // current database response shapes are rendered on this operations screen.
@@ -136,6 +137,9 @@ export function PortalAdmin() {
   const [agentFilter, setAgentFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>(currentWeekRange);
   const [outcomeRows, setOutcomeRows] = useState<Obj[]>([]);
+  const [totalLeadsByCompany, setTotalLeadsByCompany] = useState<
+    Record<string, number>
+  >({});
   const [pkg, setPkg] = useState<PackageDraft>(EMPTY_PACKAGE);
   const [packageAllLocations, setPackageAllLocations] = useState(true);
   const [packageLocationIds, setPackageLocationIds] = useState<string[]>([]);
@@ -238,6 +242,26 @@ export function PortalAdmin() {
           qc_status: qcByLead.get(String(item.lead_id)) || "",
         })),
       );
+      const { data: allTimeRows, error: allTimeError } = await supabase
+        .from("portal_appointments")
+        .select("company_id,lead_id");
+      if (allTimeError) setError(rpcError(allTimeError));
+      else {
+        const uniqueLeadsByCompany = new Map<string, Set<string>>();
+        (allTimeRows || []).forEach((row) => {
+          const companyId = String(row.company_id || "");
+          const leadId = String(row.lead_id || "");
+          if (!companyId || !leadId) return;
+          const set = uniqueLeadsByCompany.get(companyId) || new Set<string>();
+          set.add(leadId);
+          uniqueLeadsByCompany.set(companyId, set);
+        });
+        const counts: Record<string, number> = {};
+        uniqueLeadsByCompany.forEach((set, companyId) => {
+          counts[companyId] = set.size;
+        });
+        setTotalLeadsByCompany(counts);
+      }
     }
     setLoading(false);
   }
@@ -823,9 +847,9 @@ export function PortalAdmin() {
                 </p>
               </div>
             </div>
-            <div className="readyops-operations-table-scroll">
+            <HorizontalScrollFrame ariaLabel="Companies summary horizontal scroll">
               <table className="w-full min-w-[1780px] text-sm">
-                <thead className="readyops-data-table-head sticky top-0 z-30">
+                <thead className="readyops-data-table-head sticky top-3 z-30">
                   <tr className="text-left">
                     <th className="p-3">Company</th>
                     <th>Total Leads</th>
@@ -858,6 +882,9 @@ export function PortalAdmin() {
                         company={company}
                         outcome={
                           outcomesByCompany[company.company_id] || EMPTY_OUTCOME
+                        }
+                        totalLeads={
+                          totalLeadsByCompany[company.company_id] ?? 0
                         }
                         locations={companyLocations}
                         expanded={expanded === company.company_id}
@@ -906,7 +933,7 @@ export function PortalAdmin() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </HorizontalScrollFrame>
           </section>
         </div>
         <ReadyModeAgentTools agents={agents} companies={companies} />
@@ -1002,6 +1029,7 @@ export function PortalAdmin() {
 type CompanyRowProps = {
   company: Obj;
   outcome: CompanyOutcome;
+  totalLeads: number;
   locations: CompanyLocation[];
   expanded: boolean;
   onToggle: () => void;
@@ -1053,6 +1081,7 @@ function CompanyRow(props: CompanyRowProps) {
   const {
     company,
     outcome,
+    totalLeads,
     locations,
     expanded,
     onToggle,
@@ -1102,7 +1131,7 @@ function CompanyRow(props: CompanyRowProps) {
             </div>
           </div>
         </td>
-        <td className="text-center font-bold">{outcome.total}</td>
+        <td className="text-center font-bold">{totalLeads}</td>
         <td className="text-center">
           <CountPill value={outcome.qcPending} tone="amber" />
         </td>
@@ -1400,7 +1429,7 @@ function CompanyAvailabilityGrid({
           <CalendarDays size={13} /> Edit Schedule
         </button>
       </div>
-      <div className="overflow-x-auto">
+      <HorizontalScrollFrame ariaLabel="Appointment availability horizontal scroll">
         <table className="w-full min-w-[1160px] text-xs">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
@@ -1452,7 +1481,7 @@ function CompanyAvailabilityGrid({
             )}
           </tbody>
         </table>
-      </div>
+      </HorizontalScrollFrame>
     </section>
   );
 }
@@ -1542,7 +1571,7 @@ function LocationSection({
           No detailed locations. Legacy company-wide scheduling remains active.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <HorizontalScrollFrame ariaLabel="Locations table horizontal scroll">
           <table className="w-full min-w-[900px] text-xs">
             <thead>
               <tr className="text-left text-slate-400">
@@ -1654,7 +1683,7 @@ function LocationSection({
               })}
             </tbody>
           </table>
-        </div>
+        </HorizontalScrollFrame>
       )}
     </section>
   );

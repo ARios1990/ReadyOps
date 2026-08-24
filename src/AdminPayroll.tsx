@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Lock, Plus, RefreshCw, WalletCards } from "lucide-react";
 import { supabase } from "./supabase";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 
 // Payroll RPC rows include configurable fields that vary by deployed migration.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -273,7 +274,7 @@ export function AdminPayroll() {
             No payroll period yet. Pick a date and click Generate Week.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <HorizontalScrollFrame ariaLabel="Payroll table horizontal scroll">
             <table className="w-full min-w-[1250px] text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] uppercase opacity-60">
@@ -326,7 +327,7 @@ export function AdminPayroll() {
                 })}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollFrame>
         )}
       </section>
     </div>

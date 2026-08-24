@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, RefreshCw, WalletCards } from "lucide-react";
 import { supabase } from "./supabase";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 
 // Supabase returns a mix of legacy and current finance columns on this internal screen.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,7 +175,7 @@ export function AdminInvoices() {
         {loading ? (
           <div className="p-10 text-center opacity-60">Loading invoices…</div>
         ) : (
-          <div className="overflow-x-auto">
+          <HorizontalScrollFrame ariaLabel="Invoices table horizontal scroll">
             <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] uppercase opacity-60">
@@ -246,7 +247,7 @@ export function AdminInvoices() {
                 )}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollFrame>
         )}
       </section>
       {showCreate && (
