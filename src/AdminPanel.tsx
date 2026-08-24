@@ -64,6 +64,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [cuName, setCuName] = useState('');
   const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc' | 'manager'>('agent');
   const [cuAgent, setCuAgent] = useState('');
+  const [cuTeam, setCuTeam] = useState('');
   const [cuLoading, setCuLoading] = useState(false);
   const [cuMsg, setCuMsg] = useState('');
 
@@ -196,6 +197,8 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
           display_name: cuName,
           role: cuRole,
           agent_id: cuAgent || null,
+          team_id: cuTeam || null,
+          create_agent: (cuRole === 'agent' || cuRole === 'manager') && !cuAgent,
         }),
       }
     );
@@ -205,7 +208,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
       setCuMsg(data.error || 'Failed to create user');
     } else {
       setCuMsg('User created successfully!');
-      setCuEmail(''); setCuPassword(''); setCuName(''); setCuRole('agent'); setCuAgent('');
+      setCuEmail(''); setCuPassword(''); setCuName(''); setCuRole('agent'); setCuAgent(''); setCuTeam('');
       await fetchProfiles();
     }
     setCuLoading(false);
@@ -703,8 +706,20 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                   </select>
                 </div>
               </div>
+              {(cuRole === 'agent' || cuRole === 'manager') && !cuAgent && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Team</label>
+                  <select value={cuTeam} onChange={e => setCuTeam(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select team...</option>
+                    {store.teams.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.abbreviation})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {cuMsg && <p className={`text-xs ${cuMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{cuMsg}</p>}
-              <button type="submit" disabled={cuLoading || !cuEmail || !cuPassword || !cuName}
+              <button type="submit" disabled={cuLoading || !cuEmail || !cuPassword || !cuName || (((cuRole === 'agent' || cuRole === 'manager') && !cuAgent) && !cuTeam)}
                 className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
                 <UserPlus size={14} /> {cuLoading ? 'Creating...' : 'Create User'}
               </button>
