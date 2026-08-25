@@ -36,6 +36,7 @@ import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
+import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import {
   buildExternalFormUrl,
   formatDateLong,
