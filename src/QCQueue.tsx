@@ -466,13 +466,24 @@ export function QCQueue() {
       "call_recording",
       "share_recording_with_company",
     ].forEach((key) => delete patch.form_data[key]);
-    const { error: updateError } = await supabase.rpc("qc_update_lead", {
+        const { data: updatedLead, error: updateError } = await supabase.rpc("qc_update_lead", {
       p_lead_id: selected.lead.id,
       p_patch: patch,
     });
     if (updateError) setError(rpcError(updateError));
     else {
-      setMessage("QC edits saved.");
+            const persistedLead = (updatedLead || {}) as Obj;
+      setSelected((current) =>
+        current
+          ? { ...current, lead: { ...current.lead, ...persistedLead } }
+          : current,
+      );
+      setValues((current) => ({
+        ...current,
+        ...(persistedLead.form_data || {}),
+        ...persistedLead,
+      }));
+      setMessage("QC edits saved successfully.");
       await load(true);
     }
     setBusy(false);
