@@ -1341,6 +1341,7 @@ function ReviewDialog(props: DialogProps) {
   const awaitingSend =
     status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
+  if (props.isManager && managerSubmitted)
   
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-6">
