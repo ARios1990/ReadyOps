@@ -1499,7 +1499,14 @@ function ReviewDialog(props: DialogProps) {
               onChange={(value) => props.change("recording_url", value)}
               onShareChange={(value) =>
                 props.change("share_recording_with_company", value)
-              }
+                                      />
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <ClientLeadTemplate
+                lead={{ ...props.row.lead, ...props.values }}
+                appointment={props.row.appointment}
+              />
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             />
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <h3 className="font-bold text-amber-950">Company Requirements</h3>
