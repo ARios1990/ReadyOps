@@ -1510,7 +1510,7 @@ function ReviewDialog(props: DialogProps) {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             />
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <h3 className="font-bold text-amber-950">Company Requirements</h3>
+              
               <p className="mt-2 whitespace-pre-line text-sm text-amber-900">
                 {props.row.portal?.requirements_short ||
                   props.row.company.requirements_note ||
