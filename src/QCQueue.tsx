@@ -1341,7 +1341,7 @@ function ReviewDialog(props: DialogProps) {
   const awaitingSend =
     status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
-  if (props.isManager && completed)
+  if (props.isManager && managerSubmitted)props.busy || managerSubmitted
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-6">
         <section className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl">
@@ -1420,7 +1420,7 @@ function ReviewDialog(props: DialogProps) {
               ))}
             </div>
             <button
-              disabled={props.busy || completed}
+              disabled={props.busy || managerSubmitted}
               onClick={() => void props.save()}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
             >
