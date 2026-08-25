@@ -1542,7 +1542,7 @@ function ReviewDialog(props: DialogProps) {
                 />
               </div>
               <button
-                disabled={props.busy || completed}
+                disabled={if (props.isManager && managerSubmitted)}
                 onClick={props.move}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs font-bold text-blue-700 disabled:opacity-40"
               >
