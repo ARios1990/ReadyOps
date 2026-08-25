@@ -1395,7 +1395,7 @@ function ReviewDialog(props: DialogProps) {
             <X size={18} />
           </button>
         </header>
-        <div className="grid gap-5 p-5 lg:grid-cols-[1fr_340px]">
+        <div className="p-5">
           <div>
             <div className="grid gap-3 sm:grid-cols-2">
               {QC_FIELDS.map(([key, label]) => (
@@ -1440,8 +1440,30 @@ function ReviewDialog(props: DialogProps) {
               <Save size={15} /> Save QC Edits
             </button>
           </div>
-          <aside className="space-y-4">
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+                  Lead Review Preview
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Review the finished lead, recording, routing, and QC decision before delivery.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700">
+                <Clock3 size={15} />
+                <StatusPill status={status} />
+              </div>
+            </div>
+            <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+                <ClientLeadTemplate
+                  lead={{ ...props.row.lead, ...props.values }}
+                  appointment={props.row.appointment}
+                />
+              </div>
+              <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2">
+            <div className="order-4 min-w-0 rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
               <div className="flex items-center gap-2 text-blue-950">
                 <UserRound size={17} />
                 <h3 className="font-bold">Agent Assignment</h3>
@@ -1492,30 +1514,26 @@ function ReviewDialog(props: DialogProps) {
                 </>
               )}
             </div>
-            <QCRecordingUpload
-              leadId={props.row.lead.id}
-              value={String(props.values.recording_url || "")}
-              shared={Boolean(props.values.share_recording_with_company)}
-              onChange={(value) => props.change("recording_url", value)}
-              onShareChange={(value) =>
-                props.change("share_recording_with_company", value)
-              }
-            />
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <ClientLeadTemplate
-                lead={{ ...props.row.lead, ...props.values }}
-                appointment={props.row.appointment}
+            <div className="order-1 min-w-0 md:col-span-2">
+              <QCRecordingUpload
+                leadId={props.row.lead.id}
+                value={String(props.values.recording_url || "")}
+                shared={Boolean(props.values.share_recording_with_company)}
+                onChange={(value) => props.change("recording_url", value)}
+                onShareChange={(value) =>
+                  props.change("share_recording_with_company", value)
+                }
               />
             </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              
+            <div className="order-2 min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
+              <h3 className="font-bold text-amber-950">Requirements</h3>
               <p className="mt-2 whitespace-pre-line text-sm text-amber-900">
                 {props.row.portal?.requirements_short ||
                   props.row.company.requirements_note ||
                   "No quick requirements entered."}
               </p>
             </div>
-            <div className="rounded-xl border p-4">
+            <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <h3 className="font-bold">Transfer / Reschedule</h3>
               <select
                 value={props.targetCompany}
@@ -1569,7 +1587,7 @@ function ReviewDialog(props: DialogProps) {
               </button>
             </div>
             {awaitingSend && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
                 <div className="flex items-center gap-2 text-emerald-950">
                   <CheckCircle2 size={17} />
                   <h3 className="font-black">QC Approved — Awaiting Send</h3>
@@ -1593,7 +1611,7 @@ function ReviewDialog(props: DialogProps) {
                 )}
               </div>
             )}
-            <div className="rounded-xl border p-4">
+            <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <label className="text-xs font-bold text-slate-600">
                 Decision Reason
                 <select
@@ -1665,19 +1683,19 @@ function ReviewDialog(props: DialogProps) {
               props.row.portal?.external_form_url && (
                 <button
                   onClick={() => props.openExternal(props.row)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"
+                  className="order-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white md:col-span-2"
                 >
                   <ExternalLink size={15} /> Open Prefilled Client Form
                 </button>
               )}
-            <div className="rounded-xl bg-slate-900 p-4 text-xs text-slate-200">
+            <div className="order-8 rounded-xl bg-slate-900 p-4 text-xs text-slate-200 md:col-span-2">
               <ShieldCheck size={15} className="mb-2" />
               <strong>Delivery rule:</strong> only approved, company-visible
               appointments count as sent leads. Pending, denied, corrected,
               draft, deleted, and unsent records are excluded.
             </div>
             {!props.isManager && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="order-9 rounded-xl border border-red-200 bg-red-50 p-4 md:col-span-2">
                 <h3 className="font-bold text-red-900">Duplicate Lead</h3>
                 <p className="mt-1 text-xs text-red-700">
                   Delete only when this lead was entered twice. Delivered or
@@ -1692,7 +1710,9 @@ function ReviewDialog(props: DialogProps) {
                 </button>
               </div>
             )}
-          </aside>
+              </aside>
+            </div>
+          </div>
         </div>
       </section>
     </div>
