@@ -1346,6 +1346,27 @@ function CompanyRow(props: CompanyRowProps) {
     notes: String(company.notes || ""),
   }));
 
+  useEffect(() => {
+    setDraft({
+      name: String(company.company_name || ""),
+      state: String(company.state || ""),
+      account_status: String(company.account_status || "Active"),
+      contact_name: String(company.contact_name || ""),
+      phone: String(company.phone || ""),
+      email: String(company.email || ""),
+      owner_email: String(company.owner_email || company.email || ""),
+      billing_email: String(company.billing_email || company.owner_email || company.email || ""),
+      secondary_emails: Array.isArray(company.secondary_emails)
+        ? company.secondary_emails.join(", ")
+        : String(company.secondary_emails || ""),
+      billing_address: String(company.billing_address || ""),
+      metro_tag: String(company.metro_tag || ""),
+      website: String(company.website || ""),
+      requirements_note: String(company.requirements_note || ""),
+      notes: String(company.notes || ""),
+    });
+  }, [company.company_id, company.email, company.owner_email, company.billing_email, company.billing_address, company.metro_tag, company.secondary_emails]);
+
   function resetDraft() {
     setDraft({
       name: String(company.company_name || ""),
