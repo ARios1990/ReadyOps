@@ -235,7 +235,7 @@ const COMPANY_LEAD_ACTIONS = [
   ["estimate_given", "Estimate Given"],
   ["claim_filed", "Claim Filed"],
   ["signed_contract", "Signed Contract"],
-  ["lost", "Lost"],
+  ["lost", "Bad"],
 ] as const;
 
 export function CompanyPortal({
