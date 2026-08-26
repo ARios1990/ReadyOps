@@ -145,7 +145,7 @@ function Row({
               value={editValue ?? value}
               placeholder={EMPTY}
               onChange={(event) => onChange?.(field!, event.target.value)}
-              className={controlClass + ' min-h-14 resize-y'}
+              className={controlClass + ' min-h-28 resize-y'}
             />
           ) : (
             <input
@@ -276,8 +276,12 @@ export function ClientLeadTemplate({
           </Section>
 
           <Section title="Additional Information" columns>
-            <Row label="Notes:" field="notes" multiline value={notes} editValue={editValue('notes', notes)} onChange={onChange} />
-            <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
+            <div className="col-span-full space-y-2">
+              <Row label="Notes:" field="notes" multiline value={notes} editValue={editValue('notes', notes)} onChange={onChange} />
+              <div className="border-t border-blue-100 pt-1">
+                <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
+              </div>
+            </div>
             <Row label="Size of Hail:" field="hail_size" value={formValue(lead, 'hail_size', 'size_of_hail')} editValue={editValue('hail_size', formValue(lead, 'hail_size', 'size_of_hail'))} onChange={onChange} />
             <Row label="Claim Filed:" field="claim_filed" value={formValue(lead, 'claim_filed', 'file_claim')} editValue={editValue('claim_filed', formValue(lead, 'claim_filed', 'file_claim'))} onChange={onChange} />
             <Row label="Visible Damage:" field="visible_damage" value={formValue(lead, 'visible_damage')} editValue={editValue('visible_damage', formValue(lead, 'visible_damage'))} onChange={onChange} />
