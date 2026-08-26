@@ -16,15 +16,19 @@ import {
   Circle,
   Clock3,
   Download,
+  ExternalLink,
   Headphones,
   Loader2,
   RefreshCw,
   RotateCcw,
+  Save,
   Search,
   Send,
   ShieldCheck,
   Shuffle,
+  Trash2,
   UploadCloud,
+  UserRound,
   X,
   XCircle,
 } from "lucide-react";
@@ -1319,6 +1323,8 @@ function ReviewDialog(props: DialogProps) {
   const status = props.row.qc_review?.status || props.row.lead.qc_status;
   const finalCompleted = ["approved", "denied"].includes(status);
   const managerSubmitted = status === "manager_approved";
+  const awaitingSend =
+    status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
   if (props.isManager && managerSubmitted)
   
@@ -1369,45 +1375,70 @@ function ReviewDialog(props: DialogProps) {
               appointment={props.row.appointment}
               showLabel={false}
               showStatusButtons
+              editValues={props.values}
+              onChange={props.change}
+              onSave={props.save}
+              saving={props.busy}
             />
           </div>
           <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2">
-<div className="order-1 min-w-0 rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-slate-950">
-                    <Headphones size={17} className="text-blue-600" />
-                    <h3 className="font-bold">Call Recording</h3>
-                  </div>
-                  <p className={String(props.values.recording_url || "") ? "mt-2 text-xs font-bold text-emerald-700" : "mt-2 text-xs font-bold text-slate-500"}>
-                    {String(props.values.recording_url || "") ? "Recording Ready" : "Recording Missing"}
-                  </p>
-                </div>
+<div className="order-4 min-w-0 rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
+              <div className="flex items-center gap-2 text-blue-950">
+                <UserRound size={17} />
+                <h3 className="font-bold">Agent Assignment</h3>
               </div>
-              {String(props.values.recording_url || "") && (
-                <audio
-                  controls
-                  preload="metadata"
-                  src={String(props.values.recording_url)}
-                  className="mt-3 h-10 w-full"
-                />
-              )}
-              <details className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60">
-                <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-blue-700">
-                  Upload / Manage Recording
-                </summary>
-                <div className="border-t border-blue-100 p-3">
-                  <QCRecordingUpload
-                    leadId={props.row.lead.id}
-                    value={String(props.values.recording_url || "")}
-                    shared={Boolean(props.values.share_recording_with_company)}
-                    onChange={(value) => props.change("recording_url", value)}
-                    onShareChange={(value) =>
-                      props.change("share_recording_with_company", value)
+              <p className="mt-2 text-xs text-blue-800">
+                Current:{" "}
+                {props.row.agent?.name ||
+                  props.row.lead.agent_name ||
+                  "Unassigned"}
+              </p>
+              {props.isManager ? (
+                <p className="mt-3 rounded-lg border border-blue-200 bg-white p-2 text-xs text-slate-600">
+                  Managers can view the assigned agent. Only Admin or Main QC can change it.
+                </p>
+              ) : (
+                <>
+                  <select
+                    value={props.selectedAgentId}
+                    onChange={(event) => props.setSelectedAgentId(event.target.value)}
+                    className="mt-3 w-full rounded-lg border bg-white p-2 text-sm"
+                  >
+                    <option value="">Select the correct agent</option>
+                    {props.refs.agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={
+                      props.busy ||
+                      !props.selectedAgentId ||
+                      props.selectedAgentId ===
+                        (props.row.agent?.id || props.row.lead.agent_id)
                     }
-                  />
-                </div>
-              </details>
+                    onClick={() => void props.reassignAgent()}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 p-2.5 text-xs font-bold text-white disabled:opacity-40"
+                  >
+                    <Save size={14} /> Update Agent Assignment
+                  </button>
+                  <p className="mt-2 text-[11px] text-blue-700">
+                    This updates the agent name, linked user, and team access together.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="order-1 min-w-0 md:col-span-2">
+              <QCRecordingUpload
+                leadId={props.row.lead.id}
+                value={String(props.values.recording_url || "")}
+                shared={Boolean(props.values.share_recording_with_company)}
+                onChange={(value) => props.change("recording_url", value)}
+                onShareChange={(value) =>
+                  props.change("share_recording_with_company", value)
+                }
+              />
             </div>
             <div className="order-2 min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
               <h3 className="font-bold text-amber-950">Company Requirements</h3>
@@ -1470,6 +1501,30 @@ function ReviewDialog(props: DialogProps) {
                 <Shuffle size={14} /> Move / Keep Pending
               </button>
             </div>
+            {awaitingSend && (
+              <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
+                <div className="flex items-center gap-2 text-emerald-950">
+                  <CheckCircle2 size={17} />
+                  <h3 className="font-black">QC Approved — Awaiting Send</h3>
+                </div>
+                <p className="mt-2 text-xs text-emerald-800">
+                  Approval is complete, but the company still cannot see this lead and it does not count as delivered.
+                </p>
+                {props.canSend ? (
+                  <button
+                    disabled={props.busy}
+                    onClick={() => void props.send()}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 p-3 text-sm font-black text-white disabled:opacity-40"
+                  >
+                    <Send size={15} /> Send Lead to Company
+                  </button>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-white p-2 text-xs font-bold text-slate-600">
+                    Waiting for an Admin to press Send Lead.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <label className="text-xs font-bold text-slate-600">
                 Decision Reason
@@ -1536,6 +1591,17 @@ function ReviewDialog(props: DialogProps) {
                 </div>
               )}
             </div>
+            {status === "approved" &&
+              Boolean(props.row.appointment?.company_visible_at) &&
+              props.row.portal?.form_mode !== "internal" &&
+              props.row.portal?.external_form_url && (
+                <button
+                  onClick={() => props.openExternal(props.row)}
+                  className="order-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white md:col-span-2"
+                >
+                  <ExternalLink size={15} /> Open Prefilled Client Form
+                </button>
+              )}
             <div className="order-8 rounded-xl bg-slate-900 p-4 text-xs text-slate-200 md:col-span-2">
               <ShieldCheck size={15} className="mb-2" />
               <strong>Delivery rule:</strong> Only approved, company-visible appointments count as sent leads.
@@ -1546,6 +1612,13 @@ function ReviewDialog(props: DialogProps) {
                 <p className="mt-1 text-xs text-red-700">
                   Delete only when this lead was entered twice. Delivered or invoiced leads are protected.
                 </p>
+                <button
+                  disabled={props.busy || status === "approved"}
+                  onClick={() => void props.deleteLead()}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 bg-white p-2.5 text-xs font-bold text-red-700 disabled:opacity-40"
+                >
+                  <Trash2 size={14} /> Delete Lead
+                </button>
               </div>
             )}
           </aside>
