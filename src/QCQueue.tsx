@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -1251,7 +1252,10 @@ export function QCQueue() {
           targetTime={targetTime}
           setTargetTime={setTargetTime}
           decisionReason={decisionReason}
-          setDecisionReason={setDecisionReason}
+          setDecisionReason={(value) => {
+            setDecisionReason(value);
+            setError("");
+          }}
           decisionNotes={decisionNotes}
           setDecisionNotes={setDecisionNotes}
           busy={busy}
@@ -1260,7 +1264,12 @@ export function QCQueue() {
           move={() => void moveSelectedLead()}
           overrideSchedule={() => void overrideSchedule()}
           scheduleOverrideReason={scheduleOverrideReason}
-          setScheduleOverrideReason={setScheduleOverrideReason}
+          setScheduleOverrideReason={(value) => {
+            setScheduleOverrideReason(value);
+            setError("");
+          }}
+          error={error}
+          message={message}
           review={review}
           reopen={reopen}
           openExternal={openExternal}
@@ -1496,6 +1505,8 @@ type DialogProps = {
   overrideSchedule: () => void;
   scheduleOverrideReason: string;
   setScheduleOverrideReason: (value: string) => void;
+  error: string;
+  message: string;
   review: (
     decision: "approved" | "denied" | "needs_correction",
   ) => Promise<void>;
@@ -1510,6 +1521,8 @@ type DialogProps = {
   deleteLead: () => Promise<void>;
 };
 function ReviewDialog(props: DialogProps) {
+  const scheduleReasonRef = useRef<HTMLInputElement>(null);
+  const decisionReasonRef = useRef<HTMLTextAreaElement>(null);
   const status = props.row.qc_review?.status || props.row.lead.qc_status;
   const finalCompleted = ["approved", "denied"].includes(status);
   const managerSubmitted = status === "manager_approved";
@@ -1524,6 +1537,24 @@ function ReviewDialog(props: DialogProps) {
     props.targetDate !== props.row.appointment.appointment_date ||
     props.targetTime !== originalTime;
   const adminTransfer = finalCompleted && props.canSend && companyChanged;
+  const scheduleReasonRequired = completed && props.canSend;
+  const scheduleReasonMissing =
+    scheduleReasonRequired && !props.scheduleOverrideReason.trim();
+  const reopenReasonMissing =
+    finalCompleted && props.canSend && !props.decisionReason.trim();
+
+  function runScheduleAction() {
+    if (scheduleReasonMissing) scheduleReasonRef.current?.focus();
+    if (adminTransfer) props.move();
+    else if (completed && props.canSend) props.overrideSchedule();
+    else props.move();
+  }
+
+  function runReopen() {
+    if (reopenReasonMissing) decisionReasonRef.current?.focus();
+    void props.reopen();
+  }
+
   if (props.isManager && managerSubmitted)
   
     return (
@@ -1566,6 +1597,23 @@ function ReviewDialog(props: DialogProps) {
             </button>
           </div>
         </header>
+        {(props.error || props.message) && (
+          <div
+            role={props.error ? "alert" : "status"}
+            className={`sticky top-[73px] z-10 mx-5 mt-3 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm ${
+              props.error
+                ? "border-red-200 bg-red-50 text-red-800"
+                : "border-blue-200 bg-blue-50 text-blue-800"
+            }`}
+          >
+            {props.error ? (
+              <AlertTriangle className="mt-0.5 shrink-0" size={17} />
+            ) : (
+              <CheckCircle2 className="mt-0.5 shrink-0" size={17} />
+            )}
+            <span>{props.error || props.message}</span>
+          </div>
+        )}
         <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
           <div className="min-w-0">
             <ClientLeadTemplate
@@ -1698,16 +1746,27 @@ function ReviewDialog(props: DialogProps) {
               {completed && props.canSend && (
                 <div className="mt-2">
                   <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    {adminTransfer ? "Reopen / transfer reason" : "Override reason"}
+                    {adminTransfer ? "Reopen / transfer reason" : "Override reason"} (required)
                   </label>
                   <input
+                    ref={scheduleReasonRef}
                     value={props.scheduleOverrideReason}
                     onChange={(event) =>
                       props.setScheduleOverrideReason(event.target.value)
                     }
                     placeholder="Required for the audit log"
-                    className="mt-1 w-full rounded-lg border p-2 text-sm"
+                    aria-invalid={scheduleReasonMissing}
+                    className={`mt-1 w-full rounded-lg border p-2 text-sm ${
+                      scheduleReasonMissing
+                        ? "border-amber-400 bg-amber-50 focus:border-amber-500 focus:ring-amber-500"
+                        : ""
+                    }`}
                   />
+                  {scheduleReasonMissing && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                      Enter a reason before using the action below.
+                    </p>
+                  )}
                   <p className="mt-1 text-[11px] text-slate-500">
                     {adminTransfer
                       ? "Moving a completed lead reopens it as Pending QC and removes company delivery access until it is approved and sent again."
@@ -1721,7 +1780,7 @@ function ReviewDialog(props: DialogProps) {
                   managerSubmitted ||
                   (completed && props.canSend && !companyChanged && !scheduleChanged)
                 }
-                onClick={adminTransfer ? props.move : completed && props.canSend ? props.overrideSchedule : props.move}
+                onClick={runScheduleAction}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs font-bold text-blue-700 disabled:opacity-40"
               >
                 {completed && props.canSend ? (
@@ -1766,7 +1825,7 @@ function ReviewDialog(props: DialogProps) {
             )}
             <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <label className="text-xs font-bold text-slate-600">
-                Decision Reason
+                Decision Reason{finalCompleted && props.canSend ? " (required to reopen)" : ""}
                 <select
                   value={props.decisionReason}
                   onChange={(event) =>
@@ -1783,13 +1842,24 @@ function ReviewDialog(props: DialogProps) {
                 </select>
               </label>
               <textarea
+                ref={decisionReasonRef}
                 value={props.decisionReason}
                 onChange={(event) =>
                   props.setDecisionReason(event.target.value)
                 }
                 placeholder="Reason details"
-                className="mt-2 min-h-16 w-full rounded-lg border p-2 text-sm"
+                aria-invalid={reopenReasonMissing}
+                className={`mt-2 min-h-16 w-full rounded-lg border p-2 text-sm ${
+                  reopenReasonMissing
+                    ? "border-amber-400 bg-amber-50 focus:border-amber-500 focus:ring-amber-500"
+                    : ""
+                }`}
               />
+              {reopenReasonMissing && (
+                <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                  Select or enter a reason before reopening this review.
+                </p>
+              )}
               <textarea
                 value={props.decisionNotes}
                 onChange={(event) => props.setDecisionNotes(event.target.value)}
@@ -1800,7 +1870,7 @@ function ReviewDialog(props: DialogProps) {
                 props.canSend ? (
                   <button
                     disabled={props.busy}
-                    onClick={() => void props.reopen()}
+                    onClick={runReopen}
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 p-2.5 text-xs font-bold text-white"
                   >
                     <RotateCcw size={14} /> Undo Approval / Reopen Pending QC
