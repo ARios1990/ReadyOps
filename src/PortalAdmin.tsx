@@ -1334,8 +1334,8 @@ function CompanyRow(props: CompanyRowProps) {
     contact_name: String(company.contact_name || ""),
     phone: String(company.phone || ""),
     email: String(company.email || ""),
-    owner_email: String(company.owner_email || ""),
-    billing_email: String(company.billing_email || ""),
+    owner_email: String(company.owner_email || company.email || ""),
+    billing_email: String(company.billing_email || company.owner_email || company.email || ""),
     secondary_emails: Array.isArray(company.secondary_emails)
       ? company.secondary_emails.join(", ")
       : String(company.secondary_emails || ""),
@@ -1354,8 +1354,8 @@ function CompanyRow(props: CompanyRowProps) {
       contact_name: String(company.contact_name || ""),
       phone: String(company.phone || ""),
       email: String(company.email || ""),
-      owner_email: String(company.owner_email || ""),
-      billing_email: String(company.billing_email || ""),
+      owner_email: String(company.owner_email || company.email || ""),
+      billing_email: String(company.billing_email || company.owner_email || company.email || ""),
       secondary_emails: Array.isArray(company.secondary_emails)
         ? company.secondary_emails.join(", ")
         : String(company.secondary_emails || ""),
