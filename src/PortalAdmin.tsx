@@ -196,6 +196,7 @@ export function PortalAdmin() {
     setError("");
     const [
       companyRes,
+      companyContactRes,
       agentRes,
       locationRes,
       assignmentRes,
@@ -205,6 +206,9 @@ export function PortalAdmin() {
       outcomeRes,
     ] = await Promise.all([
       supabase.rpc("get_company_operations_overview"),
+      supabase
+        .from("roster_companies")
+        .select("id,owner_email,billing_email,secondary_emails,billing_address,website,requirements_note,notes,metro_tag"),
       supabase
         .from("agents")
         .select("id,name,email,portal_slug,access_token,active")
@@ -235,6 +239,7 @@ export function PortalAdmin() {
     ]);
     const firstError =
       companyRes.error ||
+      companyContactRes.error ||
       agentRes.error ||
       locationRes.error ||
       assignmentRes.error ||
@@ -267,7 +272,15 @@ export function PortalAdmin() {
             ]),
           );
       }
-      setCompanies((companyRes.data || []) as Obj[]);
+      const contactByCompany = new Map(
+        (companyContactRes.data || []).map((item) => [String(item.id), item]),
+      );
+      setCompanies(
+        ((companyRes.data || []) as Obj[]).map((item) => ({
+          ...item,
+          ...(contactByCompany.get(String(item.company_id)) || {}),
+        })),
+      );
       setAgents((agentRes.data || []) as Obj[]);
       setLocations((locationRes.data || []) as CompanyLocation[]);
       setLocationAgents((assignmentRes.data || []) as Obj[]);
