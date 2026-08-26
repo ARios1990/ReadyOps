@@ -17,20 +17,24 @@ export function HorizontalScrollFrame({ children, className = "", ariaLabel }: P
     const top = topRef.current;
     if (!body || !top) return;
 
-    let syncingFromTop = false;
-    let syncingFromBody = false;
+    const syncScrollPosition = (source: HTMLDivElement, target: HTMLDivElement) => {
+      const sourceRange = Math.max(0, source.scrollWidth - source.clientWidth);
+      const targetRange = Math.max(0, target.scrollWidth - target.clientWidth);
+      const nextScrollLeft = sourceRange
+        ? (source.scrollLeft / sourceRange) * targetRange
+        : 0;
+
+      // Avoid producing a second scroll event when both frames are already aligned.
+      if (Math.abs(target.scrollLeft - nextScrollLeft) > 0.5) {
+        target.scrollLeft = nextScrollLeft;
+      }
+    };
 
     const onBodyScroll = () => {
-      if (syncingFromTop) return;
-      syncingFromBody = true;
-      top.scrollLeft = body.scrollLeft;
-      syncingFromBody = false;
+      syncScrollPosition(body, top);
     };
     const onTopScroll = () => {
-      if (syncingFromBody) return;
-      syncingFromTop = true;
-      body.scrollLeft = top.scrollLeft;
-      syncingFromTop = false;
+      syncScrollPosition(top, body);
     };
     const onTopKey = (event: KeyboardEvent) => {
       const step = event.shiftKey ? 200 : 60;
@@ -51,8 +55,13 @@ export function HorizontalScrollFrame({ children, className = "", ariaLabel }: P
 
     const update = () => {
       const overflows = body.scrollWidth > body.clientWidth + 1;
+      // The body may reserve width for its vertical scrollbar while the top
+      // frame does not. Compensating for that gutter gives both horizontal
+      // scrollbars the same range and prevents the right edge from snapping
+      // back or becoming unreachable.
+      const verticalScrollbarGutter = Math.max(0, top.clientWidth - body.clientWidth);
       setOverflow(overflows);
-      setContentWidth(body.scrollWidth);
+      setContentWidth(body.scrollWidth + verticalScrollbarGutter);
     };
 
     body.addEventListener("scroll", onBodyScroll, { passive: true });
