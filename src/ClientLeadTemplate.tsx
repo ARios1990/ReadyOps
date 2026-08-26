@@ -28,7 +28,9 @@ type AppointmentLike = {
 const EMPTY = '—';
 
 function isBlank(value: unknown): boolean {
-  return value === null || value === undefined || String(value).trim() === '';
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  return text === '' || /^\(profile\.[^)]+\)(?:\?source=readymode)?$/i.test(text);
 }
 
 function asText(value: unknown): string {
@@ -110,7 +112,7 @@ function Row({ label, value, href }: { label: string; value: string; href?: stri
   const displayValue = value || EMPTY;
 
   return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-1 text-sm leading-5">
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-0.5 text-sm leading-5">
       <strong className="shrink-0 font-bold text-slate-950">{label}</strong>
       {href && value ? (
         <a
@@ -128,11 +130,11 @@ function Row({ label, value, href }: { label: string; value: string; href?: stri
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
   return (
     <section>
       <h3 className="mb-2 text-sm font-black text-blue-600">{title}</h3>
-      <div>{children}</div>
+      <div className={columns ? 'grid gap-x-6 sm:grid-cols-2' : ''}>{children}</div>
     </section>
   );
 }
@@ -175,7 +177,7 @@ export function ClientLeadTemplate({
           {serviceTitle(serviceNeeded, lead)}
         </h2>
 
-        <div className="space-y-6 px-5 py-4">
+        <div className="space-y-5 px-5 py-4">
           <Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" value={leadValue(lead, 'full_name', 'full_name', 'name')} />
@@ -186,7 +188,7 @@ export function ClientLeadTemplate({
             <Row label="Services Needed:" value={serviceNeeded} />
           </Section>
 
-          <Section title="Property Details">
+          <Section title="Property Details" columns>
             <Row label="Roof Age:" value={formValue(lead, 'roof_age')} />
             <Row label="Home Type:" value={formValue(lead, 'home_type')} />
             <Row label="Roof Type:" value={formValue(lead, 'roof_type')} />
@@ -199,7 +201,7 @@ export function ClientLeadTemplate({
             <Row label="Web Link:" value={webLink} href={webLink || undefined} />
           </Section>
 
-          <Section title="Additional Information">
+          <Section title="Additional Information" columns>
             <Row label="Notes:" value={notes} />
             <Row label="Last Checked On:" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} />
             <Row label="Size of Hail:" value={formValue(lead, 'hail_size', 'size_of_hail')} />
