@@ -697,6 +697,15 @@ export function PortalAdmin() {
       </div>
     );
 
+  const showCompanySegment = (nextFilter: CompanyStatusFilter) => {
+    setFilter(nextFilter);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("company-list")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const pageActions = (
     <>
       <button
@@ -772,17 +781,27 @@ export function PortalAdmin() {
             icon={<Building2 />}
             label="Active / Incomplete Companies"
             value={totals.companies}
+            onClick={() => showCompanySegment("active")}
           />
-          <Metric icon={<ShieldCheck />} label="QC Pending" value={totals.qc} />
+          <Metric
+            icon={<ShieldCheck />}
+            label="QC Pending"
+            value={totals.qc}
+            onClick={() => {
+              location.href = "/qc";
+            }}
+          />
           <Metric
             icon={<PackageCheck />}
             label="Package Leads Remaining"
             value={totals.remaining}
+            onClick={() => showCompanySegment("active-package")}
           />
           <Metric
             icon={<WalletCards />}
             label="Pending Payments"
             value={totals.pendingPayments}
+            onClick={() => showCompanySegment("pending-payment")}
           />
         </section>
         <section
@@ -903,20 +922,6 @@ export function PortalAdmin() {
                   ))}
               </select>
               <select
-                value={filter}
-                onChange={(event) =>
-                  setFilter(event.target.value as CompanyStatusFilter)
-                }
-                className="h-10 rounded-lg border px-3 text-xs font-semibold"
-              >
-                <option value="active">Active Companies</option>
-                <option value="paused">Paused Companies</option>
-                <option value="hidden">Hidden Companies</option>
-                <option value="active-package">Active Packages</option>
-                <option value="pending-payment">Pending Payment</option>
-                <option value="all">All Statuses</option>
-              </select>
-              <select
                 aria-label="Filter by state"
                 value={stateFilter}
                 onChange={(event) => setStateFilter(event.target.value)}
@@ -1023,12 +1028,44 @@ export function PortalAdmin() {
                   packages, scheduling, reps, qualifications, and sent leads.
                 </p>
               </div>
+              <div
+                role="group"
+                aria-label="Filter companies by status"
+                className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1"
+              >
+                {([
+                  ["active", "Active"],
+                  ["paused", "Paused"],
+                  ["hidden", "Hidden"],
+                  ["all", "All"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFilter(value)}
+                    aria-pressed={filter === value}
+                    className={
+                      "rounded-lg px-3 py-2 text-xs font-bold transition " +
+                      (filter === value
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-white hover:text-slate-900")
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <HorizontalScrollFrame ariaLabel="Companies summary horizontal scroll">
+            <HorizontalScrollFrame
+              className="[&_.readyops-hscroll-body]:max-h-[68vh] [&_.readyops-hscroll-body]:overflow-auto [&_.readyops-hscroll-body]:scroll-smooth"
+              ariaLabel="Companies summary horizontal scroll"
+            >
               <table className="w-full min-w-[1780px] text-sm">
-                <thead className="readyops-data-table-head sticky top-3 z-30">
+                <thead className="readyops-data-table-head sticky top-0 z-40">
                   <tr className="text-left">
-                    <th className="p-3">Company</th>
+                    <th className="sticky left-0 top-0 z-50 min-w-[360px] bg-slate-950 p-3 shadow-[5px_0_10px_-6px_rgba(15,23,42,0.9)]">
+                      Company
+                    </th>
                     <th>Total Leads</th>
                     <th>QC Pending</th>
                     <th>QC Denied</th>
@@ -1442,9 +1479,9 @@ function CompanyRow(props: CompanyRowProps) {
     <>
       <tr
         onClick={onToggle}
-        className="cursor-pointer border-t hover:bg-blue-50/30"
+        className="group cursor-pointer border-t hover:bg-blue-50/30"
       >
-        <td className="p-3">
+        <td className="sticky left-0 z-20 min-w-[360px] bg-white p-3 shadow-[5px_0_10px_-7px_rgba(15,23,42,0.75)] group-hover:bg-blue-50">
           <div className="flex items-center gap-2">
             {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             <div>
@@ -2397,21 +2434,33 @@ function Metric({
   icon,
   label,
   value,
+  onClick,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border bg-white p-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-2xl border bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      aria-label={`${label}: ${value}. Open details`}
+    >
       <div className="flex items-center gap-2 text-blue-600">
         {icon}
         <span className="text-xs font-bold uppercase tracking-wide">
           {label}
         </span>
       </div>
-      <div className="mt-2 text-3xl font-black">{value}</div>
-    </div>
+      <div className="mt-2 flex items-end justify-between">
+        <span className="text-3xl font-black">{value}</span>
+        <span className="text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
+          View →
+        </span>
+      </div>
+    </button>
   );
 }
 function Input({
