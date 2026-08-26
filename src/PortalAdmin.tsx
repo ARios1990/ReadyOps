@@ -706,6 +706,16 @@ export function PortalAdmin() {
     });
   };
 
+  const showPackageSegment = (nextPackageFilter: PackageFilter) => {
+    setFilter("all");
+    setPackageFilter(nextPackageFilter);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("company-list")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const pageActions = (
     <>
       <button
@@ -795,13 +805,13 @@ export function PortalAdmin() {
             icon={<PackageCheck />}
             label="Package Leads Remaining"
             value={totals.remaining}
-            onClick={() => showCompanySegment("active-package")}
+            onClick={() => showPackageSegment("active")}
           />
           <Metric
             icon={<WalletCards />}
             label="Pending Payments"
             value={totals.pendingPayments}
-            onClick={() => showCompanySegment("pending-payment")}
+            onClick={() => showPackageSegment("pending")}
           />
         </section>
         <section
