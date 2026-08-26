@@ -200,7 +200,9 @@ const STATUS_BUTTONS = [
   ['SIGNED CONTRACT', 'bg-blue-900'],
   ['BAD', 'bg-red-600'],
   ['NO SHOW', 'bg-amber-400 text-slate-950'],
-] as coexport function ClientLeadTemplate({
+] as const;
+
+export function ClientLeadTemplate({
   lead,
   appointment,
   showLabel = true,
