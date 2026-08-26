@@ -185,9 +185,6 @@ function Row({
   );
 }
 
-);
-}
-
 function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
   return (
     <section>
