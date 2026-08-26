@@ -16,19 +16,15 @@ import {
   Circle,
   Clock3,
   Download,
-  ExternalLink,
   Headphones,
   Loader2,
   RefreshCw,
   RotateCcw,
-  Save,
   Search,
   Send,
   ShieldCheck,
   Shuffle,
-  Trash2,
   UploadCloud,
-  UserRound,
   X,
   XCircle,
 } from "lucide-react";
@@ -74,33 +70,6 @@ const EMPTY_QUEUE: QueueData = { days: [], summary: {}, rows: [] };
 const DAY_MS = 86_400_000;
 // City, state, and ZIP stay on each lead for search/filtering, but the QC form
 // shows the complete canonical address once instead of repeating its parts.
-const QC_FIELDS = [
-  ["service_needed", "Services Needed"],
-  ["full_name", "Full Name"],
-  ["phone_number", "Phone"],
-  ["address", "Address"],
-  ["email", "Email"],
-  ["language", "Language"],
-  ["last_checked_on", "Last Checked On"],
-  ["home_type", "Home Type"],
-  ["roof_type", "Roof Type"],
-  ["roof_age", "Roof Age"],
-  ["stories", "Stories"],
-  ["insurance", "Insurance"],
-  ["insurance_name", "Insurance Name"],
-  ["claim_filed", "Claim Filed"],
-  ["contract", "Contract"],
-  ["hail_size", "Size of Hail"],
-  ["visible_damage", "Visible Damage"],
-  ["damage_type", "Damage Type"],
-  ["home_value", "Home Value"],
-  ["sq_ft", "SQ FT"],
-  ["web_url", "Web Link"],
-  ["additional_properties", "Add. Properties"],
-  ["second_address", "2nd Address"],
-  ["notes", "Notes"],
-] as const;
-
 function weekStart(value = new Date()): Date {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
   const day = date.getDay();
@@ -1231,7 +1200,7 @@ function CompanyGroup({
               {items.map((row) => {
                 const status = row.qc_review?.status || row.lead.qc_status;
                 const start =
-                  ["pending", "in_review"].includes(status) ||
+                  status === "pending" ||
                   (!isManager && status === "manager_approved");
                 return (
                   <tr
@@ -1350,8 +1319,6 @@ function ReviewDialog(props: DialogProps) {
   const status = props.row.qc_review?.status || props.row.lead.qc_status;
   const finalCompleted = ["approved", "denied"].includes(status);
   const managerSubmitted = status === "manager_approved";
-  const awaitingSend =
-    status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
   if (props.isManager && managerSubmitted)
   
@@ -1382,139 +1349,30 @@ function ReviewDialog(props: DialogProps) {
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 p-3 sm:p-6">
       <section className="mx-auto max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
-              {props.row.lead.lead_code} • QC Cycle{" "}
-              {props.row.qc_review?.cycle_number || 1}
-            </p>
-            <h2 className="text-lg font-black">
-              {props.row.company.name} — {props.row.lead.full_name}
-            </h2>
-          </div>
-          <button onClick={props.close} className="rounded-lg border p-2">
-            <X size={18} />
-          </button>
-        </header>
-        <div className="p-5">
-          <div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {QC_FIELDS.map(([key, label]) => (
-                <label
-                  key={key}
-                  className={`text-xs font-semibold text-slate-600 ${key === "notes" || key === "address" ? "sm:col-span-2" : ""}`}
-                >
-                  {label}
-                  {key === "notes" ? (
-                    <textarea
-                      value={
-                        Array.isArray(props.values[key])
-                          ? props.values[key].join(", ")
-                          : (props.values[key] ?? "")
-                      }
-                      onChange={(event) =>
-                        props.change(key, event.target.value)
-                      }
-                      className="mt-1 min-h-20 w-full rounded-lg border p-2 text-sm"
-                    />
-                  ) : (
-                    <input
-                      value={
-                        Array.isArray(props.values[key])
-                          ? props.values[key].join(", ")
-                          : (props.values[key] ?? "")
-                      }
-                      onChange={(event) =>
-                        props.change(key, event.target.value)
-                      }
-                      className="mt-1 w-full rounded-lg border p-2 text-sm"
-                    />
-                  )}
-                </label>
-              ))}
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+            Lead Template
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700">
+              <Clock3 size={15} />
+              <StatusPill status={status} />
             </div>
-            <button
-              disabled={props.busy || managerSubmitted}
-              onClick={() => void props.save()}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
-            >
-              <Save size={15} /> Save QC Edits
+            <button onClick={props.close} className="rounded-lg p-2 text-slate-700 hover:bg-slate-100" aria-label="Close review">
+              <X size={18} />
             </button>
           </div>
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
-                  Lead Review Preview
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Review the finished lead, recording, routing, and QC decision before delivery.
-                </p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700">
-                <Clock3 size={15} />
-                <StatusPill status={status} />
-              </div>
-            </div>
-            <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
-              <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-                <ClientLeadTemplate
-                  lead={{ ...props.row.lead, ...props.values }}
-                  appointment={props.row.appointment}
-                />
-              </div>
-              <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2">
-            <div className="order-4 min-w-0 rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
-              <div className="flex items-center gap-2 text-blue-950">
-                <UserRound size={17} />
-                <h3 className="font-bold">Agent Assignment</h3>
-              </div>
-              <p className="mt-2 text-xs text-blue-800">
-                Current:{" "}
-                {props.row.agent?.name ||
-                  props.row.lead.agent_name ||
-                  "Unassigned"}
-              </p>
-              {props.isManager ? (
-                <p className="mt-3 rounded-lg border border-blue-200 bg-white p-2 text-xs text-slate-600">
-                  Managers can view the assigned agent. Only Admin or Main QC
-                  can change it.
-                </p>
-              ) : (
-                <>
-                  <select
-                    value={props.selectedAgentId}
-                    onChange={(event) =>
-                      props.setSelectedAgentId(event.target.value)
-                    }
-                    className="mt-3 w-full rounded-lg border bg-white p-2 text-sm"
-                  >
-                    <option value="">Select the correct agent</option>
-                    {props.refs.agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    disabled={
-                      props.busy ||
-                      !props.selectedAgentId ||
-                      props.selectedAgentId ===
-                        (props.row.agent?.id || props.row.lead.agent_id)
-                    }
-                    onClick={() => void props.reassignAgent()}
-                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 p-2.5 text-xs font-bold text-white disabled:opacity-40"
-                  >
-                    <Save size={14} /> Update Agent Assignment
-                  </button>
-                  <p className="mt-2 text-[11px] text-blue-700">
-                    This updates the agent name, linked user, and team access
-                    together.
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="order-1 min-w-0 md:col-span-2">
+        </header>
+        <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
+          <div className="min-w-0">
+            <ClientLeadTemplate
+              lead={{ ...props.row.lead, ...props.values }}
+              appointment={props.row.appointment}
+              showLabel={false}
+              showStatusButtons
+            />
+          </div>
+          <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2">
+<div className="order-1 min-w-0 md:col-span-2">
               <QCRecordingUpload
                 leadId={props.row.lead.id}
                 value={String(props.values.recording_url || "")}
@@ -1526,7 +1384,7 @@ function ReviewDialog(props: DialogProps) {
               />
             </div>
             <div className="order-2 min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
-              <h3 className="font-bold text-amber-950">Requirements</h3>
+              <h3 className="font-bold text-amber-950">Company Requirements</h3>
               <p className="mt-2 whitespace-pre-line text-sm text-amber-900">
                 {props.row.portal?.requirements_short ||
                   props.row.company.requirements_note ||
@@ -1586,31 +1444,6 @@ function ReviewDialog(props: DialogProps) {
                 <Shuffle size={14} /> Move / Keep Pending
               </button>
             </div>
-            {awaitingSend && (
-              <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
-                <div className="flex items-center gap-2 text-emerald-950">
-                  <CheckCircle2 size={17} />
-                  <h3 className="font-black">QC Approved — Awaiting Send</h3>
-                </div>
-                <p className="mt-2 text-xs text-emerald-800">
-                  Approval is complete, but the company still cannot see this
-                  lead and it does not count as delivered.
-                </p>
-                {props.canSend ? (
-                  <button
-                    disabled={props.busy}
-                    onClick={() => void props.send()}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 p-3 text-sm font-black text-white disabled:opacity-40"
-                  >
-                    <Send size={15} /> Send Lead to Company
-                  </button>
-                ) : (
-                  <p className="mt-3 rounded-lg bg-white p-2 text-xs font-bold text-slate-600">
-                    Waiting for an Admin to press Send Lead.
-                  </p>
-                )}
-              </div>
-            )}
             <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <label className="text-xs font-bold text-slate-600">
                 Decision Reason
@@ -1677,42 +1510,19 @@ function ReviewDialog(props: DialogProps) {
                 </div>
               )}
             </div>
-            {status === "approved" &&
-              Boolean(props.row.appointment?.company_visible_at) &&
-              props.row.portal?.form_mode !== "internal" &&
-              props.row.portal?.external_form_url && (
-                <button
-                  onClick={() => props.openExternal(props.row)}
-                  className="order-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white md:col-span-2"
-                >
-                  <ExternalLink size={15} /> Open Prefilled Client Form
-                </button>
-              )}
             <div className="order-8 rounded-xl bg-slate-900 p-4 text-xs text-slate-200 md:col-span-2">
               <ShieldCheck size={15} className="mb-2" />
-              <strong>Delivery rule:</strong> only approved, company-visible
-              appointments count as sent leads. Pending, denied, corrected,
-              draft, deleted, and unsent records are excluded.
+              <strong>Delivery rule:</strong> Only approved, company-visible appointments count as sent leads.
             </div>
             {!props.isManager && (
               <div className="order-9 rounded-xl border border-red-200 bg-red-50 p-4 md:col-span-2">
                 <h3 className="font-bold text-red-900">Duplicate Lead</h3>
                 <p className="mt-1 text-xs text-red-700">
-                  Delete only when this lead was entered twice. Delivered or
-                  invoiced leads are protected.
+                  Delete only when this lead was entered twice. Delivered or invoiced leads are protected.
                 </p>
-                <button
-                  disabled={props.busy || status === "approved"}
-                  onClick={() => void props.deleteLead()}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 bg-white p-2.5 text-xs font-bold text-red-700 disabled:opacity-40"
-                >
-                  <Trash2 size={14} /> Delete Lead
-                </button>
               </div>
             )}
-              </aside>
-            </div>
-          </div>
+          </aside>
         </div>
       </section>
     </div>
