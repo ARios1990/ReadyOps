@@ -1420,8 +1420,8 @@ function CompanyRow(props: CompanyRowProps) {
         contact_name: draft.contact_name.trim() || null,
         phone: draft.phone.trim() || null,
         email: draft.email.trim() || draft.owner_email.trim() || null,
-        owner_email: draft.owner_email.trim() || null,
-        billing_email: draft.billing_email.trim() || draft.owner_email.trim() || null,
+        owner_email: draft.owner_email.trim() || draft.email.trim() || null,
+        billing_email: draft.billing_email.trim() || draft.owner_email.trim() || draft.email.trim() || null,
         secondary_emails: secondaryEmails,
         billing_address: draft.billing_address.trim() || null,
         metro_tag: draft.metro_tag.trim() || null,
@@ -1747,7 +1747,7 @@ function CompanyRow(props: CompanyRowProps) {
                         Owner email
                         <input
                           type="email"
-                          value={draft.owner_email}
+                          value={draft.owner_email || draft.email}
                           onChange={(event) => setDraft({ ...draft, owner_email: event.target.value })}
                           className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
                           placeholder="owner@company.com"
@@ -1757,7 +1757,7 @@ function CompanyRow(props: CompanyRowProps) {
                         Billing email
                         <input
                           type="email"
-                          value={draft.billing_email}
+                          value={draft.billing_email || draft.owner_email || draft.email}
                           onChange={(event) => setDraft({ ...draft, billing_email: event.target.value })}
                           className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
                           placeholder="Same as owner or billing@company.com"
