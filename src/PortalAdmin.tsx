@@ -9,6 +9,7 @@ import {
   Clipboard,
   Copy,
   ExternalLink,
+  EyeOff,
   Link2,
   Loader2,
   MapPin,
@@ -19,6 +20,7 @@ import {
   Save,
   Search,
   ShieldCheck,
+  Trash2,
   UsersRound,
   WalletCards,
   X,
@@ -67,7 +69,12 @@ type SlugEditorState = {
   value: string;
 };
 type CompanyStatusFilter =
-  "active" | "active-package" | "pending-payment" | "all";
+  | "active"
+  | "paused"
+  | "hidden"
+  | "active-package"
+  | "pending-payment"
+  | "all";
 type DateRange = { start: string; end: string };
 type LeadActivityFilter = "all" | "has_leads" | "no_leads" | "active_leads";
 type PackageFilter = "all" | "active" | "pending" | "none";
@@ -78,6 +85,11 @@ type CompanyOverviewDraft = {
   contact_name: string;
   phone: string;
   email: string;
+  owner_email: string;
+  billing_email: string;
+  secondary_emails: string;
+  billing_address: string;
+  metro_tag: string;
   website: string;
   requirements_note: string;
   notes: string;
@@ -122,7 +134,7 @@ function currentWeekRange(): DateRange {
 function initialStatusFilter(): CompanyStatusFilter {
   if (typeof window === "undefined") return "active";
   const requested = new URLSearchParams(window.location.search).get("status");
-  return ["active", "active-package", "pending-payment", "all"].includes(
+  return ["active", "paused", "hidden", "active-package", "pending-payment", "all"].includes(
     requested || "",
   )
     ? (requested as CompanyStatusFilter)
@@ -304,6 +316,8 @@ export function PortalAdmin() {
           filter === "all" ||
           (filter === "pending-payment" && pkgIsPending(company)) ||
           (filter === "active-package" && hasActivePackage(company)) ||
+          (filter === "paused" && company.account_status === "Pause") ||
+          (filter === "hidden" && company.account_status === "Hidden") ||
           (filter === "active" && company.account_status === "Active");
         const matchesSearch =
           !search.trim() ||
@@ -488,19 +502,48 @@ export function PortalAdmin() {
     }, 50);
   }
 
+  async function updateCompanyStatus(companyId: string, accountStatus: "Active" | "Pause" | "Hidden") {
+    setError("");
+    const { error: updateError } = await supabase
+      .from("roster_companies")
+      .update({ account_status: accountStatus })
+      .eq("id", companyId);
+    if (updateError) setError(rpcError(updateError));
+    else {
+      setMessage("Company status changed to " + accountStatus + ".");
+      await load();
+    }
+  }
+
+  async function deleteCompany(companyId: string, companyName: string) {
+    if (!window.confirm("Delete " + companyName + "? This cannot be undone. Companies with protected leads, appointments, or invoices may need to be hidden instead.")) return;
+    setError("");
+    const { error: deleteError } = await supabase
+      .from("roster_companies")
+      .delete()
+      .eq("id", companyId);
+    if (deleteError) setError("Unable to delete " + companyName + ": " + rpcError(deleteError) + " Hide the company instead if it has protected records.");
+    else {
+      setMessage(companyName + " deleted.");
+      if (expanded === companyId) setExpanded("");
+      await load();
+    }
+  }
+
   async function createPackage(companyId: string) {
     if (!pkg.lead_target) return;
     if (!packageAllLocations && packageLocationIds.length === 0) {
       setError("Select at least one location or choose All company locations.");
       return;
     }
+    const calculatedPackageTotal = Number(pkg.lead_target || 0) * Number(pkg.amount_per_lead || 0);
     const { error: createError } = await supabase.rpc(
       "create_location_scoped_company_package",
       {
         p_company_id: companyId,
         p_lead_target: Number(pkg.lead_target),
         p_amount_per_lead: Number(pkg.amount_per_lead || 0),
-        p_package_total: Number(pkg.package_total || 0),
+        p_package_total: calculatedPackageTotal,
         p_payment_date: pkg.payment_date || null,
         p_payment_status: pkg.payment_status,
         p_package_name: "Lead Package",
@@ -854,6 +897,8 @@ export function PortalAdmin() {
                 className="h-10 rounded-lg border px-3 text-xs font-semibold"
               >
                 <option value="active">Active Companies</option>
+                <option value="paused">Paused Companies</option>
+                <option value="hidden">Hidden Companies</option>
                 <option value="active-package">Active Packages</option>
                 <option value="pending-payment">Pending Payment</option>
                 <option value="all">All Statuses</option>
@@ -1061,6 +1106,12 @@ export function PortalAdmin() {
                           })
                         }
                         onCompanyUpdated={() => void load()}
+                        onStatusChange={(status) =>
+                          void updateCompanyStatus(company.company_id, status)
+                        }
+                        onDelete={() =>
+                          void deleteCompany(company.company_id, company.company_name)
+                        }
                         onEditSlug={() => openSlugEditor(company)}
                         onDuplicate={(item) => void duplicateLocation(item)}
                         onSetActive={(item, active) =>
@@ -1189,6 +1240,8 @@ type CompanyRowProps = {
   onEditLocation: (locationId: string) => void;
   onEditCompany: () => void;
   onCompanyUpdated: () => void | Promise<void>;
+  onStatusChange: (status: "Active" | "Pause" | "Hidden") => void;
+  onDelete: () => void;
   onEditSlug: () => void;
   onDuplicate: (item: CompanyLocation) => void;
   onSetActive: (item: CompanyLocation, active: boolean) => void;
@@ -1242,6 +1295,8 @@ function CompanyRow(props: CompanyRowProps) {
     onEditLocation,
     onEditCompany,
     onCompanyUpdated,
+    onStatusChange,
+    onDelete,
     onEditSlug,
     onDuplicate,
     onSetActive,
@@ -1266,6 +1321,13 @@ function CompanyRow(props: CompanyRowProps) {
     contact_name: String(company.contact_name || ""),
     phone: String(company.phone || ""),
     email: String(company.email || ""),
+    owner_email: String(company.owner_email || ""),
+    billing_email: String(company.billing_email || ""),
+    secondary_emails: Array.isArray(company.secondary_emails)
+      ? company.secondary_emails.join(", ")
+      : String(company.secondary_emails || ""),
+    billing_address: String(company.billing_address || ""),
+    metro_tag: String(company.metro_tag || ""),
     website: String(company.website || ""),
     requirements_note: String(company.requirements_note || ""),
     notes: String(company.notes || ""),
@@ -1279,6 +1341,13 @@ function CompanyRow(props: CompanyRowProps) {
       contact_name: String(company.contact_name || ""),
       phone: String(company.phone || ""),
       email: String(company.email || ""),
+      owner_email: String(company.owner_email || ""),
+      billing_email: String(company.billing_email || ""),
+      secondary_emails: Array.isArray(company.secondary_emails)
+        ? company.secondary_emails.join(", ")
+        : String(company.secondary_emails || ""),
+      billing_address: String(company.billing_address || ""),
+      metro_tag: String(company.metro_tag || ""),
       website: String(company.website || ""),
       requirements_note: String(company.requirements_note || ""),
       notes: String(company.notes || ""),
@@ -1292,11 +1361,18 @@ function CompanyRow(props: CompanyRowProps) {
       setSaveError("Company name is required.");
       return;
     }
-    if (
-      draft.email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
-    ) {
-      setSaveError("Please enter a valid email or leave it blank.");
+    const secondaryEmails = draft.secondary_emails
+      .split(/[,;\n]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const emailsToValidate = [
+      draft.email.trim(),
+      draft.owner_email.trim(),
+      draft.billing_email.trim(),
+      ...secondaryEmails,
+    ].filter(Boolean);
+    if (emailsToValidate.some((value) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))) {
+      setSaveError("Please correct invalid email addresses or leave them blank.");
       return;
     }
     setSaving(true);
@@ -1309,7 +1385,12 @@ function CompanyRow(props: CompanyRowProps) {
         account_status: draft.account_status || "Active",
         contact_name: draft.contact_name.trim() || null,
         phone: draft.phone.trim() || null,
-        email: draft.email.trim() || null,
+        email: draft.email.trim() || draft.owner_email.trim() || null,
+        owner_email: draft.owner_email.trim() || null,
+        billing_email: draft.billing_email.trim() || draft.owner_email.trim() || null,
+        secondary_emails: secondaryEmails,
+        billing_address: draft.billing_address.trim() || null,
+        metro_tag: draft.metro_tag.trim() || null,
         website: draft.website.trim() || null,
         requirements_note: draft.requirements_note.trim() || null,
         notes: draft.notes.trim() || null,
@@ -1426,6 +1507,37 @@ function CompanyRow(props: CompanyRowProps) {
             >
               <Link2 size={12} /> {publicSlug ? "Edit Slug" : "Add Slug"}
             </button>
+            <button
+              disabled={company.account_status === "Active"}
+              onClick={() => onStatusChange("Active")}
+              title="Set company active"
+              className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-bold text-emerald-700 disabled:opacity-40"
+            >
+              <CheckCircle2 size={12} /> Active
+            </button>
+            <button
+              disabled={company.account_status === "Pause"}
+              onClick={() => onStatusChange("Pause")}
+              title="Pause company"
+              className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-bold text-amber-700 disabled:opacity-40"
+            >
+              <Ban size={12} /> Pause
+            </button>
+            <button
+              disabled={company.account_status === "Hidden"}
+              onClick={() => onStatusChange("Hidden")}
+              title="Hide company"
+              className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-bold text-slate-600 disabled:opacity-40"
+            >
+              <EyeOff size={12} /> Hide
+            </button>
+            <button
+              onClick={onDelete}
+              title="Delete company"
+              className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold text-red-700"
+            >
+              <Trash2 size={12} /> Delete
+            </button>
           </div>
           {publicSlug && (
             <div
@@ -1453,11 +1565,14 @@ function CompanyRow(props: CompanyRowProps) {
                   <div>
                     <h3 className="font-bold">Overview</h3>
                     {!editing && (
-                      <p className="mt-1 text-xs text-slate-500">
-                        {company.contact_name || "No contact"} •{" "}
-                        {company.phone || "No phone"} •{" "}
-                        {company.email || "No email"}
-                      </p>
+                      <div className="mt-1 space-y-1 text-xs text-slate-500">
+                        <p>{company.contact_name || "No contact"} •{" "}{company.phone || "No phone"} •{" "}{company.email || company.owner_email || "No email"}</p>
+                        <p><strong>Billing:</strong> {company.billing_email || company.owner_email || "No billing email"} • {company.billing_address || "No billing address"}</p>
+                        <p><strong>Service area:</strong> {company.metro_tag || company.state || "Not set"}</p>
+                        {Array.isArray(company.secondary_emails) && company.secondary_emails.length > 0 && (
+                          <p><strong>Secondary:</strong> {company.secondary_emails.join(", ")}</p>
+                        )}
+                      </div>
                     )}
                   </div>
                   {editing ? (
@@ -1552,10 +1667,10 @@ function CompanyRow(props: CompanyRowProps) {
                           className="mt-1 h-9 w-full rounded-lg border px-3 text-xs font-semibold"
                         >
                           <option value="Active">Active</option>
+                          <option value="Pause">Pause</option>
+                          <option value="Hidden">Hidden</option>
+                          <option value="Prospect">Prospect</option>
                           <option value="Pending">Pending</option>
-                          <option value="Paused">Paused</option>
-                          <option value="Incomplete">Incomplete</option>
-                          <option value="Inactive">Inactive</option>
                         </select>
                       </label>
                       <label className="block text-xs font-semibold text-slate-600">
@@ -1584,7 +1699,7 @@ function CompanyRow(props: CompanyRowProps) {
                         />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600">
-                        Email
+                        Primary company email
                         <input
                           value={draft.email}
                           onChange={(event) =>
@@ -1594,6 +1709,56 @@ function CompanyRow(props: CompanyRowProps) {
                           placeholder="team@company.com"
                         />
                       </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Owner email
+                        <input
+                          type="email"
+                          value={draft.owner_email}
+                          onChange={(event) => setDraft({ ...draft, owner_email: event.target.value })}
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="owner@company.com"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Billing email
+                        <input
+                          type="email"
+                          value={draft.billing_email}
+                          onChange={(event) => setDraft({ ...draft, billing_email: event.target.value })}
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="Same as owner or billing@company.com"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
+                        Secondary emails
+                        <textarea
+                          value={draft.secondary_emails}
+                          onChange={(event) => setDraft({ ...draft, secondary_emails: event.target.value })}
+                          className="mt-1 min-h-[56px] w-full rounded-lg border p-2 text-xs"
+                          placeholder="Separate additional recipients with commas"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Service area / market
+                        <input
+                          value={draft.metro_tag}
+                          onChange={(event) => setDraft({ ...draft, metro_tag: event.target.value })}
+                          className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
+                          placeholder="DFW, Houston, Tampa…"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Billing address
+                        <textarea
+                          value={draft.billing_address}
+                          onChange={(event) => setDraft({ ...draft, billing_address: event.target.value })}
+                          className="mt-1 min-h-[56px] w-full rounded-lg border p-2 text-xs"
+                          placeholder="Billing street, city, state, ZIP"
+                        />
+                      </label>
+                      <p className="rounded-lg bg-blue-50 p-2 text-[11px] text-blue-700 md:col-span-2">
+                        Company addresses, locations, serviced cities, and ZIP codes are managed in the Locations section below.
+                      </p>
                       <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
                         Website
                         <input
@@ -2093,9 +2258,13 @@ function PackageSection({
   setPackageLocationIds: (value: string[]) => void;
   onCreatePackage: () => void;
 }) {
+  const calculatedTotal =
+    pkg.lead_target && pkg.amount_per_lead
+      ? (Number(pkg.lead_target) * Number(pkg.amount_per_lead)).toFixed(2)
+      : "";
   return (
     <section className="rounded-xl border bg-white p-4">
-      <h3 className="font-bold">Packages</h3>
+      <h3 className="font-bold">Package Details</h3>
       {company.package && (
         <div className="mt-2 rounded-lg bg-blue-50 p-3 text-xs">
           <strong>{company.package.package_name}</strong> •{" "}
@@ -2113,19 +2282,20 @@ function PackageSection({
       )}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Input
-          label="Lead Total"
+          label="How Many Leads"
           value={pkg.lead_target}
           onChange={(value) => setPkg({ ...pkg, lead_target: value })}
         />
         <Input
-          label="Amount / Lead"
+          label="Price per Lead"
           value={pkg.amount_per_lead}
           onChange={(value) => setPkg({ ...pkg, amount_per_lead: value })}
         />
         <Input
-          label="Package Total"
-          value={pkg.package_total}
-          onChange={(value) => setPkg({ ...pkg, package_total: value })}
+          label="Total Amount"
+          value={calculatedTotal}
+          onChange={() => undefined}
+          readOnly
         />
         <Input
           label="Payment Date"
@@ -2215,11 +2385,13 @@ function Input({
   value,
   onChange,
   type = "number",
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="text-[10px] font-bold text-slate-500">
@@ -2227,8 +2399,9 @@ function Input({
       <input
         type={type}
         value={value}
+        readOnly={readOnly}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border p-2 text-xs"
+        className={`mt-1 w-full rounded-lg border p-2 text-xs ${readOnly ? "bg-slate-50 font-bold text-slate-700" : ""}`}
       />
     </label>
   );
