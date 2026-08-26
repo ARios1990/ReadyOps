@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Save } from 'lucide-react';
 import { formatTime } from './portalUtils';
 
 type LeadLike = {
@@ -105,16 +105,68 @@ function serviceTitle(serviceNeeded: string, lead: LeadLike): string {
   if (/solar|photovoltaic|pv system/.test(normalized)) return 'Solar Inspection';
   if (/tree|arbor|stump/.test(normalized)) return 'Tree Service';
   if (/roof|shingle|hail|storm|leak|repair|estimate|inspection/.test(normalized)) return 'Roofing Inspection';
-  return service || 'Roofing Inspection';
-}
+  return service || 'Roofing Inspectiontype RowProps = {
+  label: string;
+  value: string;
+  href?: string;
+  field?: string;
+  editValue?: string;
+  multiline?: boolean;
+  inputType?: 'text' | 'email' | 'tel' | 'url';
+  onChange?: (key: string, value: string) => void;
+};
 
-function Row({ label, value, href }: { label: string; value: string; href?: string }) {
+function Row({
+  label,
+  value,
+  href,
+  field,
+  editValue,
+  multiline = false,
+  inputType = 'text',
+  onChange,
+}: RowProps) {
   const displayValue = value || EMPTY;
+  const editable = Boolean(field && onChange);
+  const controlClass =
+    'min-w-0 flex-1 rounded-md border border-transparent bg-blue-50/70 px-2 py-1 font-medium text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-blue-200 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100';
 
   return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-0.5 text-sm leading-5">
+    <label className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-0.5 text-sm leading-5">
       <strong className="shrink-0 font-bold text-slate-950">{label}</strong>
-      {href && value ? (
+      {editable ? (
+        <span className="flex min-w-[140px] flex-1 items-center gap-1">
+          {multiline ? (
+            <textarea
+              aria-label={label.replace(/:$/, '')}
+              value={editValue ?? value}
+              placeholder={EMPTY}
+              onChange={(event) => onChange?.(field!, event.target.value)}
+              className={controlClass + ' min-h-14 resize-y'}
+            />
+          ) : (
+            <input
+              aria-label={label.replace(/:$/, '')}
+              type={inputType}
+              value={editValue ?? value}
+              placeholder={EMPTY}
+              onChange={(event) => onChange?.(field!, event.target.value)}
+              className={controlClass}
+            />
+          )}
+          {href && (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open Property Link"
+              className="shrink-0 rounded p-1 text-blue-700 hover:bg-blue-100"
+            >
+              <ExternalLink size={13} />
+            </a>
+          )}
+        </span>
+      ) : href && value ? (
         <a
           href={href}
           target="_blank"
@@ -126,8 +178,11 @@ function Row({ label, value, href }: { label: string; value: string; href?: stri
       ) : (
         <span className="min-w-0 break-words font-medium text-slate-800">{displayValue}</span>
       )}
-    </div>
+    </label>
   );
+}
+
+);
 }
 
 function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
@@ -145,24 +200,41 @@ const STATUS_BUTTONS = [
   ['SIGNED CONTRACT', 'bg-blue-900'],
   ['BAD', 'bg-red-600'],
   ['NO SHOW', 'bg-amber-400 text-slate-950'],
-] as const;
-
-export function ClientLeadTemplate({
+] as coexport function ClientLeadTemplate({
   lead,
   appointment,
   showLabel = true,
   showStatusButtons = false,
+  editValues,
+  onChange,
+  onSave,
+  saving = false,
 }: {
   lead: LeadLike;
   appointment: AppointmentLike;
   showLabel?: boolean;
   showStatusButtons?: boolean;
+  editValues?: Record<string, unknown>;
+  onChange?: (key: string, value: string) => void;
+  onSave?: () => void | Promise<void>;
+  saving?: boolean;
 }) {
   const serviceNeeded = leadValue(lead, 'service_needed', 'service_needed', 'services_needed', 'services_need');
-  const homeValue = formatCurrency(leadValue(lead, 'home_value', 'home_value'));
-  const squareFeet = formatInteger(leadValue(lead, 'sq_ft', 'sq_ft', 'square_feet', 'square_footage'));
+  const rawHomeValue = leadValue(lead, 'home_value', 'home_value');
+  const rawSquareFeet = leadValue(lead, 'sq_ft', 'sq_ft', 'square_feet', 'square_footage');
+  const homeValue = formatCurrency(rawHomeValue);
+  const squareFeet = formatInteger(rawSquareFeet);
   const webLink = leadValue(lead, 'web_url', 'web_url', 'web_link', 'zillow_url', 'zillow_link');
   const notes = leadValue(lead, 'notes', 'notes');
+  const editable = Boolean(onChange);
+
+  const editValue = (key: string, fallback: string): string => {
+    if (editValues && Object.prototype.hasOwnProperty.call(editValues, key)) {
+      const value = editValues[key];
+      return value === null || value === undefined ? '' : String(value);
+    }
+    return fallback;
+  };
 
   return (
     <div className="space-y-3">
@@ -180,38 +252,52 @@ export function ClientLeadTemplate({
         <div className="space-y-5 px-5 py-4">
           <Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
-            <Row label="Name:" value={leadValue(lead, 'full_name', 'full_name', 'name')} />
-            <Row label="Phone:" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} />
-            <Row label="Address:" value={formatAddress(lead)} />
-            <Row label="Email:" value={leadValue(lead, 'email', 'email').toLowerCase()} />
-            <Row label="Language:" value={leadValue(lead, 'language', 'language')} />
-            <Row label="Services Needed:" value={serviceNeeded} />
+            <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
+            <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
+            <Row label="Address:" field="address" value={formatAddress(lead)} editValue={editValue('address', formatAddress(lead))} onChange={onChange} />
+            <Row label="Email:" field="email" inputType="email" value={leadValue(lead, 'email', 'email').toLowerCase()} editValue={editValue('email', leadValue(lead, 'email', 'email').toLowerCase())} onChange={onChange} />
+            <Row label="Language:" field="language" value={leadValue(lead, 'language', 'language')} editValue={editValue('language', leadValue(lead, 'language', 'language'))} onChange={onChange} />
+            <Row label="Services Needed:" field="service_needed" value={serviceNeeded} editValue={editValue('service_needed', serviceNeeded)} onChange={onChange} />
           </Section>
 
           <Section title="Property Details" columns>
-            <Row label="Roof Age:" value={formValue(lead, 'roof_age')} />
-            <Row label="Home Type:" value={formValue(lead, 'home_type')} />
-            <Row label="Roof Type:" value={formValue(lead, 'roof_type')} />
-            <Row label="Stories:" value={formValue(lead, 'stories')} />
-            <Row label="Insurance:" value={formValue(lead, 'insurance')} />
-            <Row label="Insurance Name:" value={formValue(lead, 'insurance_name')} />
-            <Row label="Contract:" value={formValue(lead, 'contract')} />
-            <Row label="Home Value:" value={homeValue} />
-            <Row label="SQ FT:" value={squareFeet} />
-            <Row label="Web Link:" value={webLink} href={webLink || undefined} />
+            <Row label="Roof Age:" field="roof_age" value={formValue(lead, 'roof_age')} editValue={editValue('roof_age', formValue(lead, 'roof_age'))} onChange={onChange} />
+            <Row label="Home Type:" field="home_type" value={formValue(lead, 'home_type')} editValue={editValue('home_type', formValue(lead, 'home_type'))} onChange={onChange} />
+            <Row label="Roof Type:" field="roof_type" value={formValue(lead, 'roof_type')} editValue={editValue('roof_type', formValue(lead, 'roof_type'))} onChange={onChange} />
+            <Row label="Stories:" field="stories" value={formValue(lead, 'stories')} editValue={editValue('stories', formValue(lead, 'stories'))} onChange={onChange} />
+            <Row label="Insurance:" field="insurance" value={formValue(lead, 'insurance')} editValue={editValue('insurance', formValue(lead, 'insurance'))} onChange={onChange} />
+            <Row label="Insurance Name:" field="insurance_name" value={formValue(lead, 'insurance_name')} editValue={editValue('insurance_name', formValue(lead, 'insurance_name'))} onChange={onChange} />
+            <Row label="Contract:" field="contract" value={formValue(lead, 'contract')} editValue={editValue('contract', formValue(lead, 'contract'))} onChange={onChange} />
+            <Row label="Home Value:" field="home_value" value={homeValue} editValue={editValue('home_value', rawHomeValue)} onChange={onChange} />
+            <Row label="SQ FT:" field="sq_ft" value={squareFeet} editValue={editValue('sq_ft', rawSquareFeet)} onChange={onChange} />
+            <Row label="Web Link:" field="web_url" inputType="url" value={webLink} editValue={editValue('web_url', webLink)} href={webLink || undefined} onChange={onChange} />
           </Section>
 
           <Section title="Additional Information" columns>
-            <Row label="Notes:" value={notes} />
-            <Row label="Last Checked On:" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} />
-            <Row label="Size of Hail:" value={formValue(lead, 'hail_size', 'size_of_hail')} />
-            <Row label="Claim Filed:" value={formValue(lead, 'claim_filed', 'file_claim')} />
-            <Row label="Visible Damage:" value={formValue(lead, 'visible_damage')} />
-            <Row label="Damage Type:" value={formValue(lead, 'damage_type', 'type_of_damage')} />
-            <Row label="Add. Properties:" value={formValue(lead, 'additional_properties', 'add_properties')} />
-            <Row label="2nd Address:" value={formValue(lead, 'second_address', 'other_address')} />
+            <Row label="Notes:" field="notes" multiline value={notes} editValue={editValue('notes', notes)} onChange={onChange} />
+            <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
+            <Row label="Size of Hail:" field="hail_size" value={formValue(lead, 'hail_size', 'size_of_hail')} editValue={editValue('hail_size', formValue(lead, 'hail_size', 'size_of_hail'))} onChange={onChange} />
+            <Row label="Claim Filed:" field="claim_filed" value={formValue(lead, 'claim_filed', 'file_claim')} editValue={editValue('claim_filed', formValue(lead, 'claim_filed', 'file_claim'))} onChange={onChange} />
+            <Row label="Visible Damage:" field="visible_damage" value={formValue(lead, 'visible_damage')} editValue={editValue('visible_damage', formValue(lead, 'visible_damage'))} onChange={onChange} />
+            <Row label="Damage Type:" field="damage_type" value={formValue(lead, 'damage_type', 'type_of_damage')} editValue={editValue('damage_type', formValue(lead, 'damage_type', 'type_of_damage'))} onChange={onChange} />
+            <Row label="Add. Properties:" field="additional_properties" value={formValue(lead, 'additional_properties', 'add_properties')} editValue={editValue('additional_properties', formValue(lead, 'additional_properties', 'add_properties'))} onChange={onChange} />
+            <Row label="2nd Address:" field="second_address" value={formValue(lead, 'second_address', 'other_address')} editValue={editValue('second_address', formValue(lead, 'second_address', 'other_address'))} onChange={onChange} />
           </Section>
         </div>
+
+        {editable && (
+          <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-3">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void onSave?.()}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={15} />
+              {saving ? 'Saving…' : 'Save Lead Information'}
+            </button>
+          </div>
+        )}
 
         {showStatusButtons && (
           <div className="flex flex-wrap gap-2 border-t border-slate-100 px-3 py-3">
