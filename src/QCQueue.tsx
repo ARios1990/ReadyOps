@@ -139,6 +139,7 @@ export function QCQueue() {
   const [targetTime, setTargetTime] = useState("");
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionNotes, setDecisionNotes] = useState("");
+  const [scheduleOverrideReason, setScheduleOverrideReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -403,6 +404,7 @@ export function QCQueue() {
     setTargetTime(String(row.appointment.start_time).slice(0, 5));
     setDecisionReason(row.qc_review?.reason || row.lead.qc_reason || "");
     setDecisionNotes(row.qc_review?.notes || row.lead.qc_notes || "");
+    setScheduleOverrideReason("");
     setBusy(false);
   }
   async function saveEdits() {
@@ -537,6 +539,70 @@ export function QCQueue() {
     if (closeAfter) setSelected(null);
     return true;
   }
+  async function overrideSchedule() {
+    if (!selected || !isAdmin) return;
+    const originalTime = String(selected.appointment.start_time).slice(0, 5);
+    if (!targetDate || !targetTime) {
+      setError("Choose the new appointment date and time.");
+      return;
+    }
+    if (!scheduleOverrideReason.trim()) {
+      setError("Enter a reason for the admin date and time override.");
+      return;
+    }
+    if (
+      targetCompany !== selected.lead.company_id ||
+      (targetLocation || "") !== (selected.lead.location_id || "")
+    ) {
+      setError(
+        "Undo approval before transferring this lead to another company or location.",
+      );
+      return;
+    }
+    if (
+      targetDate === selected.appointment.appointment_date &&
+      targetTime === originalTime
+    ) {
+      setError("Choose a different appointment date or time.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Override the appointment date and time while preserving the current QC and delivery status?",
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    const { data, error: overrideError } = await supabase.rpc(
+      "qc_admin_override_schedule",
+      {
+        p_lead_id: selected.lead.id,
+        p_date: targetDate,
+        p_start_time: targetTime,
+        p_reason: scheduleOverrideReason.trim(),
+      },
+    );
+    if (overrideError) setError(rpcError(overrideError));
+    else {
+      const result = (data || {}) as Obj;
+      setSelected((current) =>
+        current
+          ? {
+              ...current,
+              appointment: result.appointment || current.appointment,
+            }
+          : current,
+      );
+      setMessage(
+        "Appointment date and time overridden. QC approval and delivery status were preserved.",
+      );
+      setScheduleOverrideReason("");
+      await load(true);
+    }
+    setBusy(false);
+  }
+
   async function review(decision: "approved" | "denied" | "needs_correction") {
     if (!selected) return;
     if (decision !== "approved" && !decisionReason.trim()) {
@@ -1077,6 +1143,9 @@ export function QCQueue() {
           close={() => setSelected(null)}
           save={saveEdits}
           move={() => void moveLead(true)}
+          overrideSchedule={() => void overrideSchedule()}
+          scheduleOverrideReason={scheduleOverrideReason}
+          setScheduleOverrideReason={setScheduleOverrideReason}
           review={review}
           reopen={reopen}
           openExternal={openExternal}
@@ -1249,30 +1318,33 @@ function CompanyGroup({
                       )}
                     </td>
                     <td>
-                      {status === "approved" &&
-                      !row.appointment?.company_visible_at &&
-                      canSend ? (
-                        <button
-                          onClick={() => void onSend(row)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-1.5 font-bold text-white"
-                        >
-                          <Send size={12} /> Send Lead
-                        </button>
-                      ) : (
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => void onReview(row, start)}
                           className="rounded-lg border border-blue-500 px-4 py-1.5 font-bold text-blue-700"
                         >
-                          {status === "pending"
-                            ? "Start QC"
-                            : status === "manager_approved" && isManager
-                              ? "Submitted"
-                              : status === "approved" &&
-                                  row.appointment?.company_visible_at
-                                ? "Sent"
-                                : "Review"}
+                          {canSend
+                            ? "Open / Edit Lead"
+                            : status === "pending"
+                              ? "Start QC"
+                              : status === "manager_approved" && isManager
+                                ? "Submitted"
+                                : status === "approved" &&
+                                    row.appointment?.company_visible_at
+                                  ? "Sent"
+                                  : "Review"}
                         </button>
-                      )}
+                        {status === "approved" &&
+                          !row.appointment?.company_visible_at &&
+                          canSend && (
+                            <button
+                              onClick={() => void onSend(row)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-1.5 font-bold text-white"
+                            >
+                              <Send size={12} /> Send Lead
+                            </button>
+                          )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1306,6 +1378,9 @@ type DialogProps = {
   close: () => void;
   save: () => Promise<void>;
   move: () => void;
+  overrideSchedule: () => void;
+  scheduleOverrideReason: string;
+  setScheduleOverrideReason: (value: string) => void;
   review: (
     decision: "approved" | "denied" | "needs_correction",
   ) => Promise<void>;
@@ -1452,6 +1527,7 @@ function ReviewDialog(props: DialogProps) {
               <h3 className="font-bold">Transfer / Reschedule</h3>
               <select
                 value={props.targetCompany}
+                disabled={completed}
                 onChange={(event) => props.setTargetCompany(event.target.value)}
                 className="mt-3 w-full rounded-lg border p-2 text-sm"
               >
@@ -1463,6 +1539,7 @@ function ReviewDialog(props: DialogProps) {
               </select>
               <select
                 value={props.targetLocation}
+                disabled={completed}
                 onChange={(event) =>
                   props.setTargetLocation(event.target.value)
                 }
@@ -1493,12 +1570,38 @@ function ReviewDialog(props: DialogProps) {
                   className="rounded-lg border p-2 text-sm"
                 />
               </div>
+              {completed && props.canSend && (
+                <div className="mt-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    Override reason
+                  </label>
+                  <input
+                    value={props.scheduleOverrideReason}
+                    onChange={(event) =>
+                      props.setScheduleOverrideReason(event.target.value)
+                    }
+                    placeholder="Required for the audit log"
+                    className="mt-1 w-full rounded-lg border p-2 text-sm"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Changes only the appointment date and time. Approval and sent status stay unchanged.
+                  </p>
+                </div>
+              )}
               <button
                 disabled={props.busy || managerSubmitted}
-                onClick={props.move}
+                onClick={completed && props.canSend ? props.overrideSchedule : props.move}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs font-bold text-blue-700 disabled:opacity-40"
               >
-                <Shuffle size={14} /> Move / Keep Pending
+                {completed && props.canSend ? (
+                  <>
+                    <Clock3 size={14} /> Admin Override Date & Time
+                  </>
+                ) : (
+                  <>
+                    <Shuffle size={14} /> Move / Keep Pending
+                  </>
+                )}
               </button>
             </div>
             {awaitingSend && (
@@ -1558,13 +1661,19 @@ function ReviewDialog(props: DialogProps) {
                 className="mt-2 min-h-16 w-full rounded-lg border p-2 text-sm"
               />
               {completed ? (
-                <button
-                  disabled={props.busy}
-                  onClick={() => void props.reopen()}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 p-2.5 text-xs font-bold text-white"
-                >
-                  <RotateCcw size={14} /> Reopen as New QC Cycle
-                </button>
+                props.canSend ? (
+                  <button
+                    disabled={props.busy}
+                    onClick={() => void props.reopen()}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 p-2.5 text-xs font-bold text-white"
+                  >
+                    <RotateCcw size={14} /> Undo Approval / Reopen Pending QC
+                  </button>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-slate-100 p-2 text-center text-xs font-semibold text-slate-600">
+                    Completed QC decisions can be reopened by an Admin.
+                  </p>
+                )
               ) : (
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <button
