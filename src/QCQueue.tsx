@@ -520,25 +520,91 @@ export function QCQueue() {
     }
     setBusy(false);
   }
-  async function moveLead(closeAfter = false) {
-    if (!selected || !targetCompany || !targetDate || !targetTime) return false;
-    const { error: moveError } = await supabase.rpc("qc_move_lead", {
-      p_lead_id: selected.lead.id,
-      p_company_id: targetCompany,
-      p_location_id: targetLocation || null,
-      p_date: targetDate,
-      p_start_time: targetTime,
-      p_reason: "QC calendar reassignment or reschedule",
-    });
+  async function moveLead(closeAfter = false, reasonOverride = "") {
+    if (!selected || !targetCompany || !targetDate || !targetTime) {
+      setError("Choose a company, appointment date, and appointment time.");
+      return false;
+    }
+    const moveReason =
+      reasonOverride.trim() || "QC calendar reassignment or reschedule";
+    const { data: movedData, error: moveError } = await supabase.rpc(
+      "qc_move_lead",
+      {
+        p_lead_id: selected.lead.id,
+        p_company_id: targetCompany,
+        p_location_id: targetLocation || null,
+        p_date: targetDate,
+        p_start_time: targetTime,
+        p_reason: moveReason,
+      },
+    );
     if (moveError) {
       setError(rpcError(moveError));
       return false;
     }
-    setMessage("Appointment moved and returned to Pending QC.");
+
+    const moved = (movedData || {}) as Obj;
+    const company = refs.companies.find((item) => item.id === targetCompany);
+    const location = refs.locations.find((item) => item.id === targetLocation);
+    setSelected((current) =>
+      current
+        ? {
+            ...current,
+            lead: moved.lead || {
+              ...current.lead,
+              company_id: targetCompany,
+              location_id: targetLocation || null,
+              qc_status: "pending",
+            },
+            appointment: moved.appointment || {
+              ...current.appointment,
+              company_id: targetCompany,
+              location_id: targetLocation || null,
+              appointment_date: targetDate,
+              start_time: targetTime,
+              status: "qc_pending",
+              company_visible_at: null,
+            },
+            qc_review: moved.qc_review || {
+              ...current.qc_review,
+              status: "pending",
+              reason: moveReason,
+            },
+            company: company
+              ? { ...current.company, id: company.id, name: company.name }
+              : current.company,
+            location: location || null,
+          }
+        : current,
+    );
+    setValues((current) => ({
+      ...current,
+      ...(moved.lead?.form_data || {}),
+      ...(moved.lead || {}),
+    }));
+    setMessage(
+      "Lead moved successfully and reopened as Pending QC. Company delivery access was removed until it is approved and sent again.",
+    );
     await load(true);
     if (closeAfter) setSelected(null);
     return true;
   }
+
+  async function moveSelectedLead() {
+    if (!selected) return;
+    const status = selected.qc_review?.status || selected.lead.qc_status;
+    const completed = ["approved", "denied"].includes(status);
+    if (completed && !scheduleOverrideReason.trim()) {
+      setError("Enter a reason before reopening and moving this completed lead.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const moved = await moveLead(false, scheduleOverrideReason);
+    if (moved) setScheduleOverrideReason("");
+    setBusy(false);
+  }
+
   async function overrideSchedule() {
     if (!selected || !isAdmin) return;
     const originalTime = String(selected.appointment.start_time).slice(0, 5);
@@ -687,14 +753,63 @@ export function QCQueue() {
       return;
     }
     setBusy(true);
-    const { error: reopenError } = await supabase.rpc("qc_reopen_review", {
-      p_lead_id: selected.lead.id,
-      p_reason: decisionReason,
-    });
-    if (reopenError) setError(rpcError(reopenError));
-    else {
-      setMessage("Review reopened as a new Pending QC cycle.");
-      setSelected(null);
+    setError("");
+    const reopenReason = decisionReason.trim();
+    const { data: reopenedData, error: reopenError } = await supabase.rpc(
+      "qc_reopen_review",
+      {
+        p_lead_id: selected.lead.id,
+        p_reason: reopenReason,
+      },
+    );
+
+    if (reopenError) {
+      const reopenMessage = rpcError(reopenError);
+      const legacyCycle =
+        /only a completed qc review can be reopened/i.test(reopenMessage) ||
+        /review cycle/i.test(reopenMessage);
+      if (legacyCycle) {
+        const moved = await moveLead(false, `QC reopened: ${reopenReason}`);
+        if (moved) {
+          setMessage(
+            "Legacy review repaired and reopened as Pending QC. You can now edit or reassign the lead.",
+          );
+          setDecisionReason("");
+        }
+      } else {
+        setError(reopenMessage);
+      }
+    } else {
+      const reopenedReview = (reopenedData || {}) as Obj;
+      setSelected((current) =>
+        current
+          ? {
+              ...current,
+              lead: {
+                ...current.lead,
+                qc_status: "pending",
+                qc_reason: reopenReason,
+                qc_notes: null,
+                qc_reviewed_by: null,
+                qc_reviewed_at: null,
+              },
+              appointment: {
+                ...current.appointment,
+                status: "qc_pending",
+                company_visible_at: null,
+              },
+              qc_review: {
+                ...current.qc_review,
+                ...reopenedReview,
+                status: "pending",
+              },
+            }
+          : current,
+      );
+      setMessage(
+        "Review reopened as Pending QC. You can now edit the lead or change its company, location, date, and time.",
+      );
+      setDecisionReason("");
       await load(true);
     }
     setBusy(false);
@@ -1142,7 +1257,7 @@ export function QCQueue() {
           busy={busy}
           close={() => setSelected(null)}
           save={saveEdits}
-          move={() => void moveLead(true)}
+          move={() => void moveSelectedLead()}
           overrideSchedule={() => void overrideSchedule()}
           scheduleOverrideReason={scheduleOverrideReason}
           setScheduleOverrideReason={setScheduleOverrideReason}
@@ -1401,6 +1516,14 @@ function ReviewDialog(props: DialogProps) {
   const awaitingSend =
     status === "approved" && !props.row.appointment?.company_visible_at;
   const completed = finalCompleted || (props.isManager && managerSubmitted);
+  const originalTime = String(props.row.appointment.start_time).slice(0, 5);
+  const companyChanged =
+    props.targetCompany !== props.row.lead.company_id ||
+    (props.targetLocation || "") !== (props.row.lead.location_id || "");
+  const scheduleChanged =
+    props.targetDate !== props.row.appointment.appointment_date ||
+    props.targetTime !== originalTime;
+  const adminTransfer = finalCompleted && props.canSend && companyChanged;
   if (props.isManager && managerSubmitted)
   
     return (
@@ -1527,7 +1650,7 @@ function ReviewDialog(props: DialogProps) {
               <h3 className="font-bold">Transfer / Reschedule</h3>
               <select
                 value={props.targetCompany}
-                disabled={completed}
+                disabled={completed && !props.canSend}
                 onChange={(event) => props.setTargetCompany(event.target.value)}
                 className="mt-3 w-full rounded-lg border p-2 text-sm"
               >
@@ -1539,7 +1662,7 @@ function ReviewDialog(props: DialogProps) {
               </select>
               <select
                 value={props.targetLocation}
-                disabled={completed}
+                disabled={completed && !props.canSend}
                 onChange={(event) =>
                   props.setTargetLocation(event.target.value)
                 }
@@ -1560,12 +1683,14 @@ function ReviewDialog(props: DialogProps) {
                 <input
                   type="date"
                   value={props.targetDate}
+                  disabled={completed && !props.canSend}
                   onChange={(event) => props.setTargetDate(event.target.value)}
                   className="rounded-lg border p-2 text-sm"
                 />
                 <input
                   type="time"
                   value={props.targetTime}
+                  disabled={completed && !props.canSend}
                   onChange={(event) => props.setTargetTime(event.target.value)}
                   className="rounded-lg border p-2 text-sm"
                 />
@@ -1573,7 +1698,7 @@ function ReviewDialog(props: DialogProps) {
               {completed && props.canSend && (
                 <div className="mt-2">
                   <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    Override reason
+                    {adminTransfer ? "Reopen / transfer reason" : "Override reason"}
                   </label>
                   <input
                     value={props.scheduleOverrideReason}
@@ -1584,18 +1709,29 @@ function ReviewDialog(props: DialogProps) {
                     className="mt-1 w-full rounded-lg border p-2 text-sm"
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Changes only the appointment date and time. Approval and sent status stay unchanged.
+                    {adminTransfer
+                      ? "Moving a completed lead reopens it as Pending QC and removes company delivery access until it is approved and sent again."
+                      : "Changes only the appointment date and time. Approval and sent status stay unchanged."}
                   </p>
                 </div>
               )}
               <button
-                disabled={props.busy || managerSubmitted}
-                onClick={completed && props.canSend ? props.overrideSchedule : props.move}
+                disabled={
+                  props.busy ||
+                  managerSubmitted ||
+                  (completed && props.canSend && !companyChanged && !scheduleChanged)
+                }
+                onClick={adminTransfer ? props.move : completed && props.canSend ? props.overrideSchedule : props.move}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs font-bold text-blue-700 disabled:opacity-40"
               >
                 {completed && props.canSend ? (
                   <>
-                    <Clock3 size={14} /> Admin Override Date & Time
+                    {adminTransfer ? <Shuffle size={14} /> : <Clock3 size={14} />}
+                    {adminTransfer
+                      ? "Reopen & Move to Selected Company"
+                      : scheduleChanged
+                        ? "Admin Override Date & Time"
+                        : "Choose a New Date or Time"}
                   </>
                 ) : (
                   <>
