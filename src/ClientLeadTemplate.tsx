@@ -105,7 +105,10 @@ function serviceTitle(serviceNeeded: string, lead: LeadLike): string {
   if (/solar|photovoltaic|pv system/.test(normalized)) return 'Solar Inspection';
   if (/tree|arbor|stump/.test(normalized)) return 'Tree Service';
   if (/roof|shingle|hail|storm|leak|repair|estimate|inspection/.test(normalized)) return 'Roofing Inspection';
-  return service || 'Roofing Inspectiontype RowProps = {
+  return service || 'Roofing Inspection';
+}
+
+type RowProps = {
   label: string;
   value: string;
   href?: string;
