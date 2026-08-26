@@ -1,4 +1,5 @@
-import { ExternalLink, Save } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatTime } from './portalUtils';
 
 type LeadLike = {
@@ -229,6 +230,7 @@ export function ClientLeadTemplate({
   const webLink = leadValue(lead, 'web_url', 'web_url', 'web_link', 'zillow_url', 'zillow_link');
   const notes = leadValue(lead, 'notes', 'notes');
   const editable = Boolean(onChange);
+  const [copied, setCopied] = useState(false);
 
   const editValue = (key: string, fallback: string): string => {
     if (editValues && Object.prototype.hasOwnProperty.call(editValues, key)) {
@@ -237,6 +239,72 @@ export function ClientLeadTemplate({
     }
     return fallback;
   };
+
+  const copyLead = {
+    ...lead,
+    ...(editValues || {}),
+    form_data: {
+      ...(lead.form_data || {}),
+      ...(editValues || {}),
+    },
+  } as LeadLike;
+  const copyService = leadValue(
+    copyLead,
+    'service_needed',
+    'service_needed',
+    'services_needed',
+    'services_need',
+  );
+  const copyTitle = serviceTitle(copyService, copyLead).replace(
+    /^Roofing Inspection$/i,
+    'Roof Inspection',
+  );
+  const copyValue = (value: unknown) => asText(value) || EMPTY;
+  const copyWebLink = leadValue(
+    copyLead,
+    'web_url',
+    'web_url',
+    'web_link',
+    'zillow_url',
+    'zillow_link',
+  );
+  const copyText = [
+    `**${copyTitle}**`,
+    '**Customer Information**',
+    `App Date & Time: ${formatClientDate(appointment.appointment_date)} • ${formatTime(appointment.start_time)}`,
+    `Name: ${copyValue(leadValue(copyLead, 'full_name', 'full_name', 'name'))}`,
+    `Phone: ${copyValue(leadValue(copyLead, 'phone_number', 'phone_number', 'phone'))}`,
+    `Address: ${copyValue(formatAddress(copyLead))}`,
+    `Email: ${copyValue(leadValue(copyLead, 'email', 'email').toLowerCase())}`,
+    `Language: ${copyValue(leadValue(copyLead, 'language', 'language'))}`,
+    `Services Need: ${copyValue(copyService)}`,
+    '**Property Details**',
+    `Roof Age: ${copyValue(formValue(copyLead, 'roof_age'))}`,
+    `Home Type: ${copyValue(formValue(copyLead, 'home_type'))}`,
+    `Roof Type: ${copyValue(formValue(copyLead, 'roof_type'))}`,
+    `Stories: ${copyValue(formValue(copyLead, 'stories'))}`,
+    `Insurance: ${copyValue(formValue(copyLead, 'insurance'))}`,
+    `Insurance Name: ${copyValue(formValue(copyLead, 'insurance_name'))}`,
+    `Contract: ${copyValue(formValue(copyLead, 'contract'))}`,
+    `Home Value: ${copyValue(formatCurrency(leadValue(copyLead, 'home_value', 'home_value')))}`,
+    `SQ FT: ${copyValue(formatInteger(leadValue(copyLead, 'sq_ft', 'sq_ft', 'square_feet', 'square_footage')))}`,
+    `Web Link: ${copyWebLink ? 'Open Property Link' : EMPTY}`,
+    '**Additional Information**',
+    `Notes: ${copyValue(leadValue(copyLead, 'notes', 'notes'))}`,
+    `Last Checked On: ${copyValue(normalizeLastChecked(formValue(copyLead, 'last_checked_on', 'last_inspection_date')))}`,
+    `Size of Hail: ${copyValue(formValue(copyLead, 'hail_size', 'size_of_hail'))}`,
+    `Claim Filed: ${copyValue(formValue(copyLead, 'claim_filed', 'file_claim'))}`,
+    `Visible Damage: ${copyValue(formValue(copyLead, 'visible_damage'))}`,
+    `Damage Type: ${copyValue(formValue(copyLead, 'damage_type', 'type_of_damage'))}`,
+    `Add. Properties: ${copyValue(formValue(copyLead, 'additional_properties', 'add_properties'))}`,
+    `2nd Address: ${copyValue(formValue(copyLead, 'second_address', 'other_address'))}`,
+  ].join('\n');
+
+  async function copyLeadTemplate() {
+    await navigator.clipboard.writeText(copyText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
 
   return (
     <div className="space-y-3">
@@ -319,6 +387,32 @@ export function ClientLeadTemplate({
           </div>
         )}
       </div>
+
+      <section className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3">
+          <div>
+            <h3 className="text-sm font-black text-slate-950">Copy &amp; Send Lead</h3>
+            <p className="text-xs text-slate-600">
+              All fields stay visible. Missing answers are shown as —.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void copyLeadTemplate()}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-black text-white shadow-sm hover:bg-blue-700"
+          >
+            {copied ? <Check size={15} /> : <Copy size={15} />}
+            {copied ? 'Copied' : 'Copy Lead Template'}
+          </button>
+        </div>
+        <textarea
+          aria-label="Copy-ready lead template"
+          value={copyText}
+          readOnly
+          spellCheck={false}
+          className="min-h-[31rem] w-full resize-y border-0 bg-white px-4 py-4 font-mono text-sm leading-6 text-slate-900 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-300"
+        />
+      </section>
     </div>
   );
 }
