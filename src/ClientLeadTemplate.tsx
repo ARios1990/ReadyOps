@@ -198,7 +198,7 @@ function Section({ title, children, columns = false }: { title: string; children
 const STATUS_BUTTONS = [
   ['QC DENIED', 'bg-red-600'],
   ['GOOD', 'bg-emerald-600'],
-  ['SIGNED CONTRACT', 'bg-blue-900'],
+  ['SIGNED CONTRACT', 'bg-emerald-800'],
   ['BAD', 'bg-red-600'],
   ['NO SHOW', 'bg-amber-400 text-slate-950'],
 ] as const;
