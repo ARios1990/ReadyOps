@@ -17,6 +17,7 @@ import {
   rpcError,
   startOfWeek,
 } from "./portalUtils";
+import { leadStatusClasses, normalizeLeadStatus } from "./leadStatusPresentation";
 
 interface RepLead {
   full_name: string;
@@ -40,6 +41,7 @@ interface RepAppointment {
   attendance_status: string;
   inspection_status: string;
   sales_outcome: string;
+  canonical_status: string;
   location_label: string | null;
   lead: RepLead;
   latest_checkin: {
@@ -114,7 +116,7 @@ export function RepresentativePortal({ token }: { token: string }) {
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
-      setSuccess("Appointment updated.");
+      setSuccess("Status updated.");
       window.setTimeout(() => setSuccess(""), 2000);
       await load();
     }
@@ -250,15 +252,7 @@ export function RepresentativePortal({ token }: { token: string }) {
                     {appt.lead.city ? `, ${appt.lead.city}` : ""}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                    <Badge text={appt.rep_status} />
-                    <Badge
-                      text={appt.attendance_status}
-                      good={appt.attendance_status === "verified_show"}
-                    />
-                    <Badge
-                      text={appt.sales_outcome}
-                      good={appt.sales_outcome === "signed_contract"}
-                    />
+                    <Badge text={appt.canonical_status} />
                   </div>
                 </button>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-xl">
@@ -292,33 +286,50 @@ export function RepresentativePortal({ token }: { token: string }) {
                   </button>
                   <button
                     disabled={busy}
-                    onClick={() => void action(appt.id, "inspection_started")}
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"
+                    onClick={() => void action(appt.id, "confirmed")}
+                    className="rounded-xl border border-sky-600 bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                    title="Confirmed — stays Pending internally"
                   >
-                    Start Inspection
+                    Confirm Lead
                   </button>
                   <button
                     disabled={busy}
                     onClick={() => void action(appt.id, "inspection_completed")}
-                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+                    className="rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                    title="Inspected — appears as Good internally"
                   >
-                    Complete
+                    Inspected
                   </button>
                   <button
                     disabled={busy}
                     onClick={() => void action(appt.id, "homeowner_no_show")}
-                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700"
+                    className="rounded-xl border border-yellow-400 bg-yellow-300 px-3 py-2 text-xs font-bold text-slate-950 shadow-sm disabled:opacity-50"
                   >
                     No Show
                   </button>
                   <button
                     disabled={busy}
-                    onClick={() => void action(appt.id, "signed_contract")}
-                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+                    onClick={() => void action(appt.id, "rescheduled")}
+                    className="rounded-xl border border-orange-500 bg-orange-400 px-3 py-2 text-xs font-bold text-slate-950 shadow-sm disabled:opacity-50"
                   >
-                    Signed Contract
+                    Rescheduled
                   </button>
-                </div>
+                  <button
+                    disabled={busy}
+                    onClick={() => void action(appt.id, "homeowner_cancelled")}
+                    className="rounded-xl border border-red-700 bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                    title="Bad or lead canceled"
+                  >
+                    Bad / Canceled
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => void action(appt.id, "signed_contract")}
+                    className="rounded-xl border border-emerald-950 bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                    title="Signed contract or insurance claim filed"
+                  >
+                    Signed / Claim Filed
+                  </button>                </div>
               </div>
             </article>
           ))
@@ -395,12 +406,24 @@ export function RepresentativePortal({ token }: { token: string }) {
   );
 }
 
-function Badge({ text, good = false }: { text: string; good?: boolean }) {
+function Badge({ text }: { text: string }) {
+  const status = normalizeLeadStatus(text);
+  const label =
+    status === "good_inspected"
+      ? "INSPECTED"
+      : status === "confirmed"
+        ? "CONFIRMED"
+        : status === "signed_contract"
+          ? "SIGNED CONTRACT"
+          : status === "no_show"
+            ? "NO SHOW"
+            : status.replace(/_/g, " ").toUpperCase();
+
   return (
     <span
-      className={`rounded-full px-2 py-1 font-bold uppercase ${good ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+      className={"rounded-full border px-2.5 py-1 font-bold uppercase " + leadStatusClasses(status)}
     >
-      {text.replace(/_/g, " ")}
+      {label}
     </span>
   );
 }
