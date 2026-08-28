@@ -2231,7 +2231,7 @@ function CompanyLeadsSpreadsheet({
         ) : !data.rows.length ? (
           <Empty text="No company leads match this filter." />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="readyops-sticky-table overflow-x-auto">
             <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
               <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
                 <tr>
