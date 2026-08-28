@@ -685,3 +685,30 @@ button:disabled,
   outline: 3px solid rgba(0, 108, 255, 0.42);
   outline-offset: 2px;
 }
+
+
+/* High-contrast semantic copy inside dark alert and form surfaces. */
+html[data-theme='dark'] .text-blue-900,
+html[data-theme='dark'] .text-blue-800 {
+  color: #bfdbfe !important;
+}
+html[data-theme='dark'] .text-sky-900,
+html[data-theme='dark'] .text-sky-800 {
+  color: #bae6fd !important;
+}
+html[data-theme='dark'] .text-emerald-900,
+html[data-theme='dark'] .text-emerald-800,
+html[data-theme='dark'] .text-green-900,
+html[data-theme='dark'] .text-green-800 {
+  color: #a7f3d0 !important;
+}
+html[data-theme='dark'] .text-amber-900 {
+  color: #fde68a !important;
+}
+html[data-theme='dark'] .text-red-900 {
+  color: #fecaca !important;
+}
+html[data-theme='dark'] .text-violet-900,
+html[data-theme='dark'] .text-violet-800 {
+  color: #ddd6fe !important;
+}
