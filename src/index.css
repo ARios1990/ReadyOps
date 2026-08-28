@@ -713,3 +713,8 @@ html[data-theme='dark'] .text-violet-900,
 html[data-theme='dark'] .text-violet-800 {
   color: #ddd6fe !important;
 }
+
+
+html[data-theme='light'] .readyops-brand-header .text-blue-100 {
+  color: #1d4ed8 !important;
+}
