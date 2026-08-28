@@ -1,3 +1,6 @@
+-- Imported from the hosted ReadyOp Supabase migration history on 2026-08-28.
+-- Schema only: no production table data is included.
+
 /*
 # Create user_presence table for admin Active Users feature
 
@@ -23,7 +26,8 @@ active. Presence is treated as online when last_seen_at is within 90 seconds.
 2. Privileges: authenticated is granted SELECT, INSERT, UPDATE only. DELETE is
    NOT granted. anon has no privileges.
 3. Policies (one per verb, no `FOR ALL`):
-   - SELECT — a user reads their own row; admins read all (via public.is_admin()).
+   - SELECT — a user reads their own row;
+ admins read all (via public.is_admin()).
    - INSERT — user_id must equal the authenticated caller.
    - UPDATE — USING and WITH CHECK both require user_id = authenticated caller.
 4. Auth helper calls are wrapped in `(SELECT auth.uid())` / `(SELECT public.is_admin())`
@@ -46,17 +50,25 @@ CREATE TABLE IF NOT EXISTS public.user_presence (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+
 CREATE INDEX IF NOT EXISTS user_presence_last_seen_idx
   ON public.user_presence (last_seen_at DESC);
 
+
 ALTER TABLE public.user_presence ENABLE ROW LEVEL SECURITY;
 
+
 REVOKE ALL ON TABLE public.user_presence FROM PUBLIC;
+
 REVOKE ALL ON TABLE public.user_presence FROM anon;
+
 REVOKE ALL ON TABLE public.user_presence FROM authenticated;
+
 GRANT SELECT, INSERT, UPDATE ON TABLE public.user_presence TO authenticated;
 
+
 DROP POLICY IF EXISTS "user_presence_select_self_or_admin" ON public.user_presence;
+
 CREATE POLICY "user_presence_select_self_or_admin"
   ON public.user_presence
   FOR SELECT
@@ -66,14 +78,18 @@ CREATE POLICY "user_presence_select_self_or_admin"
     OR (SELECT public.is_admin())
   );
 
+
 DROP POLICY IF EXISTS "user_presence_insert_self" ON public.user_presence;
+
 CREATE POLICY "user_presence_insert_self"
   ON public.user_presence
   FOR INSERT
   TO authenticated
   WITH CHECK (user_id = (SELECT auth.uid()));
 
+
 DROP POLICY IF EXISTS "user_presence_update_self" ON public.user_presence;
+
 CREATE POLICY "user_presence_update_self"
   ON public.user_presence
   FOR UPDATE
@@ -81,18 +97,26 @@ CREATE POLICY "user_presence_update_self"
   USING (user_id = (SELECT auth.uid()))
   WITH CHECK (user_id = (SELECT auth.uid()));
 
+
 CREATE OR REPLACE FUNCTION public.user_presence_set_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
   NEW.updated_at := now();
+
   RETURN NEW;
+
 END;
+
 $$;
 
+
 DROP TRIGGER IF EXISTS user_presence_set_updated_at ON public.user_presence;
+
 CREATE TRIGGER user_presence_set_updated_at
   BEFORE UPDATE ON public.user_presence
   FOR EACH ROW
   EXECUTE FUNCTION public.user_presence_set_updated_at();
+
+;

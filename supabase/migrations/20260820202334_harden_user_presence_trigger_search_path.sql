@@ -1,3 +1,6 @@
+-- Imported from the hosted ReadyOp Supabase migration history on 2026-08-28.
+-- Schema only: no production table data is included.
+
 /*
 # Harden search_path on user_presence updated_at trigger
 
@@ -17,6 +20,11 @@ SET search_path = public
 AS $$
 BEGIN
   NEW.updated_at := now();
+
   RETURN NEW;
+
 END;
+
 $$;
+
+;

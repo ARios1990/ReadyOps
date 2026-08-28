@@ -1,0 +1,17 @@
+services:
+  readyops-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    init: true
+    env_file:
+      - path: .env.local
+        required: false
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - .:/app
+      - readyops_node_modules:/app/node_modules
+
+volumes:
+  readyops_node_modules:

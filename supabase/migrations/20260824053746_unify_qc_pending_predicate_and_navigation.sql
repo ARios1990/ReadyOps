@@ -1,3 +1,6 @@
+-- Imported from the hosted ReadyOp Supabase migration history on 2026-08-28.
+-- Schema only: no production table data is included.
+
 
 -- Canonicalize the "QC needs review" predicate so the Overview dashboard, the
 -- Companies & Scheduling overview, and the QC Queue all agree.
@@ -19,7 +22,9 @@ CREATE OR REPLACE FUNCTION public.get_company_operations_overview()
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF NOT public.portal_is_admin() THEN RAISE EXCEPTION 'Admin access required'; END IF;
+  IF NOT public.portal_is_admin() THEN RAISE EXCEPTION 'Admin access required';
+ END IF;
+
   RETURN coalesce((
     SELECT jsonb_agg(row_data ORDER BY (row_data->>'active_package')::boolean DESC, row_data->>'company_name')
     FROM (
@@ -115,8 +120,11 @@ BEGIN
       WHERE c.account_status IN ('Active', 'Pause') OR cp.id IS NOT NULL
     ) AS q
   ), '[]'::jsonb);
+
 END;
+
 $function$;
+
 
 -- 2) QC Queue calendar: accept 'needs_review' as an umbrella qc_status filter
 -- so a single click from the dashboard reveals every lead that needs review.
@@ -140,22 +148,32 @@ CREATE OR REPLACE FUNCTION public.get_qc_calendar_queue(
 AS $function$
 DECLARE
   v_role text := private.readyops_profile_role();
+
   v_team_id uuid;
+
   v_needs_review_states text[] := ARRAY['pending','in_review','needs_correction'];
+
 BEGIN
   IF v_role NOT IN ('admin', 'qc', 'manager') THEN
     RAISE EXCEPTION 'QC reviewer access required';
+
   END IF;
+
   IF p_start_date IS NULL OR p_end_date IS NULL OR p_end_date < p_start_date OR p_end_date > p_start_date + 31 THEN
     RAISE EXCEPTION 'Select a valid date range of 32 days or less';
+
   END IF;
+
   IF p_date_basis NOT IN ('appointment', 'call') THEN
     RAISE EXCEPTION 'Date basis must be appointment or call';
+
   END IF;
+
 
   SELECT p.team_id INTO v_team_id
   FROM public.profiles AS p
   WHERE p.id = (SELECT auth.uid());
+
 
   RETURN (
     WITH filtered AS (
@@ -329,8 +347,11 @@ BEGIN
       ), '[]'::jsonb)
     )
   );
+
 END;
+
 $function$;
+
 
 -- 3) Global search: accept 'needs_review' the same way.
 CREATE OR REPLACE FUNCTION public.search_qc_leads_global(
@@ -352,22 +373,33 @@ CREATE OR REPLACE FUNCTION public.search_qc_leads_global(
 AS $function$
 DECLARE
   v_role text := private.readyops_profile_role();
+
   v_manager_team_id uuid;
+
   v_term text := trim(coalesce(p_search, ''));
+
   v_digits text := regexp_replace(coalesce(p_search, ''), '[^0-9]', '', 'g');
+
   v_limit integer := least(greatest(coalesce(p_limit, 100), 1), 100);
+
   v_needs_review_states text[] := ARRAY['pending','in_review','needs_correction'];
+
 BEGIN
   IF (SELECT auth.uid()) IS NULL OR v_role NOT IN ('admin', 'qc', 'manager') THEN
     RAISE EXCEPTION 'QC reviewer access required';
+
   END IF;
+
   IF length(v_term) < 2 THEN
     RAISE EXCEPTION 'Enter at least 2 characters to search all history';
+
   END IF;
+
 
   SELECT p.team_id INTO v_manager_team_id
   FROM public.profiles AS p
   WHERE p.id = (SELECT auth.uid());
+
 
   RETURN (
     WITH filtered AS MATERIALIZED (
@@ -487,8 +519,11 @@ BEGIN
     )
     FROM totals AS t
   );
+
 END;
+
 $function$;
+
 
 -- 4) Helper: return the earliest appointment_date (>= today or in the recent
 -- past, if that is the only home for a lead needing review) so the client can
@@ -503,18 +538,26 @@ CREATE OR REPLACE FUNCTION public.get_qc_needs_review_focus()
 AS $function$
 DECLARE
   v_role text := private.readyops_profile_role();
+
   v_team_id uuid;
+
   v_needs_review_states text[] := ARRAY['pending','in_review','needs_correction'];
+
   v_focus_date date;
+
   v_total integer;
+
 BEGIN
   IF v_role NOT IN ('admin', 'qc', 'manager') THEN
     RAISE EXCEPTION 'QC reviewer access required';
+
   END IF;
+
 
   SELECT p.team_id INTO v_team_id
   FROM public.profiles AS p
   WHERE p.id = (SELECT auth.uid());
+
 
   SELECT count(DISTINCT l.id) INTO v_total
   FROM public.portal_leads AS l
@@ -529,6 +572,7 @@ BEGIN
       v_role IN ('admin', 'qc')
       OR (v_role = 'manager' AND v_team_id IS NOT NULL AND ag.team_id = v_team_id)
     );
+
 
   -- Prefer the soonest FUTURE appointment; fall back to the most recent past.
   SELECT COALESCE(
@@ -566,12 +610,19 @@ BEGIN
     )
   ) INTO v_focus_date;
 
+
   RETURN jsonb_build_object(
     'total_needs_review', coalesce(v_total, 0),
     'focus_date', v_focus_date
   );
+
 END;
+
 $function$;
 
+
 REVOKE ALL ON FUNCTION public.get_qc_needs_review_focus() FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION public.get_qc_needs_review_focus() TO authenticated;
+
+;

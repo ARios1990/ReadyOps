@@ -1,3 +1,7 @@
+-- Imported from the hosted ReadyOp Supabase migration history on 2026-08-28.
+-- Schema only: no production table data is included.
+
+
 create or replace function public.save_readyops_payroll_entry(
   p_entry_id uuid,
   p_pay_structure text,
@@ -14,7 +18,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $$
+as $function$
 declare
   v_agent_id uuid;
   v_period_status text;
@@ -23,7 +27,7 @@ begin
     raise exception 'Admin access required';
   end if;
 
-  if p_pay_structure not in ('commission_only', 'base_only', 'base_plus_commission', 'hourly') then
+  if p_pay_structure not in ('commission_only','base_only','base_plus_commission','hourly') then
     raise exception 'Invalid pay structure';
   end if;
 
@@ -75,12 +79,8 @@ begin
       payroll_signed_contract_rate = coalesce(p_signed_contract_rate, 0)
   where id = v_agent_id;
 end;
-$$;
+$function$;
 
-revoke all on function public.save_readyops_payroll_entry(
-  uuid, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, text
-) from public, anon;
+revoke all on function public.save_readyops_payroll_entry(uuid,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,text) from public, anon;
+grant execute on function public.save_readyops_payroll_entry(uuid,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,text) to authenticated;
 
-grant execute on function public.save_readyops_payroll_entry(
-  uuid, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, text
-) to authenticated;

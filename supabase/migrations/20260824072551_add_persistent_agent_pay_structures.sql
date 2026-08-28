@@ -1,3 +1,7 @@
+-- Imported from the hosted ReadyOp Supabase migration history on 2026-08-28.
+-- Schema only: no production table data is included.
+
+
 alter table public.agents
   add column if not exists pay_structure text not null default 'commission_only',
   add column if not exists weekly_base numeric(12,2) not null default 0,
@@ -13,38 +17,30 @@ do $$
 begin
   if not exists (
     select 1 from pg_constraint where conname = 'agents_pay_structure_check'
+      and conrelid = 'public.agents'::regclass
   ) then
-    alter table public.agents
-      add constraint agents_pay_structure_check
-      check (pay_structure in ('commission_only', 'base_only', 'base_plus_commission', 'hourly'));
+    alter table public.agents add constraint agents_pay_structure_check
+      check (pay_structure in ('commission_only','base_only','base_plus_commission','hourly'));
   end if;
-
   if not exists (
     select 1 from pg_constraint where conname = 'agents_pay_rates_nonnegative_check'
+      and conrelid = 'public.agents'::regclass
   ) then
-    alter table public.agents
-      add constraint agents_pay_rates_nonnegative_check
-      check (
-        weekly_base >= 0
-        and hourly_rate >= 0
-        and payroll_lead_rate >= 0
-        and payroll_signed_contract_rate >= 0
-      );
+    alter table public.agents add constraint agents_pay_rates_nonnegative_check
+      check (weekly_base >= 0 and hourly_rate >= 0 and payroll_lead_rate >= 0 and payroll_signed_contract_rate >= 0);
   end if;
-
   if not exists (
     select 1 from pg_constraint where conname = 'payroll_entries_pay_structure_check'
+      and conrelid = 'public.payroll_entries'::regclass
   ) then
-    alter table public.payroll_entries
-      add constraint payroll_entries_pay_structure_check
-      check (pay_structure in ('commission_only', 'base_only', 'base_plus_commission', 'hourly'));
+    alter table public.payroll_entries add constraint payroll_entries_pay_structure_check
+      check (pay_structure in ('commission_only','base_only','base_plus_commission','hourly'));
   end if;
-
   if not exists (
     select 1 from pg_constraint where conname = 'payroll_entries_hourly_rate_nonnegative_check'
+      and conrelid = 'public.payroll_entries'::regclass
   ) then
-    alter table public.payroll_entries
-      add constraint payroll_entries_hourly_rate_nonnegative_check
+    alter table public.payroll_entries add constraint payroll_entries_hourly_rate_nonnegative_check
       check (hourly_rate >= 0);
   end if;
 end
@@ -57,90 +53,59 @@ set pay_structure = 'base_only',
     payroll_lead_rate = 0,
     payroll_signed_contract_rate = 0
 from public.teams t
-where a.team_id = t.id
-  and upper(t.name) in ('MSR', 'BRL');
-
-update public.agents
-set pay_structure = 'base_only',
-    weekly_base = 4000,
-    hourly_rate = 0,
-    payroll_lead_rate = 0,
-    payroll_signed_contract_rate = 0
-where lower(name) in ('dopey-msr', 'yeni-msr');
-
-update public.agents
-set pay_structure = 'commission_only',
-    weekly_base = 0,
-    hourly_rate = 0,
-    payroll_lead_rate = 500,
-    payroll_signed_contract_rate = 0
-where lower(name) = 'leah-msr';
+where t.id = a.team_id
+  and upper(t.abbreviation) in ('MSR','BRL');
 
 update public.payroll_entries pe
-set pay_structure = a.pay_structure,
-    base_pay = a.weekly_base,
-    hourly_rate = a.hourly_rate,
-    lead_rate = a.payroll_lead_rate,
-    signed_contract_rate = a.payroll_signed_contract_rate,
+set pay_structure = 'base_only',
+    base_pay = 450,
+    hourly_rate = 0,
+    lead_rate = 0,
+    signed_contract_rate = 0,
     updated_at = now()
-from public.agents a
-join public.payroll_periods pp on pp.id = pe.payroll_period_id
-where pe.agent_id = a.id
-  and pp.status <> 'locked';
+from public.teams t, public.payroll_periods pp
+where t.id = pe.team_id
+  and pp.id = pe.payroll_period_id
+  and pp.status <> 'locked'
+  and upper(t.abbreviation) in ('MSR','BRL');
 
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'payroll_entries'
-      and column_name = 'total_pay'
-  ) and not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'payroll_entries'
-      and column_name = 'total_pay_legacy'
-  ) then
-    alter table public.payroll_entries rename column total_pay to total_pay_legacy;
-  end if;
-end
-$$;
+alter table public.payroll_entries rename column total_pay to total_pay_legacy;
 
 alter table public.payroll_entries
-  add column if not exists total_pay numeric generated always as (
+  add column total_pay numeric generated always as (
     greatest(
-      case pay_structure
-        when 'commission_only' then
-          qualified_leads * lead_rate + signed_contracts * signed_contract_rate
-        when 'base_only' then
-          base_pay
-        when 'base_plus_commission' then
-          base_pay + qualified_leads * lead_rate + signed_contracts * signed_contract_rate
-        when 'hourly' then
-          hours * hourly_rate
-        else 0
-      end + bonus - deductions,
-      0
+      (
+        case pay_structure
+          when 'commission_only' then
+            qualified_leads::numeric * lead_rate
+            + signed_contracts::numeric * signed_contract_rate
+          when 'base_only' then base_pay
+          when 'base_plus_commission' then
+            base_pay
+            + qualified_leads::numeric * lead_rate
+            + signed_contracts::numeric * signed_contract_rate
+          when 'hourly' then hours * hourly_rate
+          else 0::numeric
+        end
+        + bonus
+        - deductions
+      ),
+      0::numeric
     )
   ) stored;
 
-comment on column public.agents.pay_structure is
-  'Payroll mode: commission_only, base_only, base_plus_commission, or hourly.';
-comment on column public.agents.weekly_base is
-  'Default weekly base copied into newly generated payroll entries.';
-comment on column public.payroll_entries.total_pay_legacy is
-  'Previous generated total retained for migration compatibility.';
-comment on column public.payroll_entries.total_pay is
-  'Generated total that respects the selected pay structure.';
+comment on column public.agents.pay_structure is 'Default payroll plan: commission_only, base_only, base_plus_commission, or hourly.';
+comment on column public.agents.weekly_base is 'Default weekly base copied into newly generated payroll entries.';
+comment on column public.payroll_entries.pay_structure is 'Payroll plan snapshot for this agent and payroll period.';
+comment on column public.payroll_entries.hourly_rate is 'Hourly rate used only when pay_structure is hourly.';
+comment on column public.payroll_entries.total_pay_legacy is 'Previous generated total retained for rollback/audit after payroll plan migration.';
 
 create or replace function public.generate_readyops_payroll_week(p_date date default current_date)
 returns uuid
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $$
+as $function$
 declare
   v_start date := p_date - extract(dow from p_date)::int;
   v_period uuid;
@@ -172,7 +137,7 @@ begin
     a.team_id,
     count(distinct l.id) filter (
       where l.qc_status = 'approved'
-        and ap.client_status in ('good', 'signed_contract')
+        and ap.client_status in ('good','signed_contract')
     )::int,
     count(distinct l.id) filter (
       where l.qc_status = 'approved'
@@ -205,7 +170,8 @@ begin
 
   return v_period;
 end;
-$$;
+$function$;
 
 revoke all on function public.generate_readyops_payroll_week(date) from public, anon;
 grant execute on function public.generate_readyops_payroll_week(date) to authenticated;
+

@@ -1,0 +1,12 @@
+.git
+.github
+.bolt
+node_modules
+dist
+*.log
+.env
+.env.*
+!.env.local.example
+!.env.production.example
+supabase/.branches
+supabase/.temp

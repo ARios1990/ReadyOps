@@ -1,25 +1,42 @@
-name: Verify Scheduler
+name: Verify ReadyOps
 
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/company-agent-rep-portals]
+
+permissions:
+  contents: read
 
 jobs:
-  verify:
+  application:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Install dependencies
         run: npm ci
       - name: TypeScript
         run: npm run typecheck
+      - name: Lint
+        run: npm run lint
       - name: Production build
         run: npm run build
+
+  production-container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Build production Docker image
+        run: |
+          docker build \
+            --build-arg VITE_SUPABASE_URL=https://example.supabase.co \
+            --build-arg VITE_SUPABASE_ANON_KEY=sb_publishable_ci_placeholder \
+            --tag readyops-web:ci \
+            .

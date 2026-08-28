@@ -1,0 +1,2 @@
+-- The local ReadyOps database intentionally starts without production data.
+-- Add synthetic development fixtures here when repeatable test data is needed.
