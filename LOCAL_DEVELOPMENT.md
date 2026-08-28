@@ -40,6 +40,9 @@ minutes. Later starts are much faster.
 - Hosted Edge Function secrets are not copied. Functions that depend on external
   providers need separate local test credentials.
 - Production data should not be imported unless it has been anonymized first.
+- Local log analytics is disabled because its collector expects Docker's
+  unsecured TCP control port on Windows. Core Supabase services remain enabled;
+  do not expose Docker on port 2375 just to enable the optional collector.
 
 ## Known dependency advisory
 
