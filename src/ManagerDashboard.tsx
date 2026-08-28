@@ -133,10 +133,10 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
       <header className="readyops-brand-header sticky top-0 z-30 border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-4"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="readyops-brand-logo-sm"/><div className="border-l border-white/15 pl-4"><p className="readyops-brand-subtitle text-xs font-bold uppercase tracking-[0.18em]">Manager Dashboard</p><h1 className="text-xl font-bold text-white">{data.manager?.name || data.team.name}</h1><p className="readyops-brand-subtitle text-xs">Team: {data.team.abbreviation} — {data.team.name}</p></div></div>
-          <div className="flex gap-2">
-            {!privateLinkMode && <button onClick={() => { window.location.href = '/qc'; }} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white"><ShieldCheck size={14} /> Team QC</button>}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!privateLinkMode && <button onClick={() => { window.location.href = '/qc'; }} className="readyops-solid-action inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white shadow-sm"><ShieldCheck size={14} /> Team QC</button>}
             <button onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"><RefreshCw size={14} /> Refresh</button>
-            <button onClick={() => void exitPortal()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white">{privateLinkMode ? 'Close' : 'Sign Out'}</button>
+            <button onClick={() => void exitPortal()} className="readyops-solid-action rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white shadow-sm">{privateLinkMode ? 'Close' : 'Sign Out'}</button>
           </div>
         </div>
       </header>
@@ -157,9 +157,9 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
             <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Open an agent's private lead portal to review QC pending, approved and denied leads.</p></div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..." className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400" />
           </div>
-          <div className="overflow-x-auto">
+          <div className="readyops-sticky-table overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">Client Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
+              <thead className="bg-[#071525] text-[10px] uppercase tracking-wide text-white"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">Client Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAgents.map(agent => {
                   const agentLink = agent.portal_slug && agent.access_token
