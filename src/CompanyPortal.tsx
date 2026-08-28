@@ -764,14 +764,14 @@ export function CompanyPortal({
   const companyLink = `${window.location.origin}/company/${settingsDraft.public_slug}/manage/${token}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-5">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-5">
             <img
               src={READYOPS_LOGO_DATA_URI}
               alt="ReadyOps"
-              className="h-10 w-auto"
+              className="h-8 w-auto shrink-0 sm:h-10"
             />
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
@@ -861,7 +861,7 @@ export function CompanyPortal({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6">
+      <main className="mx-auto w-full min-w-0 max-w-[1500px] px-3 py-4 sm:px-6 sm:py-5">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -2072,15 +2072,15 @@ function CompanyLeadsSpreadsheet({
   const page = Math.floor(offset / 100) + 1;
   const pages = Math.max(1, Math.ceil(data.total / 100));
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className="min-w-0 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 sm:items-end">
         <div>
           <h2 className="text-xl font-black">Company Leads</h2>
           <p className="text-xs text-slate-500">
             Every QC-approved lead delivered to this company, across all dates.
           </p>
         </div>
-        <div className="rounded-xl border bg-white px-4 py-2 text-xs">
+        <div className="w-full rounded-xl border bg-white px-4 py-2 text-xs sm:w-auto">
           <strong>{activePackage?.remaining_leads ?? "—"}</strong> package leads
           remaining{" "}
           <span className="text-slate-400">(not yet delivered records)</span>
@@ -2097,7 +2097,7 @@ function CompanyLeadsSpreadsheet({
               setOffset(0);
               setLocationId(event.target.value);
             }}
-            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+            className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs"
           >
             <option value="">All locations</option>
             {locations.map((location) => (
@@ -2118,7 +2118,7 @@ function CompanyLeadsSpreadsheet({
               setOffset(0);
               setRepresentativeId(event.target.value);
             }}
-            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+            className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs"
           >
             <option value="">All inspectors</option>
             {representatives.map((representative) => (
@@ -2140,7 +2140,7 @@ function CompanyLeadsSpreadsheet({
               setStartDate(value);
               if (value && endDate && endDate < value) setEndDate(value);
             }}
-            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+            className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs"
           />
         </label>
         <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
@@ -2153,7 +2153,7 @@ function CompanyLeadsSpreadsheet({
               setOffset(0);
               setEndDate(event.target.value);
             }}
-            className="w-full rounded-lg border px-3 py-2 text-xs font-semibold normal-case tracking-normal text-slate-800"
+            className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs"
           />
         </label>
         <button
@@ -2166,7 +2166,7 @@ function CompanyLeadsSpreadsheet({
             setStartDate("");
             setEndDate("");
           }}
-          className="self-end rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="min-h-11 self-end rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0"
         >
           Clear Filters
         </button>
@@ -2176,7 +2176,7 @@ function CompanyLeadsSpreadsheet({
           <button
             key={key}
             onClick={() => chooseFilter(key)}
-            className={`rounded-xl border p-3 text-left ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+            className={`min-h-[104px] rounded-xl border p-3 text-left ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
           >
             <span className="text-[10px] font-black uppercase tracking-wide">
               {label}
@@ -2189,9 +2189,9 @@ function CompanyLeadsSpreadsheet({
         ))}
       </div>
       <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+        <div className="flex flex-wrap items-stretch justify-between gap-3 border-b p-3 sm:items-center">
           <form
-            className="relative min-w-[260px] flex-1"
+            className="relative w-full min-w-0 sm:flex-1"
             onSubmit={(event) => {
               event.preventDefault();
               setOffset(0);
@@ -2206,16 +2206,16 @@ function CompanyLeadsSpreadsheet({
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search homeowner, phone, address, service…"
-              className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs"
+              className="h-11 w-full rounded-lg border pl-9 pr-3 text-sm sm:h-10 sm:text-xs"
             />
           </form>
           <button
             onClick={() => void load()}
-            className="inline-flex items-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-bold"
+            className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-bold sm:min-h-0"
           >
             <RefreshCw size={13} /> Refresh
           </button>
-          <span className="text-xs font-bold text-slate-500">
+          <span className="flex flex-1 items-center justify-end text-right text-xs font-bold text-slate-500 sm:flex-none">
             {data.total} matching leads • Page {page} of {pages}
           </span>
         </div>
@@ -2231,7 +2231,141 @@ function CompanyLeadsSpreadsheet({
         ) : !data.rows.length ? (
           <Empty text="No company leads match this filter." />
         ) : (
-          <div className="readyops-sticky-table overflow-x-auto">
+          <>
+            <div className="divide-y md:hidden">
+              {data.rows.map((appointment) => {
+                const form = appointment.lead.form_data || {};
+                const status =
+                  appointment.company_action ||
+                  appointment.canonical_status ||
+                  appointment.client_status ||
+                  appointment.status;
+                const address = [
+                  appointment.lead.address,
+                  appointment.lead.city,
+                  appointment.lead.state,
+                  appointment.lead.zip_code,
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+                const propertyDetails = [
+                  form.roof_age && `Roof age: ${String(form.roof_age)}`,
+                  form.roof_type && `Roof: ${String(form.roof_type)}`,
+                  (form.insurance_name || form.insurance) &&
+                    `Insurance: ${String(form.insurance_name || form.insurance)}`,
+                ].filter(Boolean) as string[];
+                return (
+                  <article
+                    key={appointment.id}
+                    className="space-y-4 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-black text-slate-950">
+                          {appointment.lead.full_name}
+                        </h3>
+                        <p className="mt-1 text-xs font-bold text-blue-700">
+                          {formatDateLong(appointment.appointment_date)} at{" "}
+                          {formatTime(appointment.start_time)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {appointment.lead.service_needed || "Service not listed"}
+                          {" • "}
+                          {appointment.location_label || "Company-wide"}
+                        </p>
+                      </div>
+                      <StatusChip status={status} />
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                      <p className="font-semibold text-slate-800">
+                        {address || "No property address entered"}
+                      </p>
+                      {propertyDetails.length > 0 && (
+                        <p className="mt-1 text-[11px]">
+                          {propertyDetails.join(" • ")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <a
+                        href={`tel:${appointment.lead.phone_number}`}
+                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700"
+                      >
+                        Call homeowner
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => openLead(appointment)}
+                        className="min-h-11 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
+                      >
+                        View lead
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                        Inspector
+                        <select
+                          aria-label={`Assign inspector for ${appointment.lead.full_name}`}
+                          value={appointment.representative_id || ""}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void assignRep(appointment.id, event.target.value)
+                          }
+                          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-800 disabled:cursor-wait disabled:opacity-50"
+                        >
+                          <option value="">Unassigned</option>
+                          {representatives
+                            .filter(
+                              (rep) =>
+                                rep.active ||
+                                rep.id === appointment.representative_id,
+                            )
+                            .map((rep) => (
+                              <option key={rep.id} value={rep.id}>
+                                {rep.name}
+                                {rep.active ? "" : " (Inactive)"}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                        Lead status
+                        <select
+                          aria-label={`Update ${appointment.lead.full_name} lead status`}
+                          value={appointment.company_action || "pending"}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void updateLeadOutcome(
+                              appointment,
+                              event.target.value,
+                            )
+                          }
+                          className={`min-h-11 w-full rounded-lg border px-3 text-sm font-black normal-case tracking-normal disabled:cursor-wait disabled:opacity-50 ${leadStatusClasses(status)}`}
+                        >
+                          <option value="pending">Pending</option>
+                          {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {(appointment.inspector_notes || appointment.lead.notes) && (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        {appointment.inspector_notes || appointment.lead.notes}
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="readyops-sticky-table hidden overflow-x-auto md:block">
             <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
               <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
                 <tr>
@@ -2405,19 +2539,20 @@ function CompanyLeadsSpreadsheet({
               </tbody>
             </table>
           </div>
+          </>
         )}
-        <div className="flex justify-end gap-2 border-t p-3">
+        <div className="flex justify-between gap-2 border-t p-3 sm:justify-end">
           <button
             disabled={offset === 0 || loading}
             onClick={() => setOffset((value) => Math.max(0, value - 100))}
-            className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40"
+            className="min-h-11 flex-1 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40 sm:min-h-0 sm:flex-none"
           >
             Previous
           </button>
           <button
             disabled={page >= pages || loading}
             onClick={() => setOffset((value) => value + 100)}
-            className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40"
+            className="min-h-11 flex-1 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40 sm:min-h-0 sm:flex-none"
           >
             Next
           </button>
