@@ -3,7 +3,6 @@ const GREEN_STATUSES = new Set([
   "good",
   "good_inspected",
   "completed",
-  "signed_contract",
 ]);
 const RED_STATUSES = new Set([
   "bad",
@@ -45,16 +44,18 @@ export function leadStatusLabel(value: unknown): string {
 
 export function leadStatusClasses(value: unknown): string {
   const status = normalizeLeadStatus(value);
+  if (status === "signed_contract")
+    return "border-emerald-950 bg-emerald-800 text-white shadow-sm";
   if (GREEN_STATUSES.has(status))
     return "border-emerald-700 bg-emerald-600 text-white shadow-sm";
   if (RED_STATUSES.has(status))
-    return "border-red-600 bg-red-500 text-white shadow-sm";
+    return "border-red-700 bg-red-600 text-white shadow-sm";
   if (BLUE_STATUSES.has(status))
-    return "border-sky-200 bg-sky-200 text-blue-950";
+    return "border-sky-600 bg-sky-500 text-white shadow-sm";
   if (YELLOW_STATUSES.has(status))
     return "border-yellow-400 bg-yellow-300 text-slate-950";
   if (ORANGE_STATUSES.has(status))
-    return "border-orange-200 bg-orange-100 text-orange-800";
+    return "border-orange-500 bg-orange-400 text-slate-950 shadow-sm";
   if (status === "in_review")
     return "border-violet-200 bg-violet-100 text-violet-800";
   return "border-slate-200 bg-slate-100 text-slate-700";
