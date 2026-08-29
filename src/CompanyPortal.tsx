@@ -912,10 +912,10 @@ export function CompanyPortal({
           />
         </section>
 
-        <nav className="mb-5 hidden gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 sm:flex">
+        <nav className="mb-5 hidden gap-4 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm sm:flex">
           {(
             [
-              ["overview", "Overview", CalendarDays],
+              ["overview", "Dashboard", CalendarDays],
               ["leads", "Leads", FileSpreadsheet],
               ["setup", "Company Setup", ShieldCheck],
               ["reports", "Reports", BarChart3],
@@ -924,7 +924,7 @@ export function CompanyPortal({
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold ${tab === key ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold ${tab === key ? "bg-blue-600 text-white shadow-sm" : "text-white hover:bg-white/10"}`}
             >
               <Icon size={14} />
               {label}
@@ -2246,7 +2246,7 @@ function CompanyLeadsSpreadsheet({
             <span className="block max-w-[72%] text-[10px] font-black uppercase tracking-wide">
               {label}
             </span>
-            <strong className="mt-1 block text-3xl text-slate-950">
+            <strong className={`mt-1 block text-3xl ${key === "signed_contract" ? "text-white" : "text-slate-950"}`}>
               {count}
             </strong>
             <span className="mt-2 block text-[9px] font-bold">Show matching leads →</span>
@@ -2454,7 +2454,10 @@ function CompanyLeadsSpreadsheet({
                         key={label}
                         className={`border-b border-[#17314d] px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[130px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
                       >
-                        {label}
+                        <span className="flex items-center justify-between gap-1">
+                          {label}
+                          <span className="text-[9px] text-blue-100/80">↕</span>
+                        </span>
                       </th>
                     ))}
                   </tr>
@@ -2520,7 +2523,12 @@ function CompanyLeadsSpreadsheet({
                           </span>
                         </td>
                         <td className="min-w-[150px] border-b border-r border-slate-200 px-3 py-3 font-black text-blue-700">
-                          {new Date(`${appointment.appointment_date}T12:00:00`).toLocaleDateString("en-US")} · {formatTime(appointment.start_time)}
+                          <span className="block">
+                            {new Date(`${appointment.appointment_date}T12:00:00`).toLocaleDateString("en-US")}
+                          </span>
+                          <span className="mt-1 block text-slate-900">
+                            {formatTime(appointment.start_time)}
+                          </span>
                         </td>
                         <td className="min-w-[210px] border-b border-r border-slate-200 px-3 py-3 leading-5">
                           {fullAddress || "—"}
@@ -2561,7 +2569,10 @@ function CompanyLeadsSpreadsheet({
                           </button>
                         </td>
                         <td className="sticky right-0 z-[1] min-w-[125px] border-b border-l bg-inherit px-3 py-3 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.28)]">
-                          <StatusChip status={status} />
+                          <StatusChip
+                            status={status}
+                            label={String(status).toLowerCase() === "pending" ? "Pending Updates" : undefined}
+                          />
                         </td>
                       </tr>
                     );
@@ -3312,12 +3323,12 @@ function ReportValue({
     </div>
   );
 }
-function StatusChip({ status }: { status: string }) {
+function StatusChip({ status, label }: { status: string; label?: string }) {
   return (
     <span
       className={`inline-flex rounded-md border px-3 py-2 text-xs font-black ${leadStatusClasses(status)}`}
     >
-      {leadStatusLabel(status)}
+      {label || leadStatusLabel(status)}
     </span>
   );
 }
