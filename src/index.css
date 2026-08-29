@@ -867,3 +867,182 @@ html[data-theme='dark'] .readyops-agent-table tbody td .text-slate-600,
 html[data-theme='dark'] .readyops-agent-table tbody td .text-slate-700 {
   color: #dbeafe !important;
 }
+
+/* Shared reference layout: every Company and Agent view uses the same visual language. */
+.readyops-company-portal,
+.readyops-agent-portal {
+  --readyops-navy: #06152b;
+  --readyops-navy-raised: #0b223a;
+  --readyops-blue: #075ff7;
+  --readyops-line: #dce5ef;
+  --readyops-page: #f7f9fc;
+  --readyops-row: #f5f7fa;
+  --readyops-row-alt: #edf1f5;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(7, 95, 247, 0.035), transparent 30rem),
+    var(--readyops-page);
+  color: #071525;
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.readyops-company-header,
+.readyops-agent-header {
+  border-color: var(--readyops-line) !important;
+  box-shadow: 0 1px 0 rgba(6, 21, 43, 0.03);
+}
+
+.readyops-company-portal :is(h1, h2, h3),
+.readyops-agent-portal :is(h1, h2, h3) {
+  color: #06152b;
+  letter-spacing: -0.015em;
+}
+
+.readyops-company-primary-nav,
+.readyops-company-subnav,
+.readyops-agent-range-nav {
+  background: linear-gradient(110deg, #06152b 0%, #071b35 100%) !important;
+  border-color: #17314d !important;
+  box-shadow: 0 8px 18px rgba(6, 21, 43, 0.08);
+}
+
+.readyops-company-primary-nav button,
+.readyops-company-subnav button,
+.readyops-agent-range-nav button {
+  min-height: 40px;
+}
+
+.readyops-company-portal :is(section, article).bg-white,
+.readyops-agent-portal :is(section, article).bg-white,
+.readyops-agent-section {
+  border-color: var(--readyops-line);
+  box-shadow: 0 4px 14px rgba(6, 21, 43, 0.045);
+}
+
+.readyops-company-portal :is(input, select, textarea),
+.readyops-agent-portal :is(input, select, textarea) {
+  border-color: #d5e0eb;
+  background-color: #fff;
+  color: #071525;
+}
+
+.readyops-company-portal :is(input, select, textarea):focus,
+.readyops-agent-portal :is(input, select, textarea):focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.readyops-company-portal table thead,
+.readyops-agent-portal table thead {
+  background: linear-gradient(110deg, #06152b 0%, #0b223a 100%) !important;
+  color: #fff !important;
+}
+
+.readyops-company-portal table thead th,
+.readyops-agent-portal table thead th {
+  border-color: #17314d !important;
+  color: #fff !important;
+}
+
+.readyops-agent-section > div:first-child {
+  background: linear-gradient(110deg, #06152b 0%, #0b223a 100%) !important;
+  border-color: #17314d !important;
+}
+
+.readyops-agent-section > div:first-child :is(h2, p) {
+  color: #fff !important;
+}
+
+.readyops-agent-metric {
+  border-radius: 14px !important;
+  box-shadow: 0 4px 14px rgba(6, 21, 43, 0.045);
+}
+
+.readyops-icon-button {
+  min-height: 40px;
+  min-width: 40px;
+  display: inline-grid;
+  place-items: center;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.readyops-icon-button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #075ff7;
+}
+
+html[data-theme='dark'] .readyops-company-portal,
+html[data-theme='dark'] .readyops-agent-portal {
+  --readyops-line: #314761;
+  --readyops-page: #0d1928;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.09), transparent 30rem),
+    var(--readyops-page) !important;
+  color: #eef4fb !important;
+}
+
+html[data-theme='dark'] .readyops-company-portal :is(h1, h2, h3),
+html[data-theme='dark'] .readyops-agent-portal :is(h1, h2, h3) {
+  color: #f6f9fd !important;
+}
+
+html[data-theme='dark'] .readyops-company-portal :is(section, article).bg-white,
+html[data-theme='dark'] .readyops-agent-portal :is(section, article).bg-white,
+html[data-theme='dark'] .readyops-agent-section {
+  background-color: #132238 !important;
+  border-color: #314761 !important;
+}
+
+html[data-theme='dark'] .readyops-company-portal :is(input, select, textarea),
+html[data-theme='dark'] .readyops-agent-portal :is(input, select, textarea) {
+  border-color: #405873;
+  background-color: #0f1d2d;
+  color: #eef4fb;
+}
+
+html[data-theme='dark'] .readyops-company-header,
+html[data-theme='dark'] .readyops-agent-header {
+  background-color: rgba(13, 25, 40, 0.96) !important;
+  border-color: #314761 !important;
+}
+
+html[data-theme='dark'] .readyops-icon-button:hover {
+  border-color: #60a5fa;
+  background: #17314d;
+  color: #bfdbfe;
+}
+
+@media (max-width: 639px) {
+  .readyops-company-portal,
+  .readyops-agent-portal {
+    background-image: none;
+  }
+
+  .readyops-agent-range-nav {
+    border-radius: 14px;
+  }
+
+  .readyops-agent-range-nav label {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  .readyops-agent-range-nav label select {
+    width: 100%;
+    margin-left: 0;
+    min-height: 44px;
+  }
+
+  .readyops-agent-range-nav button {
+    flex: 1 1 auto;
+  }
+
+  .readyops-agent-section > div:first-child {
+    align-items: flex-start;
+  }
+}
