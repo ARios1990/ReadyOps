@@ -271,7 +271,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
     );
 
   return (
-    <div className="readyops-agent-portal min-h-screen bg-slate-50 text-slate-900">
+    <div className="readyops-agent-portal body-text min-h-screen bg-slate-50 text-slate-900">
       <header className="readyops-agent-header sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-3 sm:gap-5">
@@ -396,7 +396,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
         <section className="readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
             <div>
-              <h2 className="font-bold">Other Appointments</h2>
+              <h2 className="section-title">Other Appointments</h2>
               <p className="mt-0.5 text-xs text-blue-100">
                 Book another appointment with an agent-linked company form.
               </p>
@@ -419,7 +419,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
                   <a
                     key={company.id}
                     href={`/book/${company.public_slug}?agent_token=${encodeURIComponent(token)}&agent=${encodeURIComponent(data.agent.name)}`}
-                    className="flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-3 text-sm font-bold hover:border-blue-300 hover:bg-blue-50"
+                    className="company-link flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-3 hover:border-blue-300 hover:bg-blue-50"
                   >
                     <span>
                       {company.name}
@@ -626,7 +626,7 @@ function LeadSection({
     <section className={`readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
       <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
         <div>
-          <h2 className="font-bold">
+          <h2 className="section-title">
             {title}{" "}
             <span className="ml-1 text-sm text-blue-200">({rows.length})</span>
           </h2>
@@ -646,7 +646,7 @@ function LeadSection({
       ) : (
         <div className="overflow-x-auto">
           <table className="readyops-agent-table w-full min-w-[1100px] text-sm">
-            <thead className="bg-[#0b223a] text-white">
+            <thead className="table-header bg-[#0b223a] text-white">
               <tr className="text-left text-[10px] uppercase tracking-wide">
                 <th className="p-3">Company</th>
                 <th>Name</th>
@@ -669,7 +669,7 @@ function LeadSection({
                   }
                   className={`border-t bg-slate-50 even:bg-slate-100/80 ${row.qc_status === "needs_correction" ? "cursor-pointer hover:bg-orange-50" : "hover:bg-blue-50"}`}
                 >
-                  <td className="p-3 font-bold">
+                  <td className="company-link p-3">
                         {row.company_name}
                   </td>
                   <td>{row.name}</td>
@@ -755,7 +755,7 @@ function Metric({
         ? "border-red-200 bg-red-50 text-red-800"
         : tone === "orange"
           ? "border-orange-200 bg-orange-50 text-orange-800"
-          : "border-amber-200 bg-amber-50 text-amber-800";
+          : "readyops-kpi-neutral border-slate-200 bg-white text-slate-800";
   const Icon =
     tone === "green"
       ? CheckCircle2
@@ -771,8 +771,8 @@ function Metric({
         strokeWidth={1.8}
         className="absolute right-4 top-1/2 -translate-y-1/2"
       />
-      <p className="max-w-[75%] text-xs font-bold uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-3xl font-black">{value}</p>
+      <p className="kpi-title max-w-[75%] uppercase tracking-wide">{label}</p>
+      <p className="kpi-number mt-1">{value}</p>
     </div>
   );
 }
