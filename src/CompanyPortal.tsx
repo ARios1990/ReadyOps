@@ -892,7 +892,7 @@ export function CompanyPortal({
           </div>
         )}
 
-        <section className="mb-5 hidden gap-3 sm:grid md:grid-cols-2">
+        <section className="hidden">
           <LinkCard
             title="Agent Booking Link"
             value={agentLink}
@@ -2431,7 +2431,7 @@ function CompanyLeadsSpreadsheet({
             </div>
 
             <div className="readyops-sticky-table hidden overflow-x-auto md:block">
-              <table className="readyops-company-leads-table w-full min-w-[1480px] border-separate border-spacing-0 text-xs">
+              <table className="readyops-company-leads-table w-full min-w-[1380px] border-separate border-spacing-0 text-xs">
                 <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
                   <tr>
                     {[
@@ -2452,7 +2452,7 @@ function CompanyLeadsSpreadsheet({
                     ].map((label, index, labels) => (
                       <th
                         key={label}
-                        className={`border-b border-[#17314d] px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[130px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
+                        className={`border-b border-[#17314d] px-2 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[126px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
                       >
                         <span className="flex items-center justify-between gap-1">
                           {label}
@@ -2485,7 +2485,7 @@ function CompanyLeadsSpreadsheet({
                         className="group cursor-pointer bg-slate-50 even:bg-slate-100/80 hover:bg-blue-50"
                       >
                         <td
-                          className="sticky left-0 z-[1] min-w-[130px] border-b border-r bg-inherit px-3 py-3 shadow-[4px_0_8px_-6px_rgba(15,23,42,0.28)]"
+                          className="sticky left-0 z-[1] min-w-[126px] border-b border-r bg-inherit px-2 py-3 shadow-[4px_0_8px_-6px_rgba(15,23,42,0.28)]"
                           onClick={(event) => event.stopPropagation()}
                         >
                           <select
@@ -2496,7 +2496,7 @@ function CompanyLeadsSpreadsheet({
                             onChange={(event) =>
                               void assignRep(appointment.id, event.target.value)
                             }
-                            className="w-full min-w-[108px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-2 text-xs font-bold text-slate-900 disabled:cursor-wait disabled:opacity-50"
+                            className="w-full min-w-[112px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-2 text-[11px] font-bold text-slate-900 disabled:cursor-wait disabled:opacity-50"
                           >
                             <option value="">Unassigned</option>
                             {representatives
@@ -2513,7 +2513,7 @@ function CompanyLeadsSpreadsheet({
                               ))}
                           </select>
                         </td>
-                        <td className="min-w-[165px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[150px] border-b border-r border-slate-200 px-2.5 py-3">
                           <span className="flex items-center gap-1 font-black text-slate-950">
                             {appointment.lead.full_name}
                             <Pencil size={12} className="text-slate-500" />
@@ -2522,7 +2522,7 @@ function CompanyLeadsSpreadsheet({
                             {appointment.lead.phone_number}
                           </span>
                         </td>
-                        <td className="min-w-[150px] border-b border-r border-slate-200 px-3 py-3 font-black text-blue-700">
+                        <td className="min-w-[125px] border-b border-r border-slate-200 px-2.5 py-3 font-black text-blue-700">
                           <span className="block">
                             {new Date(`${appointment.appointment_date}T12:00:00`).toLocaleDateString("en-US")}
                           </span>
@@ -2530,45 +2530,45 @@ function CompanyLeadsSpreadsheet({
                             {formatTime(appointment.start_time)}
                           </span>
                         </td>
-                        <td className="min-w-[210px] border-b border-r border-slate-200 px-3 py-3 leading-5">
+                        <td className="min-w-[175px] border-b border-r border-slate-200 px-2.5 py-3 leading-5">
                           {fullAddress || "—"}
                         </td>
-                        <td className="min-w-[110px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[95px] border-b border-r border-slate-200 px-2.5 py-3">
                           {appointment.lead.service_needed || "—"}
                         </td>
-                        <td className="min-w-[82px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[68px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.roof_age || "—")}
                         </td>
-                        <td className="min-w-[86px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[72px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.roof_type || "—")}
                         </td>
-                        <td className="min-w-[100px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[82px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.home_type || "—")}
                         </td>
-                        <td className="min-w-[70px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[58px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.stories || "—")}
                         </td>
-                        <td className="min-w-[75px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[64px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.insurance || "—")}
                         </td>
-                        <td className="min-w-[90px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[75px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.insurance_name || "—")}
                         </td>
-                        <td className="min-w-[90px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[75px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.visible_damage || form.hail_size || "—")}
                         </td>
-                        <td className="min-w-[92px] border-b border-r border-slate-200 px-3 py-3">
+                        <td className="min-w-[75px] border-b border-r border-slate-200 px-2.5 py-3">
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
                               openLead(appointment);
                             }}
-                            className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 font-bold text-blue-700 shadow-sm"
+                            className="whitespace-nowrap rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 font-bold text-blue-700 shadow-sm"
                           >
                             View Lead
                           </button>
                         </td>
-                        <td className="sticky right-0 z-[1] min-w-[125px] border-b border-l bg-inherit px-3 py-3 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.28)]">
+                        <td className="sticky right-0 z-[1] min-w-[108px] border-b border-l bg-inherit px-2.5 py-3 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.28)]">
                           <StatusChip
                             status={status}
                             label={String(status).toLowerCase() === "pending" ? "Pending Updates" : undefined}
@@ -3208,7 +3208,7 @@ function CompanyLogo({
       : null;
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <div className="hidden h-16 w-20 items-center justify-center overflow-hidden rounded-xl border bg-white shadow-sm md:flex">
+      <div className="hidden">
         {directLogo ? (
           <img
             src={directLogo}
@@ -3324,9 +3324,12 @@ function ReportValue({
   );
 }
 function StatusChip({ status, label }: { status: string; label?: string }) {
+  const classes = label === "Pending Updates"
+    ? "border-blue-100 bg-blue-50 text-blue-700"
+    : leadStatusClasses(status);
   return (
     <span
-      className={`inline-flex rounded-md border px-3 py-2 text-xs font-black ${leadStatusClasses(status)}`}
+      className={`inline-flex whitespace-nowrap rounded-md border px-2.5 py-2 text-[11px] font-black ${classes}`}
     >
       {label || leadStatusLabel(status)}
     </span>
