@@ -307,7 +307,7 @@ export function ClientLeadTemplate({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="readyops-client-lead-template space-y-3 text-slate-900">
       {showLabel && (
         <p className="px-3 text-xs font-black uppercase tracking-[0.18em] text-blue-600">
           Lead Template
