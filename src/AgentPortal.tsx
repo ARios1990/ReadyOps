@@ -3,7 +3,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
   Edit3,
+  Eye,
+  EyeOff,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -25,6 +30,20 @@ import {
 import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
 
 type RangeMode = "this" | "previous" | "all";
+type AgentSectionKey =
+  | "corrections"
+  | "pending"
+  | "booked"
+  | "denied"
+  | "other";
+
+const DEFAULT_AGENT_SECTIONS: Record<AgentSectionKey, boolean> = {
+  corrections: true,
+  pending: true,
+  booked: true,
+  denied: true,
+  other: true,
+};
 type LeadRow = {
   lead_id: string;
   lead_code?: string;
@@ -83,6 +102,34 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
   const [correctionLoading, setCorrectionLoading] = useState(false);
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState("");
+  const sectionStorageKey = `readyops-agent-sections:${slug}`;
+  const [sectionOpen, setSectionOpen] = useState<
+    Record<AgentSectionKey, boolean>
+  >(() => {
+    if (typeof window === "undefined") return DEFAULT_AGENT_SECTIONS;
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem(`readyops-agent-sections:${slug}`) || "{}",
+      ) as Partial<Record<AgentSectionKey, boolean>>;
+      return { ...DEFAULT_AGENT_SECTIONS, ...saved };
+    } catch {
+      return DEFAULT_AGENT_SECTIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        sectionStorageKey,
+        JSON.stringify(sectionOpen),
+      );
+    } catch {
+      // The controls still work for the current visit if storage is disabled.
+    }
+  }, [sectionOpen, sectionStorageKey]);
+
+  const toggleSection = (key: AgentSectionKey) =>
+    setSectionOpen((current) => ({ ...current, [key]: !current[key] }));
 
   const range = useMemo(() => {
     const monday = calendarWeekStart();
@@ -223,7 +270,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
     );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="readyops-agent-portal min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <div>
@@ -300,46 +347,75 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           description="Open the original lead, make the changes requested by QC, and submit the same lead again."
           rows={corrections}
           onOpenCorrection={openCorrection}
+          tone="orange"
+          open={sectionOpen.corrections}
+          onToggle={() => toggleSection("corrections")}
         />
         <LeadSection
           title="QC Pending"
           description="Submitted to QC. The appointment slot is held, but the company cannot see it yet."
           rows={pending}
           onOpenCorrection={openCorrection}
+          tone="amber"
+          open={sectionOpen.pending}
+          onToggle={() => toggleSection("pending")}
         />
         <LeadSection
-          title="Approved Leads"
+          title="Booked / Approved Appointments"
           description="QC approved. The company can now see and work these appointments."
           rows={approved}
           onOpenCorrection={openCorrection}
+          tone="green"
+          open={sectionOpen.booked}
+          onToggle={() => toggleSection("booked")}
         />
         <LeadSection
           title="QC Denied"
           description="These remain in your history with the QC denial reason."
           rows={denied}
           onOpenCorrection={openCorrection}
+          tone="red"
+          open={sectionOpen.denied}
+          onToggle={() => toggleSection("denied")}
         />
-        <section className="rounded-2xl border bg-white p-4">
-          <h2 className="font-bold">Book Another Appointment</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            These links identify you automatically so new appointments are
-            attached to this agent portal.
-          </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {data.companies.map((company) => (
-              <a
-                key={company.id}
-                href={`/book/${company.public_slug}?agent_token=${encodeURIComponent(token)}&agent=${encodeURIComponent(data.agent.name)}`}
-                className="flex items-center justify-between rounded-xl border px-3 py-3 text-sm font-bold hover:border-blue-300 hover:bg-blue-50"
-              >
-                <span>
-                  {company.name}
-                  {company.state ? ` — ${company.state}` : ""}
-                </span>
-                <ExternalLink size={14} />
-              </a>
-            ))}
+        <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
+            <div>
+              <h2 className="font-bold">Other Appointments</h2>
+              <p className="mt-0.5 text-xs text-blue-100">
+                Book another appointment with an agent-linked company form.
+              </p>
+            </div>
+            <SectionToggle
+              open={sectionOpen.other}
+              onToggle={() => toggleSection("other")}
+              label="Other Appointments"
+              inverted
+            />
           </div>
+          {sectionOpen.other && (
+            <div className="p-4">
+              <p className="text-sm text-slate-500">
+                These links identify you automatically so new appointments are
+                attached to this agent portal.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {data.companies.map((company) => (
+                  <a
+                    key={company.id}
+                    href={`/book/${company.public_slug}?agent_token=${encodeURIComponent(token)}&agent=${encodeURIComponent(data.agent.name)}`}
+                    className="flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-3 text-sm font-bold hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    <span>
+                      {company.name}
+                      {company.state ? ` — ${company.state}` : ""}
+                    </span>
+                    <ExternalLink size={14} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
       {correctionLead && (
@@ -476,35 +552,87 @@ function CorrectionModal({
   );
 }
 
+function SectionToggle({
+  open,
+  onToggle,
+  label,
+  inverted = false,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  inverted?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={`${open ? "Hide" : "Show"} ${label}`}
+      onClick={onToggle}
+      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+        inverted
+          ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
+          : "border-[#17314d] bg-white text-[#071525] hover:bg-slate-50"
+      }`}
+    >
+      {open ? <EyeOff size={14} /> : <Eye size={14} />}
+      {open ? "Hide" : "Show"}
+      {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+    </button>
+  );
+}
+
 function LeadSection({
   title,
   description,
   rows,
   onOpenCorrection,
+  tone,
+  open,
+  onToggle,
 }: {
   title: string;
   description: string;
   rows: LeadRow[];
   onOpenCorrection: (row: LeadRow) => void;
+  tone: "orange" | "amber" | "green" | "red";
+  open: boolean;
+  onToggle: () => void;
 }) {
+  const borderTone =
+    tone === "green"
+      ? "border-emerald-300"
+      : tone === "red"
+        ? "border-red-300"
+        : tone === "orange"
+          ? "border-orange-300"
+          : "border-amber-300";
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white">
-      <div className="border-b p-4">
-        <h2 className="font-bold">
-          {title}{" "}
-          <span className="ml-1 text-sm text-slate-400">({rows.length})</span>
-        </h2>
-        <p className="text-xs text-slate-500">{description}</p>
+    <section className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
+      <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
+        <div>
+          <h2 className="font-bold">
+            {title}{" "}
+            <span className="ml-1 text-sm text-blue-200">({rows.length})</span>
+          </h2>
+          <p className="text-xs text-blue-100">{description}</p>
+        </div>
+        <SectionToggle
+          open={open}
+          onToggle={onToggle}
+          label={title}
+          inverted
+        />
       </div>
-      {rows.length === 0 ? (
+      {!open ? null : rows.length === 0 ? (
         <div className="p-6 text-center text-sm text-slate-400">
           No appointments in this section.
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-sm">
-            <thead>
-              <tr className="text-left text-[10px] uppercase text-slate-400">
+          <table className="readyops-agent-table w-full min-w-[1100px] text-sm">
+            <thead className="bg-[#0b223a] text-white">
+              <tr className="text-left text-[10px] uppercase tracking-wide">
                 <th className="p-3">Company</th>
                 <th>Name</th>
                 <th>Phone</th>
@@ -524,7 +652,7 @@ function LeadSection({
                     row.qc_status === "needs_correction" &&
                     onOpenCorrection(row)
                   }
-                  className={`border-t ${row.qc_status === "needs_correction" ? "cursor-pointer bg-orange-50/40 hover:bg-orange-50" : ""}`}
+                  className={`border-t bg-slate-50 even:bg-slate-100/80 ${row.qc_status === "needs_correction" ? "cursor-pointer hover:bg-orange-50" : "hover:bg-blue-50"}`}
                 >
                   <td className="p-3 font-bold">
                         {row.company_name}
@@ -613,15 +741,28 @@ function Metric({
         : tone === "orange"
           ? "border-orange-200 bg-orange-50 text-orange-800"
           : "border-amber-200 bg-amber-50 text-amber-800";
+  const Icon =
+    tone === "green"
+      ? CheckCircle2
+      : tone === "red"
+        ? XCircle
+        : tone === "orange"
+          ? AlertTriangle
+          : Clock3;
   return (
-    <div className={`rounded-2xl border p-4 ${classes}`}>
-      <p className="text-xs font-bold uppercase tracking-wide">{label}</p>
+    <div className={`relative min-h-[102px] rounded-2xl border p-4 ${classes}`}>
+      <Icon
+        size={31}
+        strokeWidth={1.8}
+        className="absolute right-4 top-1/2 -translate-y-1/2"
+      />
+      <p className="max-w-[75%] text-xs font-bold uppercase tracking-wide">{label}</p>
       <p className="mt-1 text-3xl font-black">{value}</p>
     </div>
   );
 }
 function btn(active: boolean) {
-  return `rounded-lg px-3 py-2 text-xs font-bold ${active ? "bg-blue-600 text-white" : "border bg-white text-slate-600"}`;
+  return `rounded-lg px-3 py-2 text-xs font-bold transition ${active ? "bg-[#0b3767] text-white shadow-sm" : "border bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"}`;
 }
 function State({
   title,
