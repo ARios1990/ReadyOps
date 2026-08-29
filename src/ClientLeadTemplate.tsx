@@ -189,7 +189,7 @@ function Row({
 function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
   return (
     <section>
-      <h3 className="mb-2 text-sm font-black text-blue-600">{title}</h3>
+      <h3 className="mb-2 text-sm font-black text-blue-950 underline underline-offset-2">{title}</h3>
       <div className={columns ? 'grid gap-x-6 sm:grid-cols-2' : ''}>{children}</div>
     </section>
   );
@@ -345,9 +345,9 @@ export function ClientLeadTemplate({
 
           <Section title="Additional Information" columns>
             <div className="col-span-full space-y-2">
-              <Row label="Notes:" field="notes" multiline value={notes} editValue={editValue('notes', notes)} onChange={onChange} />
+              <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
               <div className="border-t border-blue-100 pt-1">
-                <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
+                <Row label="Notes:" field="notes" multiline value={notes} editValue={editValue('notes', notes)} onChange={onChange} />
               </div>
             </div>
             <Row label="Size of Hail:" field="hail_size" value={formValue(lead, 'hail_size', 'size_of_hail')} editValue={editValue('hail_size', formValue(lead, 'hail_size', 'size_of_hail'))} onChange={onChange} />
