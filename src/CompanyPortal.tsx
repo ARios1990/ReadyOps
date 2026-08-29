@@ -784,7 +784,7 @@ export function CompanyPortal({
 
   return (
     <div className="readyops-company-portal min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
+      <header className="readyops-company-header sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-5">
             <img
@@ -912,7 +912,7 @@ export function CompanyPortal({
           />
         </section>
 
-        <nav className="mb-5 hidden gap-4 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm sm:flex">
+        <nav className="readyops-company-primary-nav mb-5 hidden gap-4 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm sm:flex">
           {(
             [
               ["overview", "Dashboard", CalendarDays],
@@ -933,7 +933,7 @@ export function CompanyPortal({
         </nav>
 
         {tab === "setup" && (
-          <nav className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <nav className="readyops-company-subnav mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm">
             {(
               [
                 ["locations", "Locations", MapPin],
@@ -943,7 +943,7 @@ export function CompanyPortal({
                 ["reps", "Representatives", Users],
               ] as [SetupTab, string, typeof CalendarDays][]
             ).map(([key, label, Icon]) => (
-              <button key={key} onClick={() => setSetupTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold ${setupTab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"}`}>
+              <button key={key} onClick={() => setSetupTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition ${setupTab === key ? "border-blue-500 bg-blue-600 text-white shadow-sm" : "border-transparent text-white hover:border-white/20 hover:bg-white/10"}`}>
                 <Icon size={14} />{label}
               </button>
             ))}
