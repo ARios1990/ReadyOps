@@ -227,15 +227,12 @@ const DAY_NAMES = [
   "Saturday",
 ];
 const COMPANY_LEAD_ACTIONS = [
-  ["contacted", "Contacted"],
-  ["confirmed", "Confirmed"],
-  ["inspected", "Inspected"],
   ["no_show", "No Show"],
-  ["rescheduled", "Rescheduled"],
-  ["estimate_given", "Estimate Given"],
-  ["claim_filed", "Claim Filed"],
   ["signed_contract", "Signed Contract"],
   ["lost", "Bad"],
+  ["good", "Good"],
+  ["inspected", "Inspected"],
+  ["rescheduled", "Rescheduled"],
 ] as const;
 
 export function CompanyPortal({
@@ -561,8 +558,20 @@ export function CompanyPortal({
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
+      const assignedRepresentative = data?.representatives.find(
+        (representative) => representative.id === repId,
+      );
+      setSelectedLead((current) =>
+        current?.id === appointmentId
+          ? {
+              ...current,
+              representative_id: repId || null,
+              representative_name: assignedRepresentative?.name || null,
+            }
+          : current,
+      );
       setCompanyLeadRefreshKey((value) => value + 1);
-      notify("Inspector assignment updated.");
+      notify("Representative assignment updated.");
       await load();
     }
     setBusy(false);
@@ -601,11 +610,15 @@ export function CompanyPortal({
   async function updateLeadOutcome(
     appointment: Appointment,
     clientStatus: string,
+    suppliedNotes?: string,
   ) {
-    const note = window.prompt(
-      "Inspector / company notes (optional)",
-      appointment.inspector_notes || "",
-    );
+    const note =
+      suppliedNotes === undefined
+        ? window.prompt(
+            "Inspector / company notes (optional)",
+            appointment.inspector_notes || "",
+          )
+        : suppliedNotes;
     if (note === null) return;
     setBusy(true);
     setError("");
@@ -861,7 +874,7 @@ export function CompanyPortal({
         </div>
       </header>
 
-      <main className="mx-auto w-full min-w-0 max-w-[1500px] px-3 py-4 sm:px-6 sm:py-5">
+      <main className="mx-auto w-full min-w-0 max-w-[1500px] px-3 pb-24 pt-4 sm:px-6 sm:py-5">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -873,7 +886,7 @@ export function CompanyPortal({
           </div>
         )}
 
-        <section className="mb-5 grid gap-3 md:grid-cols-2">
+        <section className="mb-5 hidden gap-3 sm:grid md:grid-cols-2">
           <LinkCard
             title="Agent Booking Link"
             value={agentLink}
@@ -893,7 +906,7 @@ export function CompanyPortal({
           />
         </section>
 
-        <nav className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
+        <nav className="mb-5 hidden gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 sm:flex">
           {(
             [
               ["overview", "Overview", CalendarDays],
@@ -1571,12 +1584,39 @@ export function CompanyPortal({
         )}
       </main>
 
+      <nav
+        aria-label="Mobile company navigation"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur sm:hidden"
+      >
+        {(
+          [
+            ["overview", "Overview", CalendarDays],
+            ["leads", "Leads", FileSpreadsheet],
+            ["setup", "Setup", ShieldCheck],
+            ["reports", "Reports", BarChart3],
+          ] as [Tab, string, typeof CalendarDays][]
+        ).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={tab === key ? "page" : undefined}
+            onClick={() => setTab(key)}
+            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black ${tab === key ? "bg-blue-50 text-blue-700" : "text-slate-500"}`}
+          >
+            <Icon size={19} />
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {selectedLead && (
         <LeadModal
           appointment={selectedLead}
           companyId={companyId}
           token={token}
           busy={busy}
+          representatives={data.representatives}
+          assignRep={assignRep}
           updateAppointmentStatus={updateAppointmentStatus}
           updateLeadOutcome={updateLeadOutcome}
           onClose={() => setSelectedLead(null)}
@@ -2300,11 +2340,11 @@ function CompanyLeadsSpreadsheet({
                         onClick={() => openLead(appointment)}
                         className="min-h-11 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
                       >
-                        View lead
+                        Assign & update
                       </button>
                     </div>
 
-                    <div className="grid gap-3">
+                    <div className="hidden gap-3 sm:grid">
                       <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
                         Inspector
                         <select
@@ -3004,7 +3044,7 @@ function CompanyAppointmentRow({
             {appointment.lead.qualification_status.replace(/_/g, " ")}
           </p>
         </div>
-        <div className="space-y-2 border-l pl-4">
+        <div className="hidden space-y-2 border-l pl-4 sm:block">
           <p className="text-[10px] font-bold text-slate-500">
             Inspector Assignment
           </p>
@@ -3035,7 +3075,7 @@ function CompanyAppointmentRow({
           </p>
           <StatusChip status={appointment.company_action || "pending"} />
         </div>
-        <div className="border-l pl-4">
+        <div className="hidden border-l pl-4 sm:block">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold text-slate-500">Appointment</p>
             <AppointmentWeatherBadge
@@ -3060,7 +3100,14 @@ function CompanyAppointmentRow({
           </select>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
+      <button
+        type="button"
+        onClick={() => openLead(appointment)}
+        className="mt-4 min-h-12 w-full rounded-xl bg-blue-600 px-4 text-sm font-black text-white sm:hidden"
+      >
+        Assign representative or update status
+      </button>
+      <div className="mt-4 hidden flex-wrap gap-2 border-t pt-3 sm:flex">
         <span className="mr-1 self-center text-[10px] font-black uppercase tracking-wide text-slate-400">
           Quick update
         </span>
@@ -3535,6 +3582,8 @@ function LeadModal({
   companyId,
   token,
   busy,
+  representatives,
+  assignRep,
   updateAppointmentStatus,
   updateLeadOutcome,
   onClose,
@@ -3543,6 +3592,8 @@ function LeadModal({
   companyId: string;
   token: string;
   busy: boolean;
+  representatives: Representative[];
+  assignRep: (appointmentId: string, repId: string) => Promise<void>;
   updateAppointmentStatus: (
     appointmentId: string,
     status: string,
@@ -3550,10 +3601,12 @@ function LeadModal({
   updateLeadOutcome: (
     appointment: Appointment,
     clientStatus: string,
+    notes?: string,
   ) => Promise<void>;
   onClose: () => void;
 }) {
   const lead = appointment.lead;
+  const [notes, setNotes] = useState(appointment.inspector_notes || "");
   const currentStatus =
     appointment.company_action ||
     appointment.canonical_status ||
@@ -3561,98 +3614,165 @@ function LeadModal({
     appointment.status;
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="mx-auto my-8 max-w-3xl rounded-2xl bg-white p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Update ${lead.full_name}`}
+        className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-              Company Lead
+              Assign & Update
             </p>
-            <h2 className="text-xl font-black">{lead.full_name}</h2>
+            <h2 className="truncate text-xl font-black">{lead.full_name}</h2>
+            <p className="mt-0.5 text-xs font-semibold text-slate-500">
+              {formatDateLong(appointment.appointment_date)} · {formatTime(appointment.start_time)}
+            </p>
           </div>
           <button
+            type="button"
+            aria-label="Close lead"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold"
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700"
           >
-            Close
+            <X size={19} />
           </button>
         </div>
-        <section className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                Current Lead Status
-              </p>
-              <div className="mt-2">
-                <StatusChip status={currentStatus} />
+
+        <div className="p-4 sm:p-5">
+          <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                Assigned representative
+                <select
+                  aria-label={`Assign representative for ${lead.full_name}`}
+                  value={appointment.representative_id || ""}
+                  disabled={busy}
+                  onChange={(event) =>
+                    void assignRep(appointment.id, event.target.value)
+                  }
+                  className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-bold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-50 sm:min-w-64 sm:text-sm"
+                >
+                  <option value="">Unassigned</option>
+                  {representatives
+                    .filter(
+                      (rep) =>
+                        rep.active || rep.id === appointment.representative_id,
+                    )
+                    .map((rep) => (
+                      <option key={rep.id} value={rep.id}>
+                        {rep.name}
+                        {rep.active ? "" : " (Inactive)"}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <div className="rounded-xl border border-blue-100 bg-white px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                  Current status
+                </p>
+                <div className="mt-1">
+                  <StatusChip status={currentStatus} />
+                </div>
               </div>
             </div>
-            <label className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-              Appointment Status
-              <select
-                value={appointment.status}
-                onChange={(event) =>
-                  void updateAppointmentStatus(
-                    appointment.id,
-                    event.target.value,
-                  )
-                }
-                disabled={busy}
-                className="mt-1 block min-w-44 rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-800"
-              >
-                <option value="confirmed">Confirmed</option>
-                <option value="assigned">Assigned</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </label>
-          </div>
-          <div className="mt-4 border-t border-blue-100 pt-3">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-500">
-              Quick Status Update
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void updateLeadOutcome(appointment, value)}
-                  className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold disabled:opacity-50 ${appointment.company_action === value ? "border-blue-600 bg-blue-600 text-white" : "bg-white text-slate-700 hover:border-blue-300"}`}
-                >
-                  {label}
-                </button>
-              ))}
+
+            <div className="mt-4 border-t border-blue-100 pt-4">
+              <p className="text-sm font-black text-slate-900">Choose an update</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                One tap saves the outcome and keeps it in the ReadyOps history.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {COMPANY_LEAD_ACTIONS.map(([value, label]) => {
+                  const active = appointment.company_action === value;
+                  const tone =
+                    value === "good" || value === "inspected"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : value === "signed_contract"
+                        ? "border-violet-200 bg-violet-50 text-violet-800"
+                        : value === "no_show" || value === "rescheduled"
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : "border-red-200 bg-red-50 text-red-800";
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={busy}
+                      onClick={() =>
+                        void updateLeadOutcome(appointment, value, notes)
+                      }
+                      className={`min-h-12 rounded-xl border px-3 py-2 text-sm font-black transition disabled:opacity-50 ${active ? "ring-2 ring-blue-600 ring-offset-1" : ""} ${tone}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <p className="mt-2 text-[10px] text-slate-500">
-              Each update can include inspector/company notes and is saved to
-              the ReadyOps audit history.
-            </p>
+
+            <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">
+              Notes (optional)
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Add inspector or company notes before choosing an update"
+                className="mt-1 min-h-20 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              />
+            </label>
+
+            <details className="mt-3 rounded-xl border border-blue-100 bg-white">
+              <summary className="cursor-pointer px-3 py-3 text-xs font-black text-slate-700">
+                Appointment options
+              </summary>
+              <label className="block border-t border-blue-100 p-3 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                Appointment status
+                <select
+                  value={appointment.status}
+                  onChange={(event) =>
+                    void updateAppointmentStatus(
+                      appointment.id,
+                      event.target.value,
+                    )
+                  }
+                  disabled={busy}
+                  className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-800"
+                >
+                  <option value="confirmed">Confirmed</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+            </details>
+          </section>
+
+          <div className="mt-5">
+            <ClientLeadTemplate lead={lead} appointment={appointment} />
           </div>
-        </section>
-        <ClientLeadTemplate lead={lead} appointment={appointment} />
-        <div className="mt-3">
-          <AppointmentWeatherBadge
-            date={appointment.appointment_date}
-            city={lead.city}
-            state={lead.state}
-            zip={lead.zip_code}
-            size="lg"
-          />
-        </div>
-        <div className="mt-4">
-          <SharedRecordingPlayer
-            companyId={companyId}
-            token={token}
-            leadId={lead.id}
-            recordingUrl={lead.recording_url}
-            shared={lead.recording_shared}
-          />
+          <div className="mt-3">
+            <AppointmentWeatherBadge
+              date={appointment.appointment_date}
+              city={lead.city}
+              state={lead.state}
+              zip={lead.zip_code}
+              size="lg"
+            />
+          </div>
+          <div className="mt-4">
+            <SharedRecordingPlayer
+              companyId={companyId}
+              token={token}
+              leadId={lead.id}
+              recordingUrl={lead.recording_url}
+              shared={lead.recording_shared}
+            />
+          </div>
         </div>
       </div>
     </div>
