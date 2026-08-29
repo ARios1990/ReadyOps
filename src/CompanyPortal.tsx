@@ -3621,7 +3621,7 @@ function LeadModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Update ${lead.full_name}`}
-        className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl"
+        className="readyops-company-lead-modal max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-white text-slate-900 shadow-2xl sm:max-w-3xl sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
@@ -3695,7 +3695,9 @@ function LeadModal({
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                       : value === "signed_contract"
                         ? "border-violet-200 bg-violet-50 text-violet-800"
-                        : value === "no_show" || value === "rescheduled"
+                        : value === "rescheduled"
+                          ? "readyops-outcome-rescheduled border-orange-300 bg-orange-100 text-orange-900"
+                          : value === "no_show"
                           ? "border-amber-200 bg-amber-50 text-amber-800"
                           : "border-red-200 bg-red-50 text-red-800";
                   return (
