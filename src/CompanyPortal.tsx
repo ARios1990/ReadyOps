@@ -2379,7 +2379,7 @@ function CompanyLeadsSpreadsheet({
                           onChange={(event) =>
                             void assignRep(appointment.id, event.target.value)
                           }
-                          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-800 disabled:cursor-wait disabled:opacity-50"
+className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 text-sm font-bold normal-case tracking-normal text-blue-900 disabled:cursor-wait disabled:opacity-50"
                         >
                           <option value="">Unassigned</option>
                           {representatives
@@ -2496,7 +2496,7 @@ function CompanyLeadsSpreadsheet({
                             onChange={(event) =>
                               void assignRep(appointment.id, event.target.value)
                             }
-                            className="w-full min-w-[112px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-2 text-[11px] font-bold text-slate-900 disabled:cursor-wait disabled:opacity-50"
+                            className="w-full min-w-[112px] cursor-pointer rounded-md border border-blue-300 bg-blue-100 px-2 py-2 text-[11px] font-bold text-blue-900 disabled:cursor-wait disabled:opacity-50"
                           >
                             <option value="">Unassigned</option>
                             {representatives
@@ -3056,7 +3056,7 @@ function CompanyAppointmentRow({
               void assignRep(appointment.id, event.target.value)
             }
             disabled={busy}
-            className="w-full rounded-lg border px-3 py-2 text-xs"
+            className="w-full rounded-lg border border-blue-300 bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900"
           >
             <option value="">Unassigned</option>
             {representatives
