@@ -28,6 +28,7 @@ import {
   rpcError,
 } from "./portalUtils";
 import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
+import { READYOPS_LOGO_DATA_URI } from "./brand";
 
 type RangeMode = "this" | "previous" | "all";
 type AgentSectionKey =
@@ -271,27 +272,41 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
 
   return (
     <div className="readyops-agent-portal min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-30 border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-blue-600">
-              Ready Ops Agent Portal
-            </p>
-            <h1 className="text-xl font-bold">{data.agent.name}</h1>
+      <header className="readyops-agent-header sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-3 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+            <img
+              src={READYOPS_LOGO_DATA_URI}
+              alt="ReadyOps"
+              className="h-8 w-auto shrink-0 sm:h-10"
+            />
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                Ready Ops Agent Portal
+              </p>
+              <h1 className="truncate text-lg font-black text-slate-950 sm:text-xl">
+                {data.agent.name}
+              </h1>
+            </div>
           </div>
-          <button onClick={() => void load()} className="rounded-lg border p-2">
+          <button
+            type="button"
+            aria-label="Refresh agent portal"
+            onClick={() => void load()}
+            className="readyops-icon-button rounded-lg border bg-white p-2 text-slate-700"
+          >
             <RefreshCw size={16} />
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl space-y-5 p-4">
+      <main className="mx-auto max-w-[1500px] space-y-5 px-3 pb-8 pt-4 sm:px-6 sm:py-5">
         {message && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             <CheckCircle2 size={17} />
             {message}
           </div>
         )}
-        <section className="rounded-2xl border bg-white p-4">
+        <section className="readyops-agent-range-nav rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm">
           <div className="flex flex-wrap items-end gap-2">
             <button
               onClick={() => setMode("this")}
@@ -311,12 +326,12 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
             >
               All Recent
             </button>
-            <label className="ml-auto text-xs font-bold text-slate-500">
+            <label className="ml-auto text-xs font-bold text-blue-100">
               Payroll Pay Date
               <select
                 value={payDate}
                 onChange={(event) => setPayDate(event.target.value)}
-                className="ml-2 rounded-lg border px-3 py-2 text-sm text-slate-800"
+                className="ml-2 rounded-lg border border-white/25 bg-white px-3 py-2 text-sm text-slate-900"
               >
                 <option value="">All in date filter</option>
                 {payDates.map((date) => (
@@ -327,12 +342,12 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
               </select>
             </label>
           </div>
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 px-1 text-xs text-blue-100">
             Payroll week is Sunday–Saturday. A lead is assigned to payroll by
             its appointment date; the pay date is the following Saturday.
           </p>
         </section>
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="readyops-agent-metrics grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
             label="Needs Correction"
             value={corrections.length}
@@ -378,7 +393,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           open={sectionOpen.denied}
           onToggle={() => toggleSection("denied")}
         />
-        <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <section className="readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
             <div>
               <h2 className="font-bold">Other Appointments</h2>
@@ -608,7 +623,7 @@ function LeadSection({
           ? "border-orange-300"
           : "border-amber-300";
   return (
-    <section className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
+    <section className={`readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
       <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
         <div>
           <h2 className="font-bold">
@@ -750,7 +765,7 @@ function Metric({
           ? AlertTriangle
           : Clock3;
   return (
-    <div className={`relative min-h-[102px] rounded-2xl border p-4 ${classes}`}>
+    <div className={`readyops-agent-metric relative min-h-[102px] rounded-2xl border p-4 ${classes}`}>
       <Icon
         size={31}
         strokeWidth={1.8}
@@ -762,7 +777,7 @@ function Metric({
   );
 }
 function btn(active: boolean) {
-  return `rounded-lg px-3 py-2 text-xs font-bold transition ${active ? "bg-[#0b3767] text-white shadow-sm" : "border bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"}`;
+  return `rounded-lg border px-4 py-2.5 text-xs font-bold transition ${active ? "border-blue-500 bg-blue-600 text-white shadow-sm" : "border-transparent bg-transparent text-white hover:border-white/20 hover:bg-white/10"}`;
 }
 function State({
   title,
