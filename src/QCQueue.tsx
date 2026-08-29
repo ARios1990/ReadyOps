@@ -1621,6 +1621,7 @@ function ReviewDialog(props: DialogProps) {
               appointment={props.row.appointment}
               showLabel={false}
               showStatusButtons
+              showCopySection={false}
               editValues={props.values}
               onChange={props.change}
               onSave={props.save}
