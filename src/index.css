@@ -720,3 +720,31 @@ html[data-theme='dark'] .text-violet-800 {
 html[data-theme='light'] .readyops-brand-header .text-blue-100 {
   color: #1d4ed8 !important;
 }
+
+/* Company lead update sheet: distinct reschedule color and dark-mode contrast. */
+.readyops-outcome-rescheduled {
+  background-color: #ffedd5 !important;
+  border-color: #f97316 !important;
+  color: #9a3412 !important;
+}
+
+html[data-theme='dark'] .readyops-outcome-rescheduled {
+  background-color: #7c2d12 !important;
+  border-color: #fb923c !important;
+  color: #ffedd5 !important;
+}
+
+html[data-theme='dark'] .readyops-company-lead-modal,
+html[data-theme='dark'] .readyops-client-lead-template {
+  color: #eef4fb !important;
+}
+
+html[data-theme='dark'] .readyops-company-lead-modal :is(h1, h2, h3, h4, strong, label, summary),
+html[data-theme='dark'] .readyops-client-lead-template :is(h1, h2, h3, h4, strong, label, summary) {
+  color: #f6f9fd !important;
+}
+
+html[data-theme='dark'] .readyops-company-lead-modal a,
+html[data-theme='dark'] .readyops-client-lead-template a {
+  color: #93c5fd !important;
+}
