@@ -3614,7 +3614,7 @@ function LeadModal({
     appointment.status;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[100] flex items-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
       onClick={onClose}
     >
       <div
