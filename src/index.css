@@ -748,3 +748,83 @@ html[data-theme='dark'] .readyops-company-lead-modal a,
 html[data-theme='dark'] .readyops-client-lead-template a {
   color: #93c5fd !important;
 }
+
+/* Company portal typography and reference-style lead spreadsheet. */
+.readyops-company-portal {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.readyops-company-leads-table tbody tr {
+  background-color: #f5f7fa;
+}
+
+.readyops-company-leads-table tbody tr:nth-child(even) {
+  background-color: #edf1f5;
+}
+
+.readyops-company-leads-table tbody tr:hover {
+  background-color: #eaf3ff;
+}
+
+.readyops-company-leads-table tbody td {
+  color: #172033;
+}
+
+html[data-theme='dark'] .readyops-company-leads-table tbody tr {
+  background-color: #17263a;
+}
+
+html[data-theme='dark'] .readyops-company-leads-table tbody tr:nth-child(even) {
+  background-color: #1d3047;
+}
+
+html[data-theme='dark'] .readyops-company-leads-table tbody tr:hover {
+  background-color: #233f5e;
+}
+
+html[data-theme='dark'] .readyops-company-leads-table tbody td {
+  border-color: #314761 !important;
+  color: #eef4fb !important;
+}
+
+html[data-theme='dark'] .readyops-company-leads-table tbody td .text-slate-950,
+html[data-theme='dark'] .readyops-company-leads-table tbody td .text-slate-700 {
+  color: #eef4fb !important;
+}
+
+html[data-theme='dark'] .readyops-stat-delivered,
+html[data-theme='dark'] .readyops-stat-pending {
+  background-color: #102b52 !important;
+  border-color: #3b82f6 !important;
+  color: #bfdbfe !important;
+}
+
+html[data-theme='dark'] .readyops-stat-good {
+  background-color: #073a2b !important;
+  border-color: #34d399 !important;
+  color: #a7f3d0 !important;
+}
+
+html[data-theme='dark'] .readyops-stat-bad {
+  background-color: #4a1d24 !important;
+  border-color: #f87171 !important;
+  color: #fecaca !important;
+}
+
+html[data-theme='dark'] .readyops-stat-no-show {
+  background-color: #4a3512 !important;
+  border-color: #fbbf24 !important;
+  color: #fde68a !important;
+}
+
+html[data-theme='dark'] .readyops-stat-rescheduled {
+  background-color: #7c2d12 !important;
+  border-color: #fb923c !important;
+  color: #ffedd5 !important;
+}
+
+html[data-theme='dark'] .readyops-stat-signed {
+  background-color: #065f46 !important;
+  border-color: #34d399 !important;
+  color: #ecfdf5 !important;
+}
