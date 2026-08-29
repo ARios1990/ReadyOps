@@ -828,3 +828,42 @@ html[data-theme='dark'] .readyops-stat-signed {
   border-color: #34d399 !important;
   color: #ecfdf5 !important;
 }
+
+/* Agent portal follows the same ReadyOps type, navy, white, and soft-gray system. */
+.readyops-agent-portal {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.readyops-agent-table tbody tr {
+  background-color: #f5f7fa;
+}
+
+.readyops-agent-table tbody tr:nth-child(even) {
+  background-color: #edf1f5;
+}
+
+.readyops-agent-table tbody td {
+  color: #172033;
+}
+
+html[data-theme='dark'] .readyops-agent-table tbody tr {
+  background-color: #17263a;
+}
+
+html[data-theme='dark'] .readyops-agent-table tbody tr:nth-child(even) {
+  background-color: #1d3047;
+}
+
+html[data-theme='dark'] .readyops-agent-table tbody tr:hover {
+  background-color: #233f5e !important;
+}
+
+html[data-theme='dark'] .readyops-agent-table tbody td {
+  border-color: #314761 !important;
+  color: #eef4fb !important;
+}
+
+html[data-theme='dark'] .readyops-agent-table tbody td .text-slate-600,
+html[data-theme='dark'] .readyops-agent-table tbody td .text-slate-700 {
+  color: #dbeafe !important;
+}
