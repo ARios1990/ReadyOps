@@ -1107,3 +1107,9 @@ html[data-theme='dark'] .readyops-agent-metric.readyops-kpi-neutral {
   background-color: #132238 !important;
   color: #eef4fb !important;
 }
+
+
+html[data-theme='dark'] .readyops-company-lead-modal .bg-blue-50\/60 {
+  background-color: #132238 !important;
+  border-color: #314761 !important;
+}
