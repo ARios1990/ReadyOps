@@ -208,6 +208,7 @@ export function ClientLeadTemplate({
   appointment,
   showLabel = true,
   showStatusButtons = false,
+  showCopySection = true,
   editValues,
   onChange,
   onSave,
@@ -217,6 +218,7 @@ export function ClientLeadTemplate({
   appointment: AppointmentLike;
   showLabel?: boolean;
   showStatusButtons?: boolean;
+  showCopySection?: boolean;
   editValues?: Record<string, unknown>;
   onChange?: (key: string, value: string) => void;
   onSave?: () => void | Promise<void>;
@@ -388,7 +390,9 @@ export function ClientLeadTemplate({
         )}
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
+      {showCopySection && (
+      
+            <section className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3">
           <div>
             <h3 className="text-sm font-black text-slate-950">Copy &amp; Send Lead</h3>
@@ -413,6 +417,7 @@ export function ClientLeadTemplate({
           className="min-h-[31rem] w-full resize-y border-0 bg-white px-4 py-4 font-mono text-sm leading-6 text-slate-900 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-300"
         />
       </section>
+      )}
     </div>
   );
 }
