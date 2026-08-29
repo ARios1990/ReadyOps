@@ -1046,3 +1046,64 @@ html[data-theme='dark'] .readyops-icon-button:hover {
     align-items: flex-start;
   }
 }
+
+/* Requested Inter typography scale for every Company and Agent page. */
+.readyops-company-portal,
+.readyops-agent-portal {
+  font-family: "Inter", Arial, sans-serif !important;
+}
+
+.section-title,
+.readyops-company-portal h2,
+.readyops-agent-portal h2 {
+  font-weight: 600 !important;
+  font-size: 16px !important;
+}
+
+.table-header,
+.readyops-company-portal table thead th,
+.readyops-agent-portal table thead th {
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  text-transform: uppercase;
+}
+
+.body-text,
+.readyops-company-portal table tbody td,
+.readyops-agent-portal table tbody td {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.body-text main p {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.company-link {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+}
+
+.kpi-title {
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+.kpi-number {
+  font-weight: 700 !important;
+  font-size: 20px !important;
+}
+
+/* QC Pending stays visible without the yellow highlighted card. */
+.readyops-agent-metric.readyops-kpi-neutral {
+  border-color: #dce5ef !important;
+  background-color: #ffffff !important;
+  color: #06152b !important;
+}
+
+html[data-theme='dark'] .readyops-agent-metric.readyops-kpi-neutral {
+  border-color: #314761 !important;
+  background-color: #132238 !important;
+  color: #eef4fb !important;
+}

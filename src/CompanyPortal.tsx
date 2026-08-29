@@ -783,7 +783,7 @@ export function CompanyPortal({
   const companyLink = `${window.location.origin}/company/${settingsDraft.public_slug}/manage/${token}`;
 
   return (
-    <div className="readyops-company-portal min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
+    <div className="readyops-company-portal body-text min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
       <header className="readyops-company-header sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-5">
@@ -2135,7 +2135,7 @@ function CompanyLeadsSpreadsheet({
     <section className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3 sm:items-end">
         <div>
-          <h2 className="text-xl font-black">Company Leads</h2>
+          <h2 className="section-title">Company Leads</h2>
           <p className="text-xs text-slate-500">
             Every QC-approved lead delivered to this company, across all dates.
           </p>
@@ -2243,10 +2243,10 @@ function CompanyLeadsSpreadsheet({
               strokeWidth={1.8}
               className="absolute right-3 top-1/2 -translate-y-1/2 opacity-90"
             />
-            <span className="block max-w-[72%] text-[10px] font-black uppercase tracking-wide">
+            <span className="kpi-title block max-w-[72%] uppercase tracking-wide">
               {label}
             </span>
-            <strong className={`mt-1 block text-3xl ${key === "signed_contract" ? "text-white" : "text-slate-950"}`}>
+            <strong className={`kpi-number mt-1 block ${key === "signed_contract" ? "text-white" : "text-slate-950"}`}>
               {count}
             </strong>
             <span className="mt-2 block text-[9px] font-bold">Show matching leads →</span>
@@ -2432,7 +2432,7 @@ function CompanyLeadsSpreadsheet({
 
             <div className="readyops-sticky-table hidden overflow-x-auto md:block">
               <table className="readyops-company-leads-table w-full min-w-[1380px] border-separate border-spacing-0 text-xs">
-                <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
+                <thead className="table-header sticky top-0 z-10 bg-[#071525] text-left uppercase tracking-wide text-white">
                   <tr>
                     {[
                       "Inspector Assignment",
@@ -3263,10 +3263,10 @@ function PerformanceCard({
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold text-slate-600">{label}</span>
+        <span className="kpi-title text-slate-600">{label}</span>
         {icon}
       </div>
-      <strong className="mt-2 block text-2xl text-slate-950">{value}</strong>
+      <strong className="kpi-number mt-2 block text-slate-950">{value}</strong>
       {suffix && <span className="text-[10px] font-bold">{suffix}</span>}
     </>
   );
