@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarDays,
+  CalendarClock,
+  CalendarX2,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -14,15 +16,19 @@ import {
   Loader2,
   MapPin,
   Pencil,
+  PenLine,
   Plus,
   RefreshCw,
   Save,
   Search,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   UserRoundCheck,
   Users,
   UserX,
+  Clock3,
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
@@ -777,7 +783,7 @@ export function CompanyPortal({
   const companyLink = `${window.location.origin}/company/${settingsDraft.public_slug}/manage/${token}`;
 
   return (
-    <div className="min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
+    <div className="readyops-company-portal min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-5">
@@ -2016,6 +2022,7 @@ function CompanyLeadsSpreadsheet({
     summary: {
       delivered: 0,
       good: 0,
+      bad: 0,
       no_show: 0,
       rescheduled: 0,
       signed_contract: 0,
@@ -2072,42 +2079,55 @@ function CompanyLeadsSpreadsheet({
     setFilter(next);
   };
   const filterCards = [
-    [
-      "all",
-      "Delivered",
-      data.summary.delivered,
-      "border-blue-200 bg-blue-50 text-blue-700",
-    ],
-    [
-      "good",
-      "Good",
-      data.summary.good,
-      "border-emerald-200 bg-emerald-50 text-emerald-700",
-    ],
-    [
-      "no_show",
-      "No Show",
-      data.summary.no_show,
-      "border-orange-200 bg-orange-50 text-orange-700",
-    ],
-    [
-      "rescheduled",
-      "Rescheduled",
-      data.summary.rescheduled,
-      "border-amber-200 bg-amber-50 text-amber-700",
-    ],
-    [
-      "signed_contract",
-      "Signed Contracts",
-      data.summary.signed_contract,
-      "border-violet-200 bg-violet-50 text-violet-700",
-    ],
-    [
-      "pending",
-      "Pending Updates",
-      data.summary.pending,
-      "border-red-200 bg-red-50 text-red-700",
-    ],
+    {
+      key: "all",
+      label: "Delivered",
+      count: data.summary.delivered,
+      tone: "readyops-stat-delivered border-blue-300 bg-blue-50 text-blue-700",
+      Icon: Clipboard,
+    },
+    {
+      key: "good",
+      label: "Good",
+      count: data.summary.good,
+      tone: "readyops-stat-good border-emerald-300 bg-emerald-50 text-emerald-700",
+      Icon: ThumbsUp,
+    },
+    {
+      key: "bad",
+      label: "Bad",
+      count: data.summary.bad,
+      tone: "readyops-stat-bad border-red-300 bg-red-50 text-red-600",
+      Icon: ThumbsDown,
+    },
+    {
+      key: "no_show",
+      label: "No Show",
+      count: data.summary.no_show,
+      tone: "readyops-stat-no-show border-amber-300 bg-amber-50 text-amber-600",
+      Icon: CalendarX2,
+    },
+    {
+      key: "rescheduled",
+      label: "Rescheduled",
+      count: data.summary.rescheduled,
+      tone: "readyops-stat-rescheduled border-orange-300 bg-orange-50 text-orange-600",
+      Icon: CalendarClock,
+    },
+    {
+      key: "signed_contract",
+      label: "Signed Contracts",
+      count: data.summary.signed_contract,
+      tone: "readyops-stat-signed border-emerald-800 bg-emerald-700 text-white",
+      Icon: PenLine,
+    },
+    {
+      key: "pending",
+      label: "Pending Updates",
+      count: data.summary.pending,
+      tone: "readyops-stat-pending border-blue-300 bg-blue-50 text-blue-700",
+      Icon: Clock3,
+    },
   ] as const;
   const page = Math.floor(offset / 100) + 1;
   const pages = Math.max(1, Math.ceil(data.total / 100));
@@ -2211,20 +2231,25 @@ function CompanyLeadsSpreadsheet({
           Clear Filters
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-        {filterCards.map(([key, label, count, tone]) => (
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+        {filterCards.map(({ key, label, count, tone, Icon }) => (
           <button
             key={key}
             onClick={() => chooseFilter(key)}
-            className={`min-h-[104px] rounded-xl border p-3 text-left ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+            className={`relative min-h-[112px] overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
           >
-            <span className="text-[10px] font-black uppercase tracking-wide">
+            <Icon
+              size={29}
+              strokeWidth={1.8}
+              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-90"
+            />
+            <span className="block max-w-[72%] text-[10px] font-black uppercase tracking-wide">
               {label}
             </span>
-            <strong className="mt-1 block text-2xl text-slate-950">
+            <strong className="mt-1 block text-3xl text-slate-950">
               {count}
             </strong>
-            <span className="text-[9px] font-bold">Show matching leads →</span>
+            <span className="mt-2 block text-[9px] font-bold">Show matching leads →</span>
           </button>
         ))}
       </div>
@@ -2406,179 +2431,144 @@ function CompanyLeadsSpreadsheet({
             </div>
 
             <div className="readyops-sticky-table hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[2300px] border-separate border-spacing-0 text-xs">
-              <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
-                <tr>
-                  {[
-                    "Homeowner",
-                    "Appointment Date",
-                    "Time",
-                    "Phone",
-                    "Property Address",
-                    "City / State / ZIP",
-                    "Location",
-                    "Service",
-                    "Roof Age",
-                    "Roof Type",
-                    "Insurance",
-                    "Carrier",
-                    "Damage / Hail",
-                    "Inspector Assignment",
-                    "Lead Status",
-                    "Client Notes",
-                    "Action",
-                  ].map((label, index, labels) => (
-                    <th
-                      key={label}
-                      className={`border-b border-[#17314d] px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[180px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
-                    >
-                      {label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((appointment) => {
-                  const form = appointment.lead.form_data || {};
-                  const status =
-                    appointment.company_action ||
-                    appointment.canonical_status ||
-                    appointment.client_status ||
-                    appointment.status;
-                  return (
-                    <tr
-                      key={appointment.id}
-                      onClick={() => openLead(appointment)}
-                      className="group cursor-pointer hover:bg-blue-50/40"
-                    >
-                      <td className="sticky left-0 z-[1] min-w-[180px] border-b border-r bg-white px-3 py-3 font-black shadow-[4px_0_8px_-6px_rgba(15,23,42,0.35)] group-hover:bg-blue-50">
-                        {appointment.lead.full_name}
-                      </td>
-                      <td className="border-b px-3 py-3 font-black text-blue-700">
-                        {appointment.appointment_date}
-                      </td>
-                      <td className="border-b px-3 py-3 font-bold">
-                        {formatTime(appointment.start_time)}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {appointment.lead.phone_number}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {appointment.lead.address}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {[
-                          appointment.lead.city,
-                          appointment.lead.state,
-                          appointment.lead.zip_code,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </td>
-                      <td className="border-b px-3 py-3 font-semibold">
-                        {appointment.location_label || "Company-wide"}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {appointment.lead.service_needed || "—"}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {String(form.roof_age || "—")}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {String(form.roof_type || "—")}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {String(form.insurance || "—")}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {String(form.insurance_name || "—")}
-                      </td>
-                      <td className="border-b px-3 py-3">
-                        {String(form.visible_damage || form.hail_size || "—")}
-                      </td>
-                      <td
-                        className="border-b px-3 py-3"
-                        onClick={(event) => event.stopPropagation()}
+              <table className="readyops-company-leads-table w-full min-w-[1480px] border-separate border-spacing-0 text-xs">
+                <thead className="sticky top-0 z-10 bg-[#071525] text-left text-[10px] uppercase tracking-wide text-white">
+                  <tr>
+                    {[
+                      "Inspector Assignment",
+                      "Homeowner",
+                      "Appointment Date & Time",
+                      "Full Address",
+                      "Service",
+                      "Roof Age",
+                      "Roof Type",
+                      "Home Type",
+                      "Stories",
+                      "Insurance",
+                      "Carrier",
+                      "Damage / Hail",
+                      "Action",
+                      "Lead Status",
+                    ].map((label, index, labels) => (
+                      <th
+                        key={label}
+                        className={`border-b border-[#17314d] px-3 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[130px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
                       >
-                        <select
-                          aria-label={`Assign inspector for ${appointment.lead.full_name}`}
-                          value={appointment.representative_id || ""}
-                          disabled={busy}
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((appointment) => {
+                    const form = appointment.lead.form_data || {};
+                    const status =
+                      appointment.company_action ||
+                      appointment.canonical_status ||
+                      appointment.client_status ||
+                      appointment.status;
+                    const fullAddress = [
+                      appointment.lead.address,
+                      appointment.lead.city,
+                      appointment.lead.state,
+                      appointment.lead.zip_code,
+                    ]
+                      .filter(Boolean)
+                      .join(", ");
+                    return (
+                      <tr
+                        key={appointment.id}
+                        onClick={() => openLead(appointment)}
+                        className="group cursor-pointer bg-slate-50 even:bg-slate-100/80 hover:bg-blue-50"
+                      >
+                        <td
+                          className="sticky left-0 z-[1] min-w-[130px] border-b border-r bg-inherit px-3 py-3 shadow-[4px_0_8px_-6px_rgba(15,23,42,0.28)]"
                           onClick={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            void assignRep(appointment.id, event.target.value)
-                          }
-                          className="min-w-[170px] cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold disabled:cursor-wait disabled:opacity-50"
                         >
-                          <option value="">Unassigned</option>
-                          {representatives
-                            .filter(
-                              (rep) =>
-                                rep.active ||
-                                rep.id === appointment.representative_id,
-                            )
-                            .map((rep) => (
-                              <option key={rep.id} value={rep.id}>
-                                {rep.name}
-                                {rep.active ? "" : " (Inactive)"}
-                              </option>
-                            ))}
-                        </select>
-                      </td>
-                      <td
-                        className="border-b px-3 py-3"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <select
-                          aria-label={`Update ${appointment.lead.full_name} lead status`}
-                          value={appointment.company_action || "pending"}
-                          disabled={busy}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            void updateLeadOutcome(
-                              appointment,
-                              event.target.value,
-                            )
-                          }
-                          className={`cursor-pointer rounded-md border px-3 py-2 text-xs font-black disabled:cursor-wait disabled:opacity-50 ${leadStatusClasses(status)}`}
-                        >
-                          <option value="pending">Pending</option>
-                          {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td
-                        className="max-w-[280px] truncate border-b px-3 py-3"
-                        title={
-                          appointment.inspector_notes ||
-                          appointment.lead.notes ||
-                          ""
-                        }
-                      >
-                        {appointment.inspector_notes ||
-                          appointment.lead.notes ||
-                          "—"}
-                      </td>
-                      <td className="sticky right-0 z-[1] border-b border-l bg-white px-3 py-3">
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openLead(appointment);
-                          }}
-                          className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700"
-                        >
-                          View Lead
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          <select
+                            aria-label={`Assign inspector for ${appointment.lead.full_name}`}
+                            value={appointment.representative_id || ""}
+                            disabled={busy}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              void assignRep(appointment.id, event.target.value)
+                            }
+                            className="w-full min-w-[108px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-2 text-xs font-bold text-slate-900 disabled:cursor-wait disabled:opacity-50"
+                          >
+                            <option value="">Unassigned</option>
+                            {representatives
+                              .filter(
+                                (rep) =>
+                                  rep.active ||
+                                  rep.id === appointment.representative_id,
+                              )
+                              .map((rep) => (
+                                <option key={rep.id} value={rep.id}>
+                                  {rep.name}
+                                  {rep.active ? "" : " (Inactive)"}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                        <td className="min-w-[165px] border-b border-r border-slate-200 px-3 py-3">
+                          <span className="flex items-center gap-1 font-black text-slate-950">
+                            {appointment.lead.full_name}
+                            <Pencil size={12} className="text-slate-500" />
+                          </span>
+                          <span className="mt-1 block text-[11px] text-slate-700">
+                            {appointment.lead.phone_number}
+                          </span>
+                        </td>
+                        <td className="min-w-[150px] border-b border-r border-slate-200 px-3 py-3 font-black text-blue-700">
+                          {new Date(`${appointment.appointment_date}T12:00:00`).toLocaleDateString("en-US")} · {formatTime(appointment.start_time)}
+                        </td>
+                        <td className="min-w-[210px] border-b border-r border-slate-200 px-3 py-3 leading-5">
+                          {fullAddress || "—"}
+                        </td>
+                        <td className="min-w-[110px] border-b border-r border-slate-200 px-3 py-3">
+                          {appointment.lead.service_needed || "—"}
+                        </td>
+                        <td className="min-w-[82px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.roof_age || "—")}
+                        </td>
+                        <td className="min-w-[86px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.roof_type || "—")}
+                        </td>
+                        <td className="min-w-[100px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.home_type || "—")}
+                        </td>
+                        <td className="min-w-[70px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.stories || "—")}
+                        </td>
+                        <td className="min-w-[75px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.insurance || "—")}
+                        </td>
+                        <td className="min-w-[90px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.insurance_name || "—")}
+                        </td>
+                        <td className="min-w-[90px] border-b border-r border-slate-200 px-3 py-3">
+                          {String(form.visible_damage || form.hail_size || "—")}
+                        </td>
+                        <td className="min-w-[92px] border-b border-r border-slate-200 px-3 py-3">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openLead(appointment);
+                            }}
+                            className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 font-bold text-blue-700 shadow-sm"
+                          >
+                            View Lead
+                          </button>
+                        </td>
+                        <td className="sticky right-0 z-[1] min-w-[125px] border-b border-l bg-inherit px-3 py-3 shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.28)]">
+                          <StatusChip status={status} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
         <div className="flex justify-between gap-2 border-t p-3 sm:justify-end">
@@ -3293,6 +3283,7 @@ interface CompanyLeadSheetData {
   summary: {
     delivered: number;
     good: number;
+    bad: number;
     no_show: number;
     rescheduled: number;
     signed_contract: number;
