@@ -240,6 +240,12 @@ const COMPANY_LEAD_ACTIONS = [
   ["inspected", "Inspected"],
   ["rescheduled", "Rescheduled"],
 ] as const;
+const COMPANY_LEAD_MODAL_ACTIONS = COMPANY_LEAD_ACTIONS.map(
+  ([value, label]) =>
+    value === "inspected"
+      ? (["pending", "Pending"] as const)
+      : ([value, label] as const),
+);
 
 export function CompanyPortal({
   companyId,
@@ -641,11 +647,25 @@ export function CompanyPortal({
     if (rpcErr) setError(rpcError(rpcErr));
     else {
       const updatedAppointment = updated as Partial<Appointment> | null;
-      setSelectedLead((current) =>
-        current?.id === appointment.id && updatedAppointment
-          ? { ...current, ...updatedAppointment }
-          : current,
-      );
+      if (updatedAppointment) {
+        setSelectedLead((current) =>
+          current?.id === appointment.id
+            ? { ...current, ...updatedAppointment }
+            : current,
+        );
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                appointments: current.appointments.map((item) =>
+                  item.id === appointment.id
+                    ? { ...item, ...updatedAppointment }
+                    : item,
+                ),
+              }
+            : current,
+        );
+      }
       setCompanyLeadRefreshKey((value) => value + 1);
       notify("Lead outcome updated.");
       await load();
@@ -3693,10 +3713,12 @@ function LeadModal({
                 One tap saves the outcome and keeps it in the ReadyOps history.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {COMPANY_LEAD_ACTIONS.map(([value, label]) => {
-                  const active = appointment.company_action === value;
+                {COMPANY_LEAD_MODAL_ACTIONS.map(([value, label]) => {
+                  const active = currentStatus === value;
                   const tone =
-                    value === "good" || value === "inspected"
+                    value === "pending"
+                      ? "bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-300"
+                      : value === "good"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                       : value === "signed_contract"
                         ? "border-violet-200 bg-violet-50 text-violet-800"
