@@ -303,7 +303,7 @@ ${transcript}`;
     if (transcriptError) return json({ error: `Unable to save transcript: ${transcriptError.message}` }, 500);
 
     const { error: leadUpdateError } = await admin.from("portal_leads").update({
-      qualification_status: qualificationStatus,
+      qualification_status: toDbQualificationStatus(qualificationStatus),
       qualification_reasons: reasons,
     }).eq("id", lead.id);
     if (leadUpdateError) return json({ error: `Unable to save qualification: ${leadUpdateError.message}` }, 500);
@@ -446,6 +446,24 @@ function normalizeStatus(value: unknown): QualificationStatus {
   return value === "qualified" || value === "not_qualified" || value === "needs_review"
     ? value
     : "needs_review";
+}
+
+// portal_leads.qualification_status only accepts "qualified" | "review_needed" |
+// "do_not_book" (see portal_leads_qualification_status_check and the same
+// vocabulary used by portal_evaluate_qualification and the admin lead editor).
+// The AI verdict above uses its own qualified/not_qualified/needs_review
+// wording for the API response, so map it to the stored vocabulary before
+// writing the row.
+function toDbQualificationStatus(status: QualificationStatus): "qualified" | "review_needed" | "do_not_book" {
+  switch (status) {
+    case "qualified":
+      return "qualified";
+    case "not_qualified":
+      return "do_not_book";
+    case "needs_review":
+    default:
+      return "review_needed";
+  }
 }
 
 function normalizeConfidence(value: unknown): Confidence {
