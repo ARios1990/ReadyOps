@@ -236,7 +236,7 @@ const COMPANY_LEAD_ACTIONS = [
   ["no_show", "No Show"],
   ["signed_contract", "Signed Contract"],
   ["lost", "Bad"],
-  ["good", "Good"],
+  ["good", "Good / Inspected"],
   ["inspected", "Inspected"],
   ["rescheduled", "Rescheduled"],
 ] as const;
@@ -3117,7 +3117,7 @@ function CompanyAppointmentRow({
             key={value}
             disabled={busy}
             onClick={() => void updateLeadOutcome(appointment, value)}
-            className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${appointment.company_action === value ? "border-blue-600 bg-blue-600 text-white" : "bg-slate-50 text-slate-700 hover:border-blue-300"}`}
+            className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${appointment.company_action === value ? (value === "no_show" || value === "rescheduled" ? "border-orange-600 bg-orange-500 text-white" : "border-blue-600 bg-blue-600 text-white") : value === "no_show" || value === "rescheduled" ? "border-orange-300 bg-orange-100 text-orange-800 hover:border-orange-400" : "bg-slate-50 text-slate-700 hover:border-blue-300"}`}
           >
             {label}
           </button>
