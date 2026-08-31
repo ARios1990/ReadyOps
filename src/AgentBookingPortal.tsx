@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -49,6 +49,8 @@ interface Location {
   state: string | null;
   zip: string | null;
   timezone?: string | null;
+  serviceCities: string[];
+  serviceZips: string[];
 }
 interface PublicPortalData {
   company: {
@@ -153,6 +155,16 @@ function normalizePublicPortalData(value: unknown): PublicPortalData {
             city: asNullableString(location.city),
             state: asNullableString(location.state),
             zip: asNullableString(location.zip_code),
+            serviceCities: Array.isArray(location.service_cities)
+              ? (location.service_cities as unknown[]).filter(
+                  (v): v is string => typeof v === "string",
+                )
+              : [],
+            serviceZips: Array.isArray(location.service_zips)
+              ? (location.service_zips as unknown[]).filter(
+                  (v): v is string => typeof v === "string",
+                )
+              : [],
           };
         })
         .filter((location) => location.id && location.label),
@@ -186,6 +198,88 @@ function normalizePublicPortalData(value: unknown): PublicPortalData {
       .filter((day) => day.date),
   };
 }
+
+// --- Nearest-location matching -------------------------------------------
+// When a company has more than one active location, pick the one closest to
+// the lead being booked so the widget doesn't default to a "Company-wide"
+// view with no schedule. Matching uses only data already stored on each
+// location (service_cities / service_zips / its own city, state, zip) —
+// no geocoding involved.
+function normalizeZip(zip: string | null | undefined): string {
+  return (zip || "").replace(/\D/g, "").slice(0, 5);
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value || "").trim().toLowerCase();
+}
+
+function scoreLocationMatch(
+  location: Location,
+  lead: { city: string; state: string; zip: string },
+): number {
+  const leadZip = normalizeZip(lead.zip);
+  const leadCity = normalizeText(lead.city);
+  const leadState = normalizeText(lead.state);
+  const locationState = normalizeText(location.state);
+  const sameState = Boolean(leadState) && leadState === locationState;
+
+  const zipCandidates = [
+    normalizeZip(location.zip),
+    ...location.serviceZips.map(normalizeZip),
+  ].filter(Boolean);
+  const cityCandidates = [
+    normalizeText(location.city),
+    ...location.serviceCities.map(normalizeText),
+  ].filter(Boolean);
+
+  // Exact ZIP match on this location's own zip or its service area — the
+  // strongest signal available.
+  if (leadZip && zipCandidates.includes(leadZip)) return 100;
+
+  // Same state and the lead's city is one this location explicitly serves.
+  if (sameState && leadCity && cityCandidates.includes(leadCity)) return 80;
+
+  // Same state, no exact city/zip match: fall back to ZIP-prefix proximity
+  // as a rough stand-in for "nearest" since locations don't store lat/long.
+  if (sameState && leadZip && zipCandidates.length) {
+    const leadZipNum = parseInt(leadZip, 10);
+    const distances = zipCandidates
+      .map((z) => Math.abs(parseInt(z, 10) - leadZipNum))
+      .filter((d) => Number.isFinite(d));
+    if (distances.length) {
+      const minDistance = Math.min(...distances);
+      return Math.max(30, 60 - Math.min(minDistance / 50, 30));
+    }
+  }
+
+  // Same state with nothing else to compare on.
+  if (sameState) return 20;
+
+  return 0;
+}
+
+function pickNearestLocation(
+  locations: Location[],
+  lead: { city?: string; state?: string; zip?: string },
+): string | null {
+  const city = lead.city || "";
+  const state = lead.state || "";
+  const zip = lead.zip || "";
+  if (!city && !state && !zip) return null;
+  if (!locations.length) return null;
+
+  let bestId: string | null = null;
+  let bestScore = 0;
+  for (const location of locations) {
+    const score = scoreLocationMatch(location, { city, state, zip });
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = location.id;
+    }
+  }
+  return bestId;
+}
+
 interface Reservation {
   id: string;
   reservation_token: string;
@@ -219,6 +313,8 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const sessionId = useMemo(() => getPortalSessionId(), []);
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [autoSelectedLocation, setAutoSelectedLocation] = useState(false);
+  const autoSelectAttempted = useRef(false);
   const [portal, setPortal] = useState<PublicPortalData | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const queryPrefill = useMemo(() => readReadyModePrefill(), []);
@@ -291,6 +387,24 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
         setPortal(result);
         if (!nextLocationId && result.company.locations.length === 1) {
           setLocationId(result.company.locations[0].id);
+        } else if (
+          !nextLocationId &&
+          !autoSelectAttempted.current &&
+          result.company.locations.length > 1
+        ) {
+          // More than one service area and nothing picked yet: try to match
+          // the lead's address (from the ReadyMode dialer prefill, if any)
+          // to the nearest location instead of defaulting to Company-wide.
+          autoSelectAttempted.current = true;
+          const nearestId = pickNearestLocation(result.company.locations, {
+            city: asString(queryPrefill.values.city),
+            state: asString(queryPrefill.values.state),
+            zip: asString(queryPrefill.values.zip_code),
+          });
+          if (nearestId) {
+            setAutoSelectedLocation(true);
+            setLocationId(nearestId);
+          }
         }
       } catch (loadError) {
         setError(
@@ -667,10 +781,18 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Service Area
+                  {autoSelectedLocation && (
+                    <span className="ml-1 font-normal text-emerald-600">
+                      • Matched to lead&apos;s address
+                    </span>
+                  )}
                 </label>
                 <select
                   value={locationId || ""}
-                  onChange={(e) => setLocationId(e.target.value || null)}
+                  onChange={(e) => {
+                    setAutoSelectedLocation(false);
+                    setLocationId(e.target.value || null);
+                  }}
                   className="min-w-52 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                 >
                   <option value="">Company-wide</option>
