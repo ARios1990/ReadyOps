@@ -1,18 +1,57 @@
 import { useEffect, useState } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { ClipboardCopy, ExternalLink, FileText, Headphones, Loader2, RefreshCw, Save, Sparkles, UploadCloud } from 'lucide-react';
+import { CheckCircle2, ClipboardCopy, ExternalLink, FileText, Headphones, HelpCircle, Loader2, RefreshCw, Save, Sparkles, UploadCloud, XCircle } from 'lucide-react';
 import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
+import { formatDateLong, formatTime } from './portalUtils';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
 const MAX_BYTES = 100 * 1024 * 1024;
+
+// The six required qualifiers a homeowner call must confirm before ReadyOps
+// treats the appointment as qualified. Mirrors supabase/functions/transcribe-and-qualify.
+const QUALIFIER_FIELDS: { key: QualifierKey; label: string }[] = [
+  { key: 'appointment_confirmed', label: 'Appointment date & time confirmed' },
+  { key: 'homeowner_authority', label: 'Homeowner / decision-maker' },
+  { key: 'address_confirmed', label: 'Complete address confirmed' },
+  { key: 'roof_age_or_damage', label: 'Roof age or qualifying damage' },
+  { key: 'payment_ready', label: 'Payment readiness' },
+  { key: 'no_existing_contract', label: 'No existing signed contract' },
+];
+type QualifierKey =
+  | 'appointment_confirmed'
+  | 'homeowner_authority'
+  | 'address_confirmed'
+  | 'roof_age_or_damage'
+  | 'payment_ready'
+  | 'no_existing_contract';
+type QualifierValue = 'yes' | 'no' | 'unknown';
+
+type Assessment = {
+  qualifiers?: Partial<Record<QualifierKey, QualifierValue>>;
+  evidence?: Partial<Record<QualifierKey, string>>;
+  optional_details?: {
+    insurance_company?: string;
+    roof_type?: string;
+    stories?: string;
+    damage_type?: string;
+    last_inspection_date?: string;
+  };
+  payment_path?: 'cash' | 'financing' | 'insurance' | 'unknown';
+  roof_age_damage_override?: boolean;
+  genuine_call?: 'yes' | 'no' | 'uncertain';
+  confidence?: 'high' | 'medium' | 'low';
+  reasons?: string[];
+  summary?: string;
+} | null;
 
 type TranscriptRow = {
   transcript: string | null;
   summary: string | null;
   language: string | null;
   method: string | null;
+  assessment: Assessment;
 };
 
 type QualifyVerdict = 'qualified' | 'not-qualified' | 'needs-review';
@@ -30,7 +69,66 @@ type QualifyResponse = Omit<QualifyResult, 'qualified' | 'confidence'> & {
   qualified?: boolean | QualifyVerdict | null;
   qualification_status?: string | null;
   confidence?: number | string | null;
+  assessment?: Assessment;
 };
+
+function qualifierIcon(value?: QualifierValue) {
+  if (value === 'yes') return <CheckCircle2 size={13} className="text-green-600" />;
+  if (value === 'no') return <XCircle size={13} className="text-red-600" />;
+  return <HelpCircle size={13} className="text-amber-600" />;
+}
+
+function qualifierTone(value?: QualifierValue): string {
+  if (value === 'yes') return 'border-green-200 bg-green-50 text-green-800';
+  if (value === 'no') return 'border-red-200 bg-red-50 text-red-800';
+  return 'border-amber-200 bg-amber-50 text-amber-800';
+}
+
+function formatAppointmentDateTime(date?: string | null, time?: string | null): string {
+  const parts: string[] = [];
+  if (date) {
+    try { parts.push(formatDateLong(date)); } catch { parts.push(date); }
+  }
+  if (time) {
+    try { parts.push(formatTime(String(time).slice(0, 5))); } catch { parts.push(String(time)); }
+  }
+  return parts.join(' • ');
+}
+
+function buildInspectorNote(
+  assessment: Assessment,
+  appointment: { date?: string | null; time?: string | null; address?: string | null; city?: string | null; state?: string | null; zipCode?: string | null },
+): string {
+  const lines: string[] = [];
+  const when = formatAppointmentDateTime(appointment.date, appointment.time);
+  const addressLine = [appointment.address, [appointment.city, appointment.state].filter(Boolean).join(', '), appointment.zipCode]
+    .filter(Boolean)
+    .join(', ');
+  if (when) lines.push(`Appointment: ${when}`);
+  if (addressLine) lines.push(`Address: ${addressLine}`);
+
+  const details = assessment?.optional_details;
+  const propertyBits = [
+    details?.roof_type && `${details.roof_type} roof`,
+    details?.stories && `${details.stories} ${Number(details.stories) === 1 ? 'story' : 'stories'}`,
+    details?.damage_type && `damage: ${details.damage_type}`,
+  ].filter(Boolean);
+  if (propertyBits.length) lines.push(`Property: ${propertyBits.join(', ')}`);
+
+  const paymentPath = assessment?.payment_path;
+  if (paymentPath && paymentPath !== 'unknown') {
+    lines.push(`Payment: ${paymentPath}${details?.insurance_company ? ` (${details.insurance_company})` : ''}`);
+  }
+  if (details?.last_inspection_date) lines.push(`Last inspection: ${details.last_inspection_date}`);
+
+  const overrideNote = assessment?.roof_age_damage_override
+    ? 'Recent damage/hail or a requested inspection was reported — verify roof age on site.'
+    : '';
+  if (overrideNote) lines.push(overrideNote);
+
+  if (!lines.length) return '';
+  return lines.join('\n');
+}
 
 type SpeechAlternativeLike = { transcript: string; confidence?: number };
 type SpeechResultLike = { isFinal: boolean; length: number; [index: number]: SpeechAlternativeLike };
@@ -193,6 +291,12 @@ export function QCRecordingUpload({
   language,
   onChange,
   onShareChange,
+  appointmentDate,
+  appointmentTime,
+  address,
+  city,
+  state,
+  zipCode,
 }: {
   leadId: string;
   value: string;
@@ -200,6 +304,12 @@ export function QCRecordingUpload({
   language?: string | null;
   onChange: (value: string) => void;
   onShareChange: (value: boolean) => void;
+  appointmentDate?: string | null;
+  appointmentTime?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
 }) {
   const [uploading, setUploading] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -212,6 +322,10 @@ export function QCRecordingUpload({
   const [aiQualifying, setAiQualifying] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiResult, setAiResult] = useState<QualifyResult | null>(null);
+  const [assessment, setAssessment] = useState<Assessment>(null);
+
+  const appointmentInfo = { date: appointmentDate, time: appointmentTime, address, city, state, zipCode };
+  const inspectorNote = assessment ? buildInspectorNote(assessment, appointmentInfo) : '';
 
   useEffect(() => {
     let active = true;
@@ -238,7 +352,7 @@ export function QCRecordingUpload({
     async function loadTranscript() {
       const { data, error: loadError } = await supabase
         .from('qc_lead_transcripts')
-        .select('transcript,summary,language,method')
+        .select('transcript,summary,language,method,assessment')
         .eq('lead_id', leadId)
         .maybeSingle();
       if (!active) return;
@@ -249,6 +363,7 @@ export function QCRecordingUpload({
       const row = data as TranscriptRow | null;
       setTranscript(row?.transcript || '');
       setSummary(row?.summary || '');
+      setAssessment(row?.assessment || null);
       setTranscriptStatus(row?.transcript ? `Saved transcript • ${row.method || 'manual'}` : '');
     }
     void loadTranscript();
@@ -436,6 +551,7 @@ export function QCRecordingUpload({
       if (result.transcript) setTranscript(result.transcript);
       if (result.summary) setSummary(result.summary);
       setAiResult(result);
+      setAssessment(response.assessment || null);
     } catch (qualifyError) {
       setAiError(qualifyError instanceof Error ? qualifyError.message : 'Unable to transcribe and qualify this call.');
     } finally {
@@ -510,6 +626,46 @@ export function QCRecordingUpload({
               <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-slate-600">
                 {aiResult.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
               </ul>
+            )}
+          </div>
+        )}
+        {assessment && (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <h5 className="text-[10px] font-black uppercase tracking-wide text-slate-500">Six-Qualifier Assessment</h5>
+            <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {QUALIFIER_FIELDS.map(field => {
+                const qualifierValue = assessment.qualifiers?.[field.key];
+                const evidenceText = assessment.evidence?.[field.key];
+                return (
+                  <div key={field.key} className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] ${qualifierTone(qualifierValue)}`} title={evidenceText || undefined}>
+                    {qualifierIcon(qualifierValue)}
+                    <span>
+                      <span className="font-bold">{(qualifierValue || 'unknown').toUpperCase()}</span> — {field.label}
+                      {evidenceText && <span className="mt-0.5 block font-normal italic text-slate-500">“{evidenceText}”</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600">
+              {assessment.payment_path && assessment.payment_path !== 'unknown' && <span>Payment path: <span className="font-bold">{assessment.payment_path}</span></span>}
+              {assessment.genuine_call && <span>Call intent: <span className="font-bold">{assessment.genuine_call === 'yes' ? 'genuine' : assessment.genuine_call}</span></span>}
+              {assessment.roof_age_damage_override && <span className="font-bold text-amber-700">Roof-age requirement overridden by reported damage</span>}
+            </div>
+
+            {assessment.summary && (
+              <div className="mt-3">
+                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500">Short Summary</label>
+                <p className="mt-1 rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-800">{assessment.summary}</p>
+              </div>
+            )}
+
+            {inspectorNote && (
+              <div className="mt-3">
+                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500">Brief Note to Inspector</label>
+                <p className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-800">{inspectorNote}</p>
+                <button type="button" onClick={() => void navigator.clipboard.writeText(inspectorNote)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"><ClipboardCopy size={12}/> Copy Note to Inspector</button>
+              </div>
             )}
           </div>
         )}
