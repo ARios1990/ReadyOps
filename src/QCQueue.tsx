@@ -1687,6 +1687,12 @@ function ReviewDialog(props: DialogProps) {
                 onShareChange={(value) =>
                   props.change("share_recording_with_company", value)
                 }
+                appointmentDate={props.row.appointment.appointment_date}
+                appointmentTime={props.row.appointment.start_time}
+                address={props.row.lead.address}
+                city={props.row.lead.city}
+                state={props.row.lead.state}
+                zipCode={props.row.lead.zip_code}
               />
             </div>
             <div className="order-2 min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
