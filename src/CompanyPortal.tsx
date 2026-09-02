@@ -49,6 +49,7 @@ import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import { SharedRecordingPlayer } from "./SharedRecordingPlayer";
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
+import { useAuth } from "./AuthContext";
 import {
   ClientStatusActions,
   LeadReceivedIndicator,
@@ -332,6 +333,7 @@ export function CompanyPortal({
   companyId: string;
   token: string;
 }) {
+  const { ownerAccess } = useAuth();
   const [data, setData] = useState<CompanyPortalData | null>(null);
   const [dashboard, setDashboard] = useState<CompanyDashboardSummary | null>(
     null,
@@ -772,6 +774,73 @@ export function CompanyPortal({
     setBusy(false);
   }
 
+  async function updateLeadPackage(
+    packageId: string,
+    leadTarget: number,
+    amountPerLead: number,
+    startDate: string,
+  ): Promise<boolean> {
+    if (!ownerAccess) {
+      setError("Owner access is required to edit a lead package.");
+      return false;
+    }
+    if (!Number.isInteger(leadTarget) || leadTarget <= 0) {
+      setError("Package leads must be a whole number greater than zero.");
+      return false;
+    }
+    if (!Number.isFinite(amountPerLead) || amountPerLead < 0) {
+      setError("Price per lead cannot be negative.");
+      return false;
+    }
+    if (!startDate) {
+      setError("Start date is required.");
+      return false;
+    }
+
+    setBusy(true);
+    setError("");
+    const { data: scopeRows, error: scopeError } = await supabase
+      .from("company_package_locations")
+      .select("location_id")
+      .eq("package_id", packageId);
+    if (scopeError) {
+      setError(rpcError(scopeError));
+      setBusy(false);
+      return false;
+    }
+
+    const { data: updated, error: packageError } = await supabase.rpc(
+      "save_company_package_admin",
+      {
+        p_company_id: companyId,
+        p_package_id: packageId,
+        p_lead_target: leadTarget,
+        p_amount_per_lead: amountPerLead,
+        p_start_date: startDate,
+        p_location_ids: (scopeRows || []).map((row) => row.location_id),
+        p_override_price: true,
+      },
+    );
+    if (packageError) {
+      setError(rpcError(packageError));
+      setBusy(false);
+      return false;
+    }
+
+    const updatedPackage = updated as
+      | CompanyDashboardSummary["active_package"]
+      | null;
+    if (updatedPackage) {
+      setDashboard((current) =>
+        current ? { ...current, active_package: updatedPackage } : current,
+      );
+    }
+    notify("Lead package updated.");
+    await load();
+    setBusy(false);
+    return true;
+  }
+
   async function confirmLeadReceipt(appointment: Appointment) {
     const previousData = data;
     const previousSelected = selectedLead;
@@ -1143,6 +1212,8 @@ export function CompanyPortal({
             updateAppointmentStatus={updateAppointmentStatus}
             updateLeadOutcome={updateLeadOutcome}
             confirmLeadReceipt={confirmLeadReceipt}
+            ownerAccess={ownerAccess}
+            updateLeadPackage={updateLeadPackage}
             openLeads={(filter) => {
               setCompanyLeadFilter(filter);
               setCompanyLeadLocationId("");
@@ -2796,6 +2867,8 @@ function CompanyAppointmentsDashboard({
   updateAppointmentStatus,
   updateLeadOutcome,
   confirmLeadReceipt,
+  ownerAccess,
+  updateLeadPackage,
   openLeads,
 }: {
   data: CompanyPortalData;
@@ -2815,12 +2888,44 @@ function CompanyAppointmentsDashboard({
     notes?: string,
   ) => Promise<void>;
   confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
+  ownerAccess: boolean;
+  updateLeadPackage: (
+    packageId: string,
+    leadTarget: number,
+    amountPerLead: number,
+    startDate: string,
+  ) => Promise<boolean>;
   openLeads: (filter: string) => void;
 }) {
   const delivered = data.appointments;
   const fallbackPerformance = performanceFromAppointments(delivered);
   const performance = dashboard?.performance || fallbackPerformance;
   const pkg = dashboard?.active_package;
+  const [editingPackage, setEditingPackage] = useState(false);
+  const [packageDraft, setPackageDraft] = useState({
+    leadTarget: "",
+    amountPerLead: "",
+    startDate: "",
+  });
+  useEffect(() => {
+    setEditingPackage(false);
+    setPackageDraft({
+      leadTarget: pkg ? String(pkg.lead_target) : "",
+      amountPerLead: pkg ? String(pkg.amount_per_lead ?? 0) : "",
+      startDate: pkg?.start_date || "",
+    });
+  }, [pkg]);
+
+  async function savePackageDraft() {
+    if (!pkg) return;
+    const saved = await updateLeadPackage(
+      pkg.id,
+      Number(packageDraft.leadTarget),
+      Number(packageDraft.amountPerLead),
+      packageDraft.startDate,
+    );
+    if (saved) setEditingPackage(false);
+  }
   const visibleWeekStart = calendarWeekStart(
     new Date(`${selectedDay}T12:00:00`),
   );
@@ -2933,22 +3038,68 @@ function CompanyAppointmentsDashboard({
               <p className="mt-2 text-xs font-bold text-slate-700">
                 {pkg.package_name || `Package #${pkg.package_number || ""}`}
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <PackageField label="Package Leads" value={String(pkg.lead_target)} />
-                <PackageField label="Price Per Lead" value={formatPackageMoney(pkg.amount_per_lead)} />
-                <PackageField label="Total Amount" value={formatPackageMoney(pkg.package_total)} />
-                <PackageField label="Amount Paid" value={formatPackageMoney(pkg.amount_paid)} />
-                <PackageField label="Payment Status" value={packageStatusLabel(pkg.payment_status)} />
-                <PackageField label="Remaining Balance" value={formatPackageMoney(pkg.remaining_balance)} />
-                <PackageField
-                  label="Start Date"
-                  value={pkg.start_date ? formatDateLong(pkg.start_date) : "—"}
-                />
-                <PackageField
-                  label="Completion Date"
-                  value={pkg.completion_date ? formatDateLong(pkg.completion_date) : "In Progress"}
-                />
-              </div>
+              {ownerAccess && editingPackage ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <PackageEditField
+                    label="Package Leads"
+                    value={packageDraft.leadTarget}
+                    onChange={(leadTarget) =>
+                      setPackageDraft((current) => ({ ...current, leadTarget }))
+                    }
+                  />
+                  <PackageEditField
+                    label="Price Per Lead"
+                    value={packageDraft.amountPerLead}
+                    onChange={(amountPerLead) =>
+                      setPackageDraft((current) => ({ ...current, amountPerLead }))
+                    }
+                  />
+                  <PackageEditField
+                    label="Start Date"
+                    type="date"
+                    value={packageDraft.startDate}
+                    onChange={(startDate) =>
+                      setPackageDraft((current) => ({ ...current, startDate }))
+                    }
+                  />
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void savePackageDraft()}
+                      className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-black text-white disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setEditingPackage(false)}
+                      className="min-h-9 flex-1 rounded-lg border bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <PackageField label="Package Leads" value={String(pkg.lead_target)} />
+                  <PackageField label="Price Per Lead" value={formatPackageMoney(pkg.amount_per_lead)} />
+                  <PackageField label="Total Amount" value={formatPackageMoney(pkg.package_total)} />
+                  <PackageField label="Amount Paid" value={formatPackageMoney(pkg.amount_paid)} />
+                  <PackageField label="Payment Status" value={packageStatusLabel(pkg.payment_status)} />
+                  <PackageField label="Remaining Balance" value={formatPackageMoney(pkg.remaining_balance)} />
+                  <PackageField
+                    label="Start Date"
+                    value={pkg.start_date ? formatDateLong(pkg.start_date) : "—"}
+                  />
+                  <PackageField
+                    label="Completion Date"
+                    value={pkg.completion_date ? formatDateLong(pkg.completion_date) : "In Progress"}
+                  />
+                </div>
+              )}
               <div className="mt-4 flex items-center justify-between gap-3 text-xs">
                 <strong>{pkg.delivered_leads} of {pkg.lead_target} Leads Delivered</strong>
                 <strong className="text-blue-700">
@@ -2963,9 +3114,21 @@ function CompanyAppointmentsDashboard({
                   }}
                 />
               </div>
-              <p className="mt-3 rounded-lg bg-blue-50 p-2 text-[10px] font-bold text-blue-700">
-                Package pricing and payments are managed by ReadyOps. {dashboard?.package_history.length || 0} package{dashboard?.package_history.length === 1 ? "" : "s"} in history.
-              </p>
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-blue-50 p-2 text-[10px] font-bold text-blue-700">
+                <p>
+                  Package pricing and payments are managed by ReadyOps. {dashboard?.package_history.length || 0} package{dashboard?.package_history.length === 1 ? "" : "s"} in history.
+                </p>
+                {ownerAccess && !editingPackage && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setEditingPackage(true)}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                  >
+                    <Pencil size={11} /> Edit Package
+                  </button>
+                )}
+              </div>
             </>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-slate-400">
@@ -3304,6 +3467,8 @@ function CompanyAppointmentRow({
           currentStatus={appointment.company_action || canonical}
           received={Boolean(appointment.client_received)}
           disabled={busy}
+          pendingInsteadOfInspected
+          compact
           onConfirm={() => void confirmLeadReceipt(appointment)}
           onDisposition={(status) =>
             void updateLeadOutcome(appointment, status, "")
@@ -3509,6 +3674,32 @@ function PackageField({ value, label }: { value: string; label: string }) {
       </span>
       <strong className="mt-1 block text-sm text-slate-900">{value}</strong>
     </div>
+  );
+}
+
+function PackageEditField({
+  label,
+  value,
+  onChange,
+  type = "number",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: "number" | "date";
+}) {
+  return (
+    <label className="text-[9px] font-black uppercase tracking-wide text-slate-500">
+      {label}
+      <input
+        type={type}
+        min={type === "number" ? "0" : undefined}
+        step={label === "Package Leads" ? "1" : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 min-h-9 w-full rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-bold normal-case tracking-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </label>
   );
 }
 
@@ -3941,6 +4132,8 @@ function LeadModal({
                 currentStatus={currentStatus}
                 received={Boolean(appointment.client_received)}
                 disabled={busy}
+                pendingInsteadOfInspected
+                compact
                 onConfirm={() => void confirmLeadReceipt(appointment)}
                 onDisposition={(status) =>
                   void updateLeadOutcome(appointment, status, notes)
