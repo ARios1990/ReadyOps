@@ -58,6 +58,13 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [addLoading, setAddLoading] = useState(false);
   const [addMsg, setAddMsg] = useState('');
 
+  // Add agent form
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentTeam, setNewAgentTeam] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [agentAddLoading, setAgentAddLoading] = useState(false);
+  const [agentAddMsg, setAgentAddMsg] = useState('');
+
   // Create user form
   const [cuEmail, setCuEmail] = useState('');
   const [cuPassword, setCuPassword] = useState('');
@@ -149,6 +156,32 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   }
 
   // === Agent Actions ===
+  async function handleAddAgent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newAgentName.trim() || !newAgentTeam) return;
+
+    setAgentAddLoading(true);
+    setAgentAddMsg('');
+
+    const { data, error } = await supabase.rpc('create_agent_admin', {
+      p_name: newAgentName.trim(),
+      p_team_id: newAgentTeam,
+      p_email: newAgentEmail.trim() || null,
+    });
+
+    if (error) {
+      setAgentAddMsg(error.message);
+    } else {
+      const created = data as { name?: string } | null;
+      setAgentAddMsg(`${created?.name || 'Agent'} added successfully.`);
+      setNewAgentName('');
+      setNewAgentEmail('');
+      await store.refetch();
+    }
+
+    setAgentAddLoading(false);
+  }
+
   async function deleteAgent(agentId: string) {
     await supabase.from('profiles').update({ agent_id: null }).eq('agent_id', agentId);
     await supabase.from('agents').delete().eq('id', agentId);
@@ -222,6 +255,16 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const filteredProfiles = profiles.filter(p =>
     p.display_name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const selectedNewAgentTeam = store.teams.find(t => t.id === newAgentTeam);
+  const enteredAgentName = newAgentName.trim();
+  const selectedTeamSuffix = selectedNewAgentTeam ? `-${selectedNewAgentTeam.abbreviation}` : '';
+  const agentBaseName = selectedTeamSuffix && enteredAgentName.toLowerCase().endsWith(selectedTeamSuffix.toLowerCase())
+    ? enteredAgentName.slice(0, -selectedTeamSuffix.length).trim()
+    : enteredAgentName;
+  const agentNamePreview = agentBaseName && selectedNewAgentTeam
+    ? `${agentBaseName}-${selectedNewAgentTeam.abbreviation}`
+    : '';
 
   return (
     <div
@@ -456,7 +499,80 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
 
         {/* === AGENTS TAB === */}
         {tab === 'agents' && (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-220px)] overflow-y-auto">
+          <div className="space-y-3">
+            <form
+              onSubmit={handleAddAgent}
+              className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-4 shadow-sm"
+            >
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <UserPlus size={16} className="text-blue-600" /> Add Agent
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Select a team and ReadyOps will format the submitted agent name automatically.
+                  </p>
+                </div>
+                {agentNamePreview && (
+                  <div className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-500">
+                    Form name: <span className="font-bold text-blue-700">{agentNamePreview}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_minmax(200px,1.2fr)_auto] md:items-end">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Agent Name *</label>
+                  <input
+                    type="text"
+                    value={newAgentName}
+                    onChange={e => setNewAgentName(e.target.value)}
+                    placeholder="e.g. Joshua"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Team *</label>
+                  <select
+                    value={newAgentTeam}
+                    onChange={e => setNewAgentTeam(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select team...</option>
+                    {store.teams.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.abbreviation})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Email (optional)</label>
+                  <input
+                    type="email"
+                    value={newAgentEmail}
+                    onChange={e => setNewAgentEmail(e.target.value)}
+                    placeholder="agent@example.com"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={agentAddLoading || !newAgentName.trim() || !newAgentTeam}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus size={14} /> {agentAddLoading ? 'Adding...' : 'Add Agent'}
+                </button>
+              </div>
+
+              {agentAddMsg && (
+                <p className={`mt-2 text-xs ${agentAddMsg.includes('successfully') ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {agentAddMsg}
+                </p>
+              )}
+            </form>
+
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[calc(100vh-390px)] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -497,6 +613,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                   })}
               </tbody>
             </table>
+          </div>
           </div>
         )}
 
@@ -735,6 +852,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
 function getTeamColor(abbr: string): string {
   const colors: Record<string, string> = {
     MRS: 'bg-blue-100 text-blue-700',
+    MSR: 'bg-blue-100 text-blue-700',
     BRL: 'bg-purple-100 text-purple-700',
     TJ: 'bg-orange-100 text-orange-700',
     PHL: 'bg-teal-100 text-teal-700',
