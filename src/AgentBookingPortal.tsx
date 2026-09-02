@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
-import { ColdCallScript } from "./ColdCallScript";
-import { normalizeLeadType, type LeadType } from "./leadTypes";
 import {
   addDays,
   buildLeadTemplate,
@@ -939,23 +937,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 Complete the lead details. Your selected time is being held.
               </p>
             </div>
-            <div className="mb-4">
-              <ColdCallScript
-                leadType={String(formValues.lead_type || "")}
-                onLeadTypeChange={(value: LeadType) =>
-                  setFormValues((prev) => ({ ...prev, lead_type: value }))
-                }
-                context={{
-                  ...formValues,
-                  agent_name: agentName,
-                  homeowner_name: formValues.full_name,
-                  address: formValues.address,
-                  city: formValues.city,
-                  neighborhood: formValues.city,
-                  company_name: company.name,
-                }}
-              />
-            </div>
             <DynamicLeadForm
               schema={settings.formSchema || []}
               values={formValues}
@@ -969,4 +950,105 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           </section>
         )}
       </main>
-    
+    </div>
+  );
+}
+
+function FullPageMessage({
+  icon,
+  title,
+  detail,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          {icon}
+        </div>
+        <h1 className="font-bold text-slate-900">{title}</h1>
+        {detail && <p className="mt-2 text-sm text-slate-500">{detail}</p>}
+      </div>
+    </div>
+  );
+}
+
+function readReadyModePrefill(): {
+  agent_name: string;
+  values: Record<string, unknown>;
+} {
+  const q = new URLSearchParams(window.location.search);
+  const get = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = q.get(key);
+      if (value) return value;
+    }
+    return "";
+  };
+  const first = get("first_name", "firstName");
+  const last = get("last_name", "lastName");
+  const fullName =
+    get("full_name", "name") || [first, last].filter(Boolean).join(" ");
+  const street = get("address", "street");
+  const city = get("city");
+  const state = get("state");
+  const zip = get("zip", "zip_code");
+  const fullAddress =
+    get("full_address") ||
+    [street, city, state, zip].filter(Boolean).join(", ");
+  const values: Record<string, unknown> = {
+    full_name: fullName,
+    phone_number: get("phone", "phone_number"),
+    address: fullAddress,
+    city,
+    state,
+    zip_code: zip,
+    email: get("email"),
+    language: get("language"),
+    service_needed: get("service_needed", "services_needed"),
+    last_checked_on: get("last_checked_on"),
+    home_type: get("home_type"),
+    roof_type: get("roof_type"),
+    roof_age: get("roof_age"),
+    stories: get("stories"),
+    insurance: get("insurance"),
+    insurance_name: get("insurance_name"),
+    contract: get("contract") || "No",
+    home_value: get("home_value"),
+    sq_ft: get("sq_ft"),
+    web_url: get("web_url", "web_link"),
+    notes: get("notes"),
+    hail_size: get("hail_size", "size_of_hail"),
+    claim_filed: get("claim_filed", "file_claim"),
+    visible_damage: get("visible_damage"),
+    damage_type: get("damage_type"),
+    additional_properties:
+      get("additional_properties", "add_properties") || "No",
+    second_address: get("second_address", "2nd_address"),
+    recording_url: get(
+      "recording_url",
+      "recording",
+      "recording_link",
+      "audio_url",
+      "call_recording",
+    ),
+    readymode_call_log_id: get(
+      "rm_call_log_id",
+      "readymode_call_log_id",
+      "call_log_id",
+    ),
+    agent_token: get("agent_token"),
+    _source:
+      get("source") ||
+      (get("rm_lead_id", "readymode_lead_id") ? "readymode" : "ready_ops"),
+    _source_lead_id: get("rm_lead_id", "readymode_lead_id", "lead_id"),
+    _source_disposition: get("disposition"),
+  };
+  Object.keys(values).forEach((key) => {
+    if (values[key] === "") delete values[key];
+  });
+  return { agent_name: get("agent", "agent_name", "user_name"), values };
+}
