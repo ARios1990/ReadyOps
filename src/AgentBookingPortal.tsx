@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
+import { ColdCallScript } from "./ColdCallScript";
+import { normalizeLeadType, type LeadType } from "./leadTypes";
 import {
   addDays,
   buildLeadTemplate,
@@ -937,6 +939,23 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 Complete the lead details. Your selected time is being held.
               </p>
             </div>
+            <div className="mb-4">
+              <ColdCallScript
+                leadType={String(formValues.lead_type || "")}
+                onLeadTypeChange={(value: LeadType) =>
+                  setFormValues((prev) => ({ ...prev, lead_type: value }))
+                }
+                context={{
+                  ...formValues,
+                  agent_name: agentName,
+                  homeowner_name: formValues.full_name,
+                  address: formValues.address,
+                  city: formValues.city,
+                  neighborhood: formValues.city,
+                  company_name: company.name,
+                }}
+              />
+            </div>
             <DynamicLeadForm
               schema={settings.formSchema || []}
               values={formValues}
@@ -1008,6 +1027,12 @@ function readReadyModePrefill(): {
     zip_code: zip,
     email: get("email"),
     language: get("language"),
+    // The lane comes from the campaign the agent is dialing. ReadyMode passes it
+    // as a URL param; everything downstream (script, QC, inspector note) keys
+    // off this rather than guessing from what gets said on the call.
+    lead_type: normalizeLeadType(
+      get("lead_type", "leadType", "campaign_type", "lane"),
+    ),
     service_needed: get("service_needed", "services_needed"),
     last_checked_on: get("last_checked_on"),
     home_type: get("home_type"),

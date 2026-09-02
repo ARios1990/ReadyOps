@@ -1723,6 +1723,9 @@ function ReviewDialog(props: DialogProps) {
                 city={props.row.lead.city}
                 state={props.row.lead.state}
                 zipCode={props.row.lead.zip_code}
+                homeownerName={props.row.lead.full_name}
+                leadType={String(props.values.lead_type || props.row.lead.form_data?.lead_type || "")}
+                leadForm={{ ...(props.row.lead.form_data || {}), ...props.values }}
               />
             </div>
             <div className="order-2 min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
