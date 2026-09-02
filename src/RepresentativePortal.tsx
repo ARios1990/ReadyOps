@@ -279,7 +279,8 @@ export function RepresentativePortal({ token }: { token: string }) {
                     received={Boolean(appt.client_received)}
                     disabled={busy}
                     onConfirm={() => void action(appt, "confirmed")}
-                    onDisposition={(status) =>
+                    onDisposition={(status) => {
+                      if (status === "pending") return;
                       void action(
                         appt,
                         status === "good"
@@ -290,8 +291,8 @@ export function RepresentativePortal({ token }: { token: string }) {
                               ? "homeowner_no_show"
                               : status,
                         status,
-                      )
-                    }
+                      );
+                    }}
                   />
                 </div>
               </div>
