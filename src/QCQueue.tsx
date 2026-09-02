@@ -75,6 +75,32 @@ const EMPTY_REFS: RefData = {
 const EMPTY_QUEUE: QueueData = { days: [], summary: {}, rows: [] };
 const DAY_MS = 86_400_000;
 const OWNER_OVERRIDE_EMAIL = "mastersreadyservices2025@gmail.com";
+const QC_DENIED_REASONS = [
+  "Do Not Call (DNC)",
+  "Renter / Not the Homeowner",
+  "Incorrect or Invalid Information",
+  "Did Not Meet Client Requirements",
+  "Homeowner Was Not Serious or Interested",
+  "Homeowner Did Not Agree to a Specific Date and Time",
+  "Required Qualification Questions Were Not Asked",
+  "Property Address Was Not Confirmed",
+  "Appointment Date or Time Was Not Confirmed",
+  "Homeowner Was Unaware of the Appointment",
+  "Decision-Maker Was Not Available",
+  "Property Is Under Contract With Another Company",
+  "Roof Is Too New",
+  "Property Is Outside the Service Area",
+  "Property Type Is Not Accepted",
+  "Insurance Requirement Was Not Met",
+  "Duplicate Lead or Appointment",
+  "Agent Provided Misleading Information",
+  "Incomplete or Inconsistent Lead Details",
+  "Disconnected or Incorrect Phone Number",
+  "No Call Recording Found",
+  "Recording Was Incomplete or Unclear",
+  "Unable to Verify the Homeowner’s Consent",
+  "Property Is Not Within the Required Storm Swath / Affected Area",
+] as const;
 // City, state, and ZIP stay on each lead for search/filtering, but the QC form
 // shows the complete canonical address once instead of repeating its parts.
 function weekStart(value = new Date()): Date {
@@ -1886,11 +1912,11 @@ function ReviewDialog(props: DialogProps) {
                   className="mt-1 w-full rounded-lg border p-2 text-sm"
                 >
                   <option value="">Select or enter a reason</option>
-                  <option>Missing or invalid recording</option>
-                  <option>Incorrect homeowner information</option>
-                  <option>Outside company requirements</option>
-                  <option>Duplicate appointment</option>
-                  <option>Agent follow-up required</option>
+                  {QC_DENIED_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
                 </select>
               </label>
               <textarea

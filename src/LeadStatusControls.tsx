@@ -15,6 +15,14 @@ const CLIENT_DISPOSITIONS: Exclude<LeadDisposition, "pending">[] = [
   "rescheduled",
 ];
 
+const COMPANY_PORTAL_DISPOSITIONS: LeadDisposition[] = [
+  "pending",
+  "no_show",
+  "bad",
+  "signed_contract",
+  "rescheduled",
+];
+
 export function LeadStatusBadge({
   value,
   audience = "agent",
@@ -49,27 +57,41 @@ export function ClientStatusActions({
   onConfirm,
   onDisposition,
   className = "",
+  pendingInsteadOfInspected = false,
+  compact = false,
 }: {
   currentStatus: unknown;
   received: boolean;
   disabled?: boolean;
   onConfirm: () => void;
-  onDisposition: (status: Exclude<LeadDisposition, "pending">) => void;
+  onDisposition: (status: LeadDisposition) => void;
   className?: string;
+  pendingInsteadOfInspected?: boolean;
+  compact?: boolean;
 }) {
   const current = normalizeLeadDisposition(currentStatus);
+  const dispositions = pendingInsteadOfInspected
+    ? COMPANY_PORTAL_DISPOSITIONS
+    : CLIENT_DISPOSITIONS;
+  const sizeClasses = compact
+    ? "min-h-9 px-2.5 py-1.5 text-[11px]"
+    : "min-h-11 px-3 py-2 text-xs";
   return (
     <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${className}`}>
       <button
         type="button"
         disabled={disabled || received}
         onClick={onConfirm}
-        className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${LEAD_STATUS_CONFIG.pending.className}`}
+        className={`${sizeClasses} rounded-lg border font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${LEAD_STATUS_CONFIG.pending.className}`}
       >
         {received ? "Lead Received" : "Confirm Lead"}
       </button>
-      {CLIENT_DISPOSITIONS.map((status) => {
+      {dispositions.map((status) => {
         const config = LEAD_STATUS_CONFIG[status];
+        const tone =
+          status === "pending" && pendingInsteadOfInspected
+            ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
+            : config.className;
         return (
           <button
             key={status}
@@ -77,7 +99,7 @@ export function ClientStatusActions({
             aria-pressed={current === status}
             disabled={disabled}
             onClick={() => onDisposition(status)}
-            className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${config.className} ${current === status ? "ring-2 ring-slate-950/30 ring-offset-1" : "hover:brightness-105"}`}
+            className={`${sizeClasses} rounded-lg border font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${tone} ${current === status ? "ring-2 ring-sky-500 ring-offset-1 dark:ring-sky-300" : status === "pending" ? "" : "hover:brightness-105"}`}
           >
             {config.clientLabel}
           </button>
