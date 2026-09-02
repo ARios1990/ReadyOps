@@ -269,6 +269,56 @@ function optimisticAppointmentStatus(
   return patch;
 }
 
+function optimisticDashboardStatus(
+  current: CompanyDashboardSummary | null,
+  appointment: Appointment,
+  nextStatus: string,
+): CompanyDashboardSummary | null {
+  if (!current) return current;
+  const previousDisposition =
+    normalizeLeadDisposition(
+      appointment.company_action ||
+        appointment.canonical_status ||
+        appointment.client_status,
+    ) || "pending";
+  const nextDisposition = normalizeLeadDisposition(nextStatus) || "pending";
+  if (previousDisposition === nextDisposition) return current;
+
+  const fields: Record<
+    LeadDisposition,
+    | "pending_updates"
+    | "good_inspected"
+    | "bad_leads"
+    | "no_shows"
+    | "signed_contracts"
+    | "rescheduled"
+  > = {
+    pending: "pending_updates",
+    good: "good_inspected",
+    bad: "bad_leads",
+    no_show: "no_shows",
+    signed_contract: "signed_contracts",
+    rescheduled: "rescheduled",
+  };
+  const performance = { ...current.performance };
+  const previousField = fields[previousDisposition];
+  const nextField = fields[nextDisposition];
+  performance[previousField] = Math.max(0, performance[previousField] - 1);
+  performance[nextField] += 1;
+  performance.inspection_rate = performance.total_leads
+    ? ((performance.good_inspected + performance.signed_contracts) /
+        performance.total_leads) *
+      100
+    : 0;
+  performance.close_rate =
+    performance.good_inspected + performance.signed_contracts
+      ? (performance.signed_contracts /
+          (performance.good_inspected + performance.signed_contracts)) *
+        100
+      : 0;
+  return { ...current, performance };
+}
+
 export function CompanyPortal({
   companyId,
   token,
@@ -653,6 +703,7 @@ export function CompanyPortal({
     if (note === null) return;
     const previousData = data;
     const previousSelected = selectedLead;
+    const previousDashboard = dashboard;
     const optimistic = optimisticAppointmentStatus(clientStatus);
     setBusy(true);
     setError("");
@@ -669,6 +720,9 @@ export function CompanyPortal({
           }
         : current,
     );
+    setDashboard((current) =>
+      optimisticDashboardStatus(current, appointment, clientStatus),
+    );
     const { data: updated, error: rpcErr } = await supabase.rpc(
       "company_update_lead_outcome",
       {
@@ -682,6 +736,7 @@ export function CompanyPortal({
     if (rpcErr) {
       setData(previousData);
       setSelectedLead(previousSelected);
+      setDashboard(previousDashboard);
       setError(rpcError(rpcErr));
     } else {
       const updatedAppointment = updated as Partial<Appointment> | null;
