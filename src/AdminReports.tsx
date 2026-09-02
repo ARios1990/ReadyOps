@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase";
 import { defaultReportDateRange, isLeadOutcome } from "./leadOutcome";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
+import { leadStatusExportValue } from "./leadStatusPresentation";
+import { LeadStatusBadge } from "./LeadStatusControls";
 
 // Report joins intentionally accept flexible Supabase row shapes across legacy
 // and current database responses.
@@ -21,6 +23,12 @@ function isBad(row: Obj): boolean {
 }
 function isNoShow(row: Obj): boolean {
   return isLeadOutcome(row, "no_show");
+}
+function isRescheduled(row: Obj): boolean {
+  return isLeadOutcome(row, "rescheduled");
+}
+function isPending(row: Obj): boolean {
+  return isLeadOutcome(row, "pending");
 }
 
 export function AdminReports({
@@ -60,7 +68,7 @@ export function AdminReports({
       supabase
         .from("portal_appointments")
         .select(
-          "id,lead_id,company_id,appointment_date,status,canonical_status,client_status,sales_outcome,attendance_status,inspection_status",
+          "id,lead_id,company_id,appointment_date,status,canonical_status,client_status,company_action,sales_outcome,attendance_status,inspection_status",
         )
         .gte("appointment_date", startDate)
         .lte("appointment_date", endDate),
@@ -123,6 +131,8 @@ export function AdminReports({
         if (statusFilter === "bad" && !isBad(row)) return false;
         if (statusFilter === "no_show" && !isNoShow(row)) return false;
         if (statusFilter === "signed_contract" && !isSigned(row)) return false;
+        if (statusFilter === "rescheduled" && !isRescheduled(row)) return false;
+        if (statusFilter === "pending" && !isPending(row)) return false;
         return true;
       }),
     [joined, companyId, agentId, statusFilter],
@@ -134,8 +144,11 @@ export function AdminReports({
       approved: filtered.filter((r) => r.lead?.qc_status === "approved").length,
       denied: filtered.filter((r) => r.lead?.qc_status === "denied").length,
       good: filtered.filter(isGood).length,
+      bad: filtered.filter(isBad).length,
       noShow: filtered.filter(isNoShow).length,
       signed: filtered.filter(isSigned).length,
+      rescheduled: filtered.filter(isRescheduled).length,
+      pending: filtered.filter(isPending).length,
       completed: filtered.filter(
         (r) => r.status === "completed" || r.inspection_status === "completed",
       ).length,
@@ -166,8 +179,11 @@ export function AdminReports({
               .length,
             denied: rows.filter((r) => r.lead?.qc_status === "denied").length,
             good: rows.filter(isGood).length,
+            bad: rows.filter(isBad).length,
             noShow: rows.filter(isNoShow).length,
             signed: rows.filter(isSigned).length,
+            rescheduled: rows.filter(isRescheduled).length,
+            pending: rows.filter(isPending).length,
           };
         })
         .filter((r) => r.total > 0),
@@ -194,8 +210,11 @@ export function AdminReports({
             approved,
             denied: rows.filter((r) => r.lead?.qc_status === "denied").length,
             good: rows.filter(isGood).length,
+            bad: rows.filter(isBad).length,
             noShow: rows.filter(isNoShow).length,
             signed: rows.filter(isSigned).length,
+            rescheduled: rows.filter(isRescheduled).length,
+            pending: rows.filter(isPending).length,
             conversion: approved
               ? Math.round((rows.filter(isSigned).length / approved) * 100)
               : 0,
@@ -212,8 +231,10 @@ export function AdminReports({
       Agent: r.lead?.agent_name || "",
       Lead_ID: r.lead?.lead_code || "",
       QC: r.lead?.qc_status || "",
-      Good: r.client_status === "good" ? "Yes" : "",
-      Client_Status: r.client_status || "",
+      Good: isGood(r) ? "Yes" : "",
+      Client_Status: leadStatusExportValue(
+        r.company_action || r.client_status || r.canonical_status,
+      ),
       Appointment_Status: r.status || "",
       Sales_Outcome: r.sales_outcome || "",
     }));
@@ -332,6 +353,8 @@ export function AdminReports({
               <option value="bad">Bad</option>
               <option value="no_show">No Show</option>
               <option value="signed_contract">Signed Contract</option>
+              <option value="rescheduled">Rescheduled</option>
+              <option value="pending">Pending</option>
             </select>
           </label>
         </div>
@@ -342,13 +365,16 @@ export function AdminReports({
           {error}
         </div>
       )}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-9">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-12">
         <Kpi label="Total Leads" value={metrics.total} />
         <Kpi label="Approved" value={metrics.approved} />
         <Kpi label="QC Denied" value={metrics.denied} />
         <Kpi label="Good" value={metrics.good} />
+        <Kpi label="Bad" value={metrics.bad} />
         <Kpi label="No Shows" value={metrics.noShow} />
-        <Kpi label="Signed" value={metrics.signed} />
+        <Kpi label="Signed Contract" value={metrics.signed} />
+        <Kpi label="Rescheduled" value={metrics.rescheduled} />
+        <Kpi label="Pending" value={metrics.pending} />
         <Kpi label="Completed" value={metrics.completed} />
         <Kpi label="Revenue" value={money(metrics.revenue)} />
         <Kpi label="Payroll Cost" value={money(metrics.payroll)} />
@@ -424,8 +450,11 @@ function CompanyTable({ rows }: { rows: Obj[] }) {
         "Approved",
         "QC Denied",
         "Good",
+        "Bad",
         "No Show",
-        "Signed",
+        "Signed Contract",
+        "Rescheduled",
+        "Pending",
       ]}
       rows={rows.map((r) => [
         r.name,
@@ -433,8 +462,11 @@ function CompanyTable({ rows }: { rows: Obj[] }) {
         r.approved,
         r.denied,
         r.good,
+        r.bad,
         r.noShow,
         r.signed,
+        r.rescheduled,
+        r.pending,
       ])}
     />
   );
@@ -449,8 +481,11 @@ function AgentTable({ rows }: { rows: Obj[] }) {
         "Approved",
         "QC Denied",
         "Good",
+        "Bad",
         "No Show",
-        "Signed",
+        "Signed Contract",
+        "Rescheduled",
+        "Pending",
         "Conversion",
       ]}
       rows={rows.map((r) => [
@@ -460,8 +495,11 @@ function AgentTable({ rows }: { rows: Obj[] }) {
         r.approved,
         r.denied,
         r.good,
+        r.bad,
         r.noShow,
         r.signed,
+        r.rescheduled,
+        r.pending,
         `${r.conversion}%`,
       ])}
     />
@@ -493,8 +531,10 @@ function AppointmentTable({
         r.lead?.agent_name || "—",
         r.lead?.lead_code || "—",
         r.lead?.qc_status || "—",
-        r.client_status === "good" ? "Yes" : "—",
-        r.client_status || "—",
+        isGood(r) ? "Yes" : "—",
+        <LeadStatusBadge
+          value={r.company_action || r.client_status || r.canonical_status}
+        />,
         r.status || "—",
         r.sales_outcome || "—",
       ])}
@@ -544,7 +584,7 @@ function Table({
   rows,
 }: {
   headers: string[];
-  rows: (string | number)[][];
+  rows: ReactNode[][];
 }) {
   return (
     <HorizontalScrollFrame ariaLabel="Report table horizontal scroll">
@@ -564,7 +604,7 @@ function Table({
               <tr key={i} className="border-t">
                 {r.map((v, j) => (
                   <td key={j} className="px-4 py-3">
-                    {String(v).replace(/_/g, " ")}
+                    {typeof v === "string" ? v.replace(/_/g, " ") : v}
                   </td>
                 ))}
               </tr>

@@ -207,7 +207,6 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
     '**Additional Information**',
     'Notes: ' + leadTemplateValue(values, 'notes'),
     'Size of Hail: ' + leadTemplateValue(values, 'hail_size'),
-    'Claim Filed: ' + leadTemplateValue(values, 'claim_filed'),
     'Visible Damage: ' + leadTemplateValue(values, 'visible_damage'),
     'Damage Type: ' + leadTemplateValue(values, 'damage_type'),
     'Add. Properties: ' + leadTemplateValue(values, 'additional_properties'),

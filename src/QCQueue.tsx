@@ -1100,7 +1100,7 @@ export function QCQueue() {
             options={[
               ["pending", "Pending"],
               ["confirmed", "Confirmed"],
-              ["good_inspected", "Good / Inspected"],
+              ["good_inspected", "Good"],
               ["signed_contract", "Signed Contract"],
               ["no_show", "No Show"],
               ["bad", "Bad"],

@@ -49,7 +49,17 @@ import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import { SharedRecordingPlayer } from "./SharedRecordingPlayer";
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
-import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
+import {
+  ClientStatusActions,
+  LeadReceivedIndicator,
+} from "./LeadStatusControls";
+import {
+  clientLeadStatusLabel,
+  leadStatusClasses,
+  leadStatusExportValue,
+  normalizeLeadDisposition,
+  type LeadDisposition,
+} from "./leadStatusPresentation";
 
 interface Location {
   id: string;
@@ -129,16 +139,14 @@ interface Appointment {
   sales_outcome: string;
   client_status: string;
   company_action?: string;
+  client_received?: boolean;
+  received_at?: string | null;
+  received_by?: string | null;
   inspector_notes: string | null;
   representative_id: string | null;
   representative_name: string | null;
   location_label: string | null;
   lead: LeadRecord;
-  latest_checkin: {
-    verified?: boolean;
-    distance_m?: number;
-    checked_in_at?: string;
-  } | null;
 }
 interface AuditLog {
   id: string;
@@ -167,9 +175,6 @@ interface SettingsRecord {
   external_form_url: string | null;
   external_prefill_map: Record<string, string>;
   external_submission_map: Record<string, string>;
-  check_in_radius_m: number;
-  check_in_before_minutes: number;
-  check_in_after_minutes: number;
 }
 interface CompanyPortalData {
   company: {
@@ -202,6 +207,8 @@ interface CompanyDashboardSummary {
     signed_contracts: number;
     no_shows: number;
     bad_leads: number;
+    rescheduled: number;
+    pending_updates: number;
     inspection_rate: number;
     close_rate: number;
   };
@@ -233,20 +240,34 @@ const DAY_NAMES = [
   "Friday",
   "Saturday",
 ];
-const COMPANY_LEAD_ACTIONS = [
+const COMPANY_LEAD_ACTIONS: Array<
+  [Exclude<LeadDisposition, "pending">, string]
+> = [
+  ["good", "Inspected"],
   ["no_show", "No Show"],
+  ["bad", "Bad / Canceled"],
   ["signed_contract", "Signed Contract"],
-  ["lost", "Bad"],
-  ["good", "Good / Inspected"],
-  ["inspected", "Inspected"],
   ["rescheduled", "Rescheduled"],
-] as const;
-const COMPANY_LEAD_MODAL_ACTIONS = COMPANY_LEAD_ACTIONS.map(
-  ([value, label]) =>
-    value === "inspected"
-      ? (["pending", "Pending"] as const)
-      : ([value, label] as const),
-);
+];
+
+function optimisticAppointmentStatus(
+  value: string,
+): Partial<Appointment> {
+  const status = normalizeLeadDisposition(value) || "pending";
+  const patch: Partial<Appointment> = {
+    company_action: status,
+    client_status: status,
+    canonical_status: status === "good" ? "good_inspected" : status,
+  };
+  if (status === "good" || status === "signed_contract") {
+    patch.inspection_status = "completed";
+  } else if (status === "no_show") {
+    patch.inspection_status = "not_completed";
+  }
+  if (status === "signed_contract") patch.sales_outcome = "signed_contract";
+  if (status === "bad") patch.sales_outcome = "lost";
+  return patch;
+}
 
 export function CompanyPortal({
   companyId,
@@ -405,9 +426,6 @@ export function CompanyPortal({
       requirements_short: settingsDraft.requirements_short,
       requirements_detail: settingsDraft.requirements_detail,
       qualification_rules: settingsDraft.qualification_rules,
-      check_in_radius_m: settingsDraft.check_in_radius_m,
-      check_in_before_minutes: settingsDraft.check_in_before_minutes,
-      check_in_after_minutes: settingsDraft.check_in_after_minutes,
     });
   }
 
@@ -633,8 +651,24 @@ export function CompanyPortal({
           )
         : suppliedNotes;
     if (note === null) return;
+    const previousData = data;
+    const previousSelected = selectedLead;
+    const optimistic = optimisticAppointmentStatus(clientStatus);
     setBusy(true);
     setError("");
+    setSelectedLead((current) =>
+      current?.id === appointment.id ? { ...current, ...optimistic } : current,
+    );
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            appointments: current.appointments.map((item) =>
+              item.id === appointment.id ? { ...item, ...optimistic } : item,
+            ),
+          }
+        : current,
+    );
     const { data: updated, error: rpcErr } = await supabase.rpc(
       "company_update_lead_outcome",
       {
@@ -645,8 +679,11 @@ export function CompanyPortal({
         p_notes: note,
       },
     );
-    if (rpcErr) setError(rpcError(rpcErr));
-    else {
+    if (rpcErr) {
+      setData(previousData);
+      setSelectedLead(previousSelected);
+      setError(rpcError(rpcErr));
+    } else {
       const updatedAppointment = updated as Partial<Appointment> | null;
       if (updatedAppointment) {
         setSelectedLead((current) =>
@@ -670,6 +707,68 @@ export function CompanyPortal({
       setCompanyLeadRefreshKey((value) => value + 1);
       notify("Lead outcome updated.");
       await load();
+    }
+    setBusy(false);
+  }
+
+  async function confirmLeadReceipt(appointment: Appointment) {
+    const previousData = data;
+    const previousSelected = selectedLead;
+    const optimistic = {
+      client_received: true,
+      received_at: new Date().toISOString(),
+      received_by: "Company portal",
+    };
+    setBusy(true);
+    setError("");
+    setSelectedLead((current) =>
+      current?.id === appointment.id ? { ...current, ...optimistic } : current,
+    );
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            appointments: current.appointments.map((item) =>
+              item.id === appointment.id ? { ...item, ...optimistic } : item,
+            ),
+          }
+        : current,
+    );
+    const { data: updated, error: rpcErr } = await supabase.rpc(
+      "company_confirm_lead_received",
+      {
+        p_company_id: companyId,
+        p_access_token: token,
+        p_appointment_id: appointment.id,
+      },
+    );
+    if (rpcErr) {
+      setData(previousData);
+      setSelectedLead(previousSelected);
+      setError(rpcError(rpcErr));
+    } else {
+      const updatedAppointment = updated as Partial<Appointment> | null;
+      if (updatedAppointment) {
+        setSelectedLead((current) =>
+          current?.id === appointment.id
+            ? { ...current, ...updatedAppointment }
+            : current,
+        );
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                appointments: current.appointments.map((item) =>
+                  item.id === appointment.id
+                    ? { ...item, ...updatedAppointment }
+                    : item,
+                ),
+              }
+            : current,
+        );
+      }
+      setCompanyLeadRefreshKey((value) => value + 1);
+      notify("Lead receipt confirmed.");
     }
     setBusy(false);
   }
@@ -982,6 +1081,7 @@ export function CompanyPortal({
             assignRep={assignRep}
             updateAppointmentStatus={updateAppointmentStatus}
             updateLeadOutcome={updateLeadOutcome}
+            confirmLeadReceipt={confirmLeadReceipt}
             openLeads={(filter) => {
               setCompanyLeadFilter(filter);
               setCompanyLeadLocationId("");
@@ -1157,16 +1257,6 @@ export function CompanyPortal({
                       ...settingsDraft.qualification_rules,
                       block_disqualified: value,
                     },
-                  })
-                }
-              />
-              <NumberField
-                label="GPS Check-In Radius (meters)"
-                value={String(settingsDraft.check_in_radius_m)}
-                onChange={(value) =>
-                  setSettingsDraft({
-                    ...settingsDraft,
-                    check_in_radius_m: Number(value || 152),
                   })
                 }
               />
@@ -1646,6 +1736,7 @@ export function CompanyPortal({
           assignRep={assignRep}
           updateAppointmentStatus={updateAppointmentStatus}
           updateLeadOutcome={updateLeadOutcome}
+          confirmLeadReceipt={confirmLeadReceipt}
           onClose={() => setSelectedLead(null)}
         />
       )}
@@ -2104,49 +2195,49 @@ function CompanyLeadsSpreadsheet({
       key: "all",
       label: "Delivered",
       count: data.summary.delivered,
-      tone: "readyops-stat-delivered border-blue-300 bg-blue-50 text-blue-700",
+      tone: "readyops-stat-delivered border-[#7DD3FC] bg-[#BAE6FD] text-[#075985]",
       Icon: Clipboard,
     },
     {
       key: "good",
-      label: "Good",
+      label: "Inspected",
       count: data.summary.good,
-      tone: "readyops-stat-good border-emerald-300 bg-emerald-50 text-emerald-700",
+      tone: "readyops-stat-good border-[#6EE7B7] bg-[#A7F3D0] text-[#047857]",
       Icon: ThumbsUp,
     },
     {
       key: "bad",
       label: "Bad",
       count: data.summary.bad,
-      tone: "readyops-stat-bad border-red-300 bg-red-50 text-red-600",
+      tone: "readyops-stat-bad border-[#FCA5A5] bg-[#FECACA] text-[#B91C1C]",
       Icon: ThumbsDown,
     },
     {
       key: "no_show",
       label: "No Show",
       count: data.summary.no_show,
-      tone: "readyops-stat-no-show border-amber-300 bg-amber-50 text-amber-600",
+      tone: "readyops-stat-no-show border-[#FBBF24] bg-[#FDE68A] text-[#92400E]",
       Icon: CalendarX2,
     },
     {
       key: "rescheduled",
       label: "Rescheduled",
       count: data.summary.rescheduled,
-      tone: "readyops-stat-rescheduled border-orange-300 bg-orange-50 text-orange-600",
+      tone: "readyops-stat-rescheduled border-[#FDBA74] bg-[#FED7AA] text-[#C2410C]",
       Icon: CalendarClock,
     },
     {
       key: "signed_contract",
-      label: "Signed Contracts",
+      label: "Signed Contract",
       count: data.summary.signed_contract,
-      tone: "readyops-stat-signed border-emerald-800 bg-emerald-700 text-white",
+      tone: "readyops-stat-signed border-[#00512E] bg-[#006B3C] text-white",
       Icon: PenLine,
     },
     {
       key: "pending",
       label: "Pending Updates",
       count: data.summary.pending,
-      tone: "readyops-stat-pending border-blue-300 bg-blue-50 text-blue-700",
+      tone: "readyops-stat-pending border-[#67E8F9] bg-[#A5F3FC] text-[#0E7490]",
       Icon: Clock3,
     },
   ] as const;
@@ -2421,7 +2512,13 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                         Lead status
                         <select
                           aria-label={`Update ${appointment.lead.full_name} lead status`}
-                          value={appointment.company_action || "pending"}
+                          value={
+                            normalizeLeadDisposition(
+                              appointment.company_action ||
+                                appointment.client_status ||
+                                appointment.canonical_status,
+                            ) || "pending"
+                          }
                           disabled={busy}
                           onChange={(event) =>
                             void updateLeadOutcome(
@@ -2637,6 +2734,7 @@ function CompanyAppointmentsDashboard({
   assignRep,
   updateAppointmentStatus,
   updateLeadOutcome,
+  confirmLeadReceipt,
   openLeads,
 }: {
   data: CompanyPortalData;
@@ -2653,7 +2751,9 @@ function CompanyAppointmentsDashboard({
   updateLeadOutcome: (
     appointment: Appointment,
     clientStatus: string,
+    notes?: string,
   ) => Promise<void>;
+  confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
   openLeads: (filter: string) => void;
 }) {
   const delivered = data.appointments;
@@ -2672,27 +2772,14 @@ function CompanyAppointmentsDashboard({
   const selectedAppointments = delivered
     .filter((appointment) => appointment.appointment_date === selectedDay)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  const rescheduled = delivered.filter((item) =>
-    ["rescheduled", "reschedule"].includes(
-      item.company_action || item.canonical_status || item.client_status,
-    ),
-  ).length;
-  const pendingUpdates = delivered.filter(
-    (item) => !item.company_action || item.company_action === "pending",
-  ).length;
+  const rescheduled = performance.rescheduled;
+  const pendingUpdates = performance.pending_updates;
   return (
     <section className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[1.65fr_1.1fr_250px]">
         <section className="rounded-2xl border bg-white p-3 shadow-sm">
           <h2 className="mb-3 font-black">Company Performance</h2>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <PerformanceCard
-              tone="blue"
-              label="Package"
-              value={pkg?.lead_target ?? "—"}
-              icon={<Clipboard size={18} />}
-              onClick={() => openLeads("all")}
-            />
             <PerformanceCard
               tone="blue"
               label="Delivered"
@@ -2709,13 +2796,13 @@ function CompanyAppointmentsDashboard({
             />
             <PerformanceCard
               tone="green"
-              label="Good"
+              label="Inspected"
               value={performance.good_inspected}
               icon={<UserRoundCheck size={18} />}
               onClick={() => openLeads("good")}
             />
             <PerformanceCard
-              tone="orange"
+              tone="yellow"
               label="No Show"
               value={performance.no_shows}
               icon={<UserX size={18} />}
@@ -2729,14 +2816,14 @@ function CompanyAppointmentsDashboard({
               onClick={() => openLeads("rescheduled")}
             />
             <PerformanceCard
-              tone="purple"
-              label="Signed Contracts"
+              tone="signed"
+              label="Signed Contract"
               value={performance.signed_contracts}
               icon={<Clipboard size={18} />}
               onClick={() => openLeads("signed_contract")}
             />
             <PerformanceCard
-              tone="red"
+              tone="cyan"
               label="Pending Updates"
               value={pendingUpdates}
               icon={<AlertTriangle size={18} />}
@@ -2994,6 +3081,7 @@ function CompanyAppointmentsDashboard({
             assignRep={assignRep}
             updateAppointmentStatus={updateAppointmentStatus}
             updateLeadOutcome={updateLeadOutcome}
+            confirmLeadReceipt={confirmLeadReceipt}
           />
         ))
       )}
@@ -3009,6 +3097,7 @@ function CompanyAppointmentRow({
   assignRep,
   updateAppointmentStatus,
   updateLeadOutcome,
+  confirmLeadReceipt,
 }: {
   appointment: Appointment;
   representatives: Representative[];
@@ -3022,7 +3111,9 @@ function CompanyAppointmentRow({
   updateLeadOutcome: (
     appointment: Appointment,
     clientStatus: string,
+    notes?: string,
   ) => Promise<void>;
+  confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
 }) {
   const canonical =
     appointment.canonical_status ||
@@ -3132,20 +3223,24 @@ function CompanyAppointmentRow({
       >
         Assign representative or update status
       </button>
-      <div className="mt-4 hidden flex-wrap gap-2 border-t pt-3 sm:flex">
-        <span className="mr-1 self-center text-[10px] font-black uppercase tracking-wide text-slate-400">
-          Quick update
-        </span>
-        {COMPANY_LEAD_ACTIONS.map(([value, label]) => (
-          <button
-            key={value}
-            disabled={busy}
-            onClick={() => void updateLeadOutcome(appointment, value)}
-            className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${appointment.company_action === value ? (value === "no_show" || value === "rescheduled" ? "border-orange-600 bg-orange-500 text-white" : "border-blue-600 bg-blue-600 text-white") : value === "no_show" || value === "rescheduled" ? "border-orange-300 bg-orange-100 text-orange-800 hover:border-orange-400" : "bg-slate-50 text-slate-700 hover:border-blue-300"}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mt-4 hidden border-t pt-3 sm:block">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+            Quick update
+          </span>
+          <LeadReceivedIndicator
+            received={Boolean(appointment.client_received)}
+          />
+        </div>
+        <ClientStatusActions
+          currentStatus={appointment.company_action || canonical}
+          received={Boolean(appointment.client_received)}
+          disabled={busy}
+          onConfirm={() => void confirmLeadReceipt(appointment)}
+          onDisposition={(status) =>
+            void updateLeadOutcome(appointment, status, "")
+          }
+        />
       </div>
     </article>
   );
@@ -3161,10 +3256,12 @@ function CompanyReports({
   const performance =
     dashboard?.performance || performanceFromAppointments(data.appointments);
   const rows = [
-    ["Good / Inspected", performance.good_inspected, "bg-emerald-500"],
-    ["Signed Contracts", performance.signed_contracts, "bg-violet-500"],
-    ["No Shows", performance.no_shows, "bg-orange-500"],
-    ["Bad Leads", performance.bad_leads, "bg-red-500"],
+    ["Pending Updates", performance.pending_updates, "bg-[#0EA5E9]"],
+    ["Inspected", performance.good_inspected, "bg-[#059669]"],
+    ["Bad / Canceled", performance.bad_leads, "bg-[#E52420]"],
+    ["No Show", performance.no_shows, "bg-[#FBBF24]"],
+    ["Signed Contract", performance.signed_contracts, "bg-[#006B3C]"],
+    ["Rescheduled", performance.rescheduled, "bg-[#FF7A1A]"],
   ] as const;
   return (
     <section className="grid gap-4 lg:grid-cols-2">
@@ -3270,7 +3367,15 @@ function PerformanceCard({
   icon,
   onClick,
 }: {
-  tone: "blue" | "green" | "purple" | "orange" | "red";
+  tone:
+    | "blue"
+    | "cyan"
+    | "green"
+    | "signed"
+    | "purple"
+    | "yellow"
+    | "orange"
+    | "red";
   label: string;
   value: React.ReactNode;
   suffix?: string;
@@ -3278,11 +3383,14 @@ function PerformanceCard({
   onClick?: () => void;
 }) {
   const colors = {
-    blue: "border-blue-100 bg-blue-50 text-blue-700",
-    green: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    purple: "border-violet-100 bg-violet-50 text-violet-700",
-    orange: "border-orange-100 bg-orange-50 text-orange-700",
-    red: "border-red-100 bg-red-50 text-red-700",
+    blue: "border-[#7DD3FC] bg-[#BAE6FD] text-[#075985]",
+    cyan: "border-[#67E8F9] bg-[#A5F3FC] text-[#0E7490]",
+    green: "border-[#6EE7B7] bg-[#A7F3D0] text-[#047857]",
+    signed: "border-[#34D399] bg-[#6EE7B7] text-[#00512E]",
+    purple: "border-[#C4B5FD] bg-[#DDD6FE] text-[#6D28D9]",
+    yellow: "border-[#FBBF24] bg-[#FDE68A] text-[#92400E]",
+    orange: "border-[#FDBA74] bg-[#FED7AA] text-[#C2410C]",
+    red: "border-[#FCA5A5] bg-[#FECACA] text-[#B91C1C]",
   };
   const content = (
     <>
@@ -3355,7 +3463,7 @@ function StatusChip({ status, label }: { status: string; label?: string }) {
     <span
       className={`inline-flex whitespace-nowrap rounded-md border px-2.5 py-2 text-[11px] font-black ${classes}`}
     >
-      {label || leadStatusLabel(status)}
+      {label || clientLeadStatusLabel(status)}
     </span>
   );
 }
@@ -3367,12 +3475,24 @@ function performanceFromAppointments(
   const signed = appointments.filter((item) => isLeadOutcome(item, "signed_contract")).length;
   const noShows = appointments.filter((item) => isLeadOutcome(item, "no_show")).length;
   const bad = appointments.filter((item) => isLeadOutcome(item, "bad")).length;
+  const rescheduled = appointments.filter((item) =>
+    isLeadOutcome(item, "rescheduled"),
+  ).length;
+  const pendingUpdates = appointments.filter(
+    (item) =>
+      (!item.company_action || item.company_action === "pending") &&
+      !(
+        ["good", "signed_contract", "no_show", "bad", "rescheduled"] as const
+      ).some((status) => isLeadOutcome(item, status)),
+  ).length;
   return {
     total_leads: total,
     good_inspected: good,
     signed_contracts: signed,
     no_shows: noShows,
     bad_leads: bad,
+    rescheduled,
+    pending_updates: pendingUpdates,
     inspection_rate: total ? ((good + signed) / total) * 100 : 0,
     close_rate: good + signed ? (signed / (good + signed)) * 100 : 0,
   };
@@ -3399,7 +3519,12 @@ function downloadAppointments(
       item.lead.phone_number,
       item.lead.address,
       item.location_label || "Company-wide",
-      item.canonical_status || item.client_status || item.status,
+      leadStatusExportValue(
+        item.company_action ||
+          item.client_status ||
+          item.canonical_status ||
+          item.status,
+      ),
       item.representative_name || "Unassigned",
     ]),
   ];
@@ -3615,6 +3740,7 @@ function LeadModal({
   assignRep,
   updateAppointmentStatus,
   updateLeadOutcome,
+  confirmLeadReceipt,
   onClose,
 }: {
   appointment: Appointment;
@@ -3632,6 +3758,7 @@ function LeadModal({
     clientStatus: string,
     notes?: string,
   ) => Promise<void>;
+  confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
   onClose: () => void;
 }) {
   const lead = appointment.lead;
@@ -3712,41 +3839,29 @@ function LeadModal({
             </div>
 
             <div className="mt-4 border-t border-blue-100 pt-4">
-              <p className="text-sm font-black text-slate-900">Choose an update</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                One tap saves the outcome and keeps it in the ReadyOps history.
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {COMPANY_LEAD_MODAL_ACTIONS.map(([value, label]) => {
-                  const active = currentStatus === value;
-                  const tone =
-                    value === "pending"
-                      ? "bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-300"
-                      : value === "good"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : value === "signed_contract"
-                        ? "border-violet-200 bg-violet-50 text-violet-800"
-                        : value === "rescheduled"
-                          ? "readyops-outcome-rescheduled border-orange-300 bg-orange-100 text-orange-900"
-                          : value === "no_show"
-                          ? "border-amber-200 bg-amber-50 text-amber-800"
-                          : "border-red-200 bg-red-50 text-red-800";
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={active}
-                      disabled={busy}
-                      onClick={() =>
-                        void updateLeadOutcome(appointment, value, notes)
-                      }
-                      className={`min-h-12 rounded-xl border px-3 py-2 text-sm font-black transition disabled:opacity-50 ${active ? "ring-2 ring-blue-600 ring-offset-1" : ""} ${tone}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    Choose an update
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    One tap saves the outcome and keeps it in ReadyOps history.
+                  </p>
+                </div>
+                <LeadReceivedIndicator
+                  received={Boolean(appointment.client_received)}
+                />
               </div>
+              <ClientStatusActions
+                className="mt-3"
+                currentStatus={currentStatus}
+                received={Boolean(appointment.client_received)}
+                disabled={busy}
+                onConfirm={() => void confirmLeadReceipt(appointment)}
+                onDisposition={(status) =>
+                  void updateLeadOutcome(appointment, status, notes)
+                }
+              />
             </div>
 
             <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">

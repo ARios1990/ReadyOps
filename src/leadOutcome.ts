@@ -3,6 +3,7 @@ export type LeadOutcomeRecord = {
   canonical_status?: unknown;
   sales_outcome?: unknown;
   attendance_status?: unknown;
+  company_action?: unknown;
 };
 
 export type LeadOutcome =
@@ -19,16 +20,25 @@ function statusValues(row: LeadOutcomeRecord): string[] {
     row.canonical_status,
     row.sales_outcome,
     row.attendance_status,
+    row.company_action,
   ].map(value => String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_"));
 }
 
 export function normalizeLeadOutcome(row: LeadOutcomeRecord): LeadOutcome {
   const values = statusValues(row);
-  if (values.includes("signed_contract") || values.includes("signed")) return "signed_contract";
+  if (
+    values.includes("signed_contract") ||
+    values.includes("signed") ||
+    values.includes("signed_claim_filed")
+  ) return "signed_contract";
   if (values.some(value => value === "no_show" || value.includes("no_show"))) return "no_show";
   if (values.includes("bad") || values.includes("lost")) return "bad";
-  if (values.includes("good") || values.includes("good_inspected")) return "good";
-  if (values.includes("rescheduled")) return "rescheduled";
+  if (
+    values.includes("good") ||
+    values.includes("good_inspected") ||
+    values.includes("inspected")
+  ) return "good";
+  if (values.includes("rescheduled") || values.includes("reschedule")) return "rescheduled";
   return "pending";
 }
 

@@ -27,7 +27,11 @@ import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
 import { formatDateLong, formatTime, rpcError } from "./portalUtils";
-import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
+import {
+  leadStatusClasses,
+  leadStatusExportValue,
+  leadStatusLabel,
+} from "./leadStatusPresentation";
 
 // RPC payloads intentionally stay flexible because legacy form_data keys remain visible in CRM.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -257,7 +261,11 @@ export function AdminLeadCRM() {
         form.storm_date || form.hail_date || form.last_checked_on,
         row.lead.qc_status,
         row.appointment.inspection_status,
-        row.appointment.client_status || row.appointment.canonical_status,
+        leadStatusExportValue(
+          row.appointment.company_action ||
+            row.appointment.client_status ||
+            row.appointment.canonical_status,
+        ),
         row.lead.source,
         row.lead.notes,
       ]
@@ -392,7 +400,7 @@ export function AdminLeadCRM() {
             options={[
               ["pending", "Pending"],
               ["confirmed", "Confirmed"],
-              ["good_inspected", "Good / Inspected"],
+              ["good_inspected", "Good"],
               ["signed_contract", "Signed Contract"],
               ["no_show", "No Show"],
               ["bad", "Bad"],
@@ -917,7 +925,6 @@ function LeadDetailModal({
                       ["Home Value", money(lead.home_value || form.home_value)],
                       ["Insurance", form.insurance],
                       ["Carrier", form.insurance_name],
-                      ["Claim Filed", form.claim_filed],
                       ["Visible Damage", form.visible_damage],
                       ["Damage Type", form.damage_type],
                       ["Hail Size", form.hail_size],
@@ -1345,15 +1352,11 @@ function LeadEditForm({
             onChange={(value) => set("company_action", value)}
             options={statusOptions([
               "pending",
-              "contacted",
-              "confirmed",
-              "inspected",
+              "good",
               "no_show",
+              "bad",
               "rescheduled",
-              "estimate_given",
-              "claim_filed",
               "signed_contract",
-              "lost",
             ])}
           />
           <EditTextArea
@@ -1373,7 +1376,6 @@ function LeadEditForm({
           ["home_type", "Home Type"],
           ["insurance", "Insurance"],
           ["insurance_name", "Insurance Carrier"],
-          ["claim_filed", "Claim Filed"],
           ["visible_damage", "Visible Damage"],
           ["damage_type", "Damage Type"],
           ["hail_size", "Hail Size"],

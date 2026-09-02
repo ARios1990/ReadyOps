@@ -196,11 +196,12 @@ function Section({ title, children, columns = false }: { title: string; children
 }
 
 const STATUS_BUTTONS = [
-  ['QC DENIED', 'bg-red-600'],
-  ['GOOD', 'bg-emerald-600'],
-  ['SIGNED CONTRACT', 'bg-emerald-800'],
-  ['BAD', 'bg-red-600'],
-  ['NO SHOW', 'bg-amber-400 text-slate-950'],
+  ['QC DENIED', 'bg-[#E52420] text-white'],
+  ['GOOD', 'bg-[#059669] text-white'],
+  ['SIGNED CONTRACT', 'bg-[#006B3C] text-white'],
+  ['BAD', 'bg-[#E52420] text-white'],
+  ['NO SHOW', 'bg-[#FBBF24] text-slate-950'],
+  ['RESCHEDULED', 'bg-[#FF7A1A] text-slate-950'],
 ] as const;
 
 export function ClientLeadTemplate({
@@ -295,7 +296,6 @@ export function ClientLeadTemplate({
     `Notes: ${copyValue(leadValue(copyLead, 'notes', 'notes'))}`,
     `Last Checked On: ${copyValue(normalizeLastChecked(formValue(copyLead, 'last_checked_on', 'last_inspection_date')))}`,
     `Size of Hail: ${copyValue(formValue(copyLead, 'hail_size', 'size_of_hail'))}`,
-    `Claim Filed: ${copyValue(formValue(copyLead, 'claim_filed', 'file_claim'))}`,
     `Visible Damage: ${copyValue(formValue(copyLead, 'visible_damage'))}`,
     `Damage Type: ${copyValue(formValue(copyLead, 'damage_type', 'type_of_damage'))}`,
     `Add. Properties: ${copyValue(formValue(copyLead, 'additional_properties', 'add_properties'))}`,
@@ -353,7 +353,6 @@ export function ClientLeadTemplate({
               </div>
             </div>
             <Row label="Size of Hail:" field="hail_size" value={formValue(lead, 'hail_size', 'size_of_hail')} editValue={editValue('hail_size', formValue(lead, 'hail_size', 'size_of_hail'))} onChange={onChange} />
-            <Row label="Claim Filed:" field="claim_filed" value={formValue(lead, 'claim_filed', 'file_claim')} editValue={editValue('claim_filed', formValue(lead, 'claim_filed', 'file_claim'))} onChange={onChange} />
             <Row label="Visible Damage:" field="visible_damage" value={formValue(lead, 'visible_damage')} editValue={editValue('visible_damage', formValue(lead, 'visible_damage'))} onChange={onChange} />
             <Row label="Damage Type:" field="damage_type" value={formValue(lead, 'damage_type', 'type_of_damage')} editValue={editValue('damage_type', formValue(lead, 'damage_type', 'type_of_damage'))} onChange={onChange} />
             <Row label="Add. Properties:" field="additional_properties" value={formValue(lead, 'additional_properties', 'add_properties')} editValue={editValue('additional_properties', formValue(lead, 'additional_properties', 'add_properties'))} onChange={onChange} />
@@ -381,7 +380,7 @@ export function ClientLeadTemplate({
               <button
                 key={label}
                 type="button"
-                className={'min-w-0 flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-[10px] font-black text-white shadow-sm ' + tone}
+                className={'min-w-0 flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-[10px] font-black shadow-sm ' + tone}
               >
                 {label}
               </button>

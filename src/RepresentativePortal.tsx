@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Loader2,
   MapPin,
-  Navigation,
   Phone,
   RefreshCw,
 } from "lucide-react";
@@ -17,7 +16,12 @@ import {
   rpcError,
   startOfWeek,
 } from "./portalUtils";
-import { leadStatusClasses, normalizeLeadStatus } from "./leadStatusPresentation";
+import {
+  ClientStatusActions,
+  LeadReceivedIndicator,
+  LeadStatusBadge,
+} from "./LeadStatusControls";
+import type { LeadDisposition } from "./leadStatusPresentation";
 
 interface RepLead {
   full_name: string;
@@ -41,21 +45,14 @@ interface RepAppointment {
   attendance_status: string;
   inspection_status: string;
   sales_outcome: string;
+  client_status: string;
+  company_action?: string;
   canonical_status: string;
+  client_received?: boolean;
+  received_at?: string | null;
+  received_by?: string | null;
   location_label: string | null;
   lead: RepLead;
-  latest_checkin: {
-    verified?: boolean;
-    distance_m?: number;
-    timing_status?: string;
-    checked_in_at?: string;
-  } | null;
-  timeline: Array<{
-    id: string;
-    action: string;
-    actor_name: string | null;
-    created_at: string;
-  }>;
 }
 interface RepPortalData {
   representative: {
@@ -65,12 +62,6 @@ interface RepPortalData {
     email: string | null;
   };
   company: { id: string; name: string };
-  settings: {
-    timezone: string;
-    check_in_radius_m: number;
-    check_in_before_minutes: number;
-    check_in_after_minutes: number;
-  };
   appointments: RepAppointment[];
 }
 
@@ -102,70 +93,72 @@ export function RepresentativePortal({ token }: { token: string }) {
     void load();
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps -- the representative token is the complete portal scope
 
-  async function action(appointmentId: string, actionName: string) {
+  async function action(
+    appointment: RepAppointment,
+    actionName: string,
+    disposition?: Exclude<LeadDisposition, "pending">,
+  ) {
+    const previous = data;
     setBusy(true);
     setError("");
-    const { error: rpcErr } = await supabase.rpc(
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            appointments: current.appointments.map((item) =>
+              item.id === appointment.id
+                ? actionName === "confirmed"
+                  ? {
+                      ...item,
+                      client_received: true,
+                      received_at: new Date().toISOString(),
+                      received_by: current.representative.name,
+                    }
+                  : {
+                      ...item,
+                      company_action: disposition,
+                      client_status: disposition || item.client_status,
+                      canonical_status:
+                        disposition === "good"
+                          ? "good_inspected"
+                          : disposition || item.canonical_status,
+                    }
+                : item,
+            ),
+          }
+        : current,
+    );
+    const { data: updated, error: rpcErr } = await supabase.rpc(
       "representative_update_appointment",
       {
         p_access_token: token,
-        p_appointment_id: appointmentId,
+        p_appointment_id: appointment.id,
         p_action: actionName,
         p_note: null,
       },
     );
-    if (rpcErr) setError(rpcError(rpcErr));
-    else {
-      setSuccess("Status updated.");
+    if (rpcErr) {
+      setData(previous);
+      setError(rpcError(rpcErr));
+    } else {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              appointments: current.appointments.map((item) =>
+                item.id === appointment.id
+                  ? { ...item, ...(updated as Partial<RepAppointment>) }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      setSuccess(
+        actionName === "confirmed" ? "Lead receipt confirmed." : "Status updated.",
+      );
       window.setTimeout(() => setSuccess(""), 2000);
-      await load();
     }
     setBusy(false);
-  }
-
-  async function checkIn(appointmentId: string) {
-    if (!navigator.geolocation) {
-      setError("Location services are not supported on this device.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { data: result, error: rpcErr } = await supabase.rpc(
-          "representative_check_in",
-          {
-            p_access_token: token,
-            p_appointment_id: appointmentId,
-            p_latitude: position.coords.latitude,
-            p_longitude: position.coords.longitude,
-            p_accuracy_m: position.coords.accuracy,
-            p_note: null,
-          },
-        );
-        if (rpcErr) setError(rpcError(rpcErr));
-        else {
-          const checkin = result as {
-            verified: boolean;
-            distance_m: number | null;
-            timing_status: string;
-          };
-          setSuccess(
-            checkin.verified
-              ? `GPS verified${checkin.distance_m != null ? ` • ${Math.round(checkin.distance_m)} m from property` : ""}.`
-              : `Check-in recorded as unverified (${checkin.timing_status.replace(/_/g, " ")}).`,
-          );
-          window.setTimeout(() => setSuccess(""), 4000);
-          await load();
-        }
-        setBusy(false);
-      },
-      (geoError) => {
-        setError(`Unable to get location: ${geoError.message}`);
-        setBusy(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
   }
 
   if (loading && !data)
@@ -222,12 +215,6 @@ export function RepresentativePortal({ token }: { token: string }) {
             {success}
           </div>
         )}
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          <strong>GPS check-in:</strong> verification radius{" "}
-          {data.settings.check_in_radius_m} m. Location is requested only when
-          you press Check In.
-        </div>
-
         {sorted.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-400">
             No assigned appointments in this date window.
@@ -252,84 +239,61 @@ export function RepresentativePortal({ token }: { token: string }) {
                     {appt.lead.city ? `, ${appt.lead.city}` : ""}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                    <Badge text={appt.canonical_status} />
+                    <LeadStatusBadge
+                      value={
+                        appt.company_action ||
+                        appt.client_status ||
+                        appt.canonical_status
+                      }
+                      audience="client"
+                    />
+                    <LeadReceivedIndicator
+                      received={Boolean(appt.client_received)}
+                    />
                   </div>
                 </button>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-xl">
-                  <a
-                    href={`tel:${appt.lead.phone_number}`}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"
-                  >
-                    <Phone size={13} /> Call
-                  </a>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appt.lead.address)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"
-                  >
-                    <MapPin size={13} /> Map
-                  </a>
-                  <button
+                <div className="w-full lg:max-w-xl">
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={`tel:${appt.lead.phone_number}`}
+                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"
+                    >
+                      <Phone size={13} /> Call
+                    </a>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appt.lead.address)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"
+                    >
+                      <MapPin size={13} /> Map
+                    </a>
+                  </div>
+                  <ClientStatusActions
+                    className="mt-2"
+                    currentStatus={
+                      appt.company_action ||
+                      appt.client_status ||
+                      appt.canonical_status
+                    }
+                    received={Boolean(appt.client_received)}
                     disabled={busy}
-                    onClick={() => void action(appt.id, "en_route")}
-                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
-                  >
-                    <Navigation size={13} className="inline mr-1" /> En Route
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void checkIn(appt.id)}
-                    className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"
-                  >
-                    Check In
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "confirmed")}
-                    className="rounded-xl border border-sky-600 bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
-                    title="Confirmed — stays Pending internally"
-                  >
-                    Confirm Lead
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "inspection_completed")}
-                    className="rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
-                    title="Inspected — appears as Good internally"
-                  >
-                    Inspected
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "homeowner_no_show")}
-                    className="rounded-xl border border-yellow-400 bg-yellow-300 px-3 py-2 text-xs font-bold text-slate-950 shadow-sm disabled:opacity-50"
-                  >
-                    No Show
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "rescheduled")}
-                    className="rounded-xl border border-orange-500 bg-orange-400 px-3 py-2 text-xs font-bold text-slate-950 shadow-sm disabled:opacity-50"
-                  >
-                    Rescheduled
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "homeowner_cancelled")}
-                    className="rounded-xl border border-red-700 bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
-                    title="Bad or lead canceled"
-                  >
-                    Bad / Canceled
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => void action(appt.id, "signed_contract")}
-                    className="rounded-xl border border-emerald-950 bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
-                    title="Signed contract or insurance claim filed"
-                  >
-                    Signed / Claim Filed
-                  </button>                </div>
+                    onConfirm={() => void action(appt, "confirmed")}
+                    onDisposition={(status) =>
+                      void action(
+                        appt,
+                        status === "good"
+                          ? "inspection_completed"
+                          : status === "bad"
+                            ? "homeowner_cancelled"
+                            : status === "no_show"
+                              ? "homeowner_no_show"
+                              : status,
+                        status,
+                      )
+                    }
+                  />
+                </div>
               </div>
             </article>
           ))
@@ -406,27 +370,6 @@ export function RepresentativePortal({ token }: { token: string }) {
   );
 }
 
-function Badge({ text }: { text: string }) {
-  const status = normalizeLeadStatus(text);
-  const label =
-    status === "good_inspected"
-      ? "INSPECTED"
-      : status === "confirmed"
-        ? "CONFIRMED"
-        : status === "signed_contract"
-          ? "SIGNED CONTRACT"
-          : status === "no_show"
-            ? "NO SHOW"
-            : status.replace(/_/g, " ").toUpperCase();
-
-  return (
-    <span
-      className={"rounded-full border px-2.5 py-1 font-bold uppercase " + leadStatusClasses(status)}
-    >
-      {label}
-    </span>
-  );
-}
 function Detail({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
