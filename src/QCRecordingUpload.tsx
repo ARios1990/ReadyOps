@@ -3,7 +3,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { CheckCircle2, ClipboardCopy, ExternalLink, FileText, Headphones, HelpCircle, Loader2, RefreshCw, Save, Sparkles, UploadCloud, XCircle } from 'lucide-react';
 import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
-import { formatDateLong, formatTime } from './portalUtils';
+import { getLane } from './leadTypes';
+import { buildInspectorNote } from './inspectorNote';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -39,6 +40,7 @@ type Assessment = {
     last_inspection_date?: string;
   };
   payment_path?: 'cash' | 'financing' | 'insurance' | 'unknown';
+  lead_type?: string;
   roof_age_damage_override?: boolean;
   genuine_call?: 'yes' | 'no' | 'uncertain';
   confidence?: 'high' | 'medium' | 'low';
@@ -84,51 +86,6 @@ function qualifierTone(value?: QualifierValue): string {
   return 'border-amber-200 bg-amber-50 text-amber-800';
 }
 
-function formatAppointmentDateTime(date?: string | null, time?: string | null): string {
-  const parts: string[] = [];
-  if (date) {
-    try { parts.push(formatDateLong(date)); } catch { parts.push(date); }
-  }
-  if (time) {
-    try { parts.push(formatTime(String(time).slice(0, 5))); } catch { parts.push(String(time)); }
-  }
-  return parts.join(' • ');
-}
-
-function buildInspectorNote(
-  assessment: Assessment,
-  appointment: { date?: string | null; time?: string | null; address?: string | null; city?: string | null; state?: string | null; zipCode?: string | null },
-): string {
-  const lines: string[] = [];
-  const when = formatAppointmentDateTime(appointment.date, appointment.time);
-  const addressLine = [appointment.address, [appointment.city, appointment.state].filter(Boolean).join(', '), appointment.zipCode]
-    .filter(Boolean)
-    .join(', ');
-  if (when) lines.push(`Appointment: ${when}`);
-  if (addressLine) lines.push(`Address: ${addressLine}`);
-
-  const details = assessment?.optional_details;
-  const propertyBits = [
-    details?.roof_type && `${details.roof_type} roof`,
-    details?.stories && `${details.stories} ${Number(details.stories) === 1 ? 'story' : 'stories'}`,
-    details?.damage_type && `damage: ${details.damage_type}`,
-  ].filter(Boolean);
-  if (propertyBits.length) lines.push(`Property: ${propertyBits.join(', ')}`);
-
-  const paymentPath = assessment?.payment_path;
-  if (paymentPath && paymentPath !== 'unknown') {
-    lines.push(`Payment: ${paymentPath}${details?.insurance_company ? ` (${details.insurance_company})` : ''}`);
-  }
-  if (details?.last_inspection_date) lines.push(`Last inspection: ${details.last_inspection_date}`);
-
-  const overrideNote = assessment?.roof_age_damage_override
-    ? 'Recent damage/hail or a requested inspection was reported — verify roof age on site.'
-    : '';
-  if (overrideNote) lines.push(overrideNote);
-
-  if (!lines.length) return '';
-  return lines.join('\n');
-}
 
 type SpeechAlternativeLike = { transcript: string; confidence?: number };
 type SpeechResultLike = { isFinal: boolean; length: number; [index: number]: SpeechAlternativeLike };
@@ -297,6 +254,9 @@ export function QCRecordingUpload({
   city,
   state,
   zipCode,
+  homeownerName,
+  leadType,
+  leadForm,
 }: {
   leadId: string;
   value: string;
@@ -310,6 +270,9 @@ export function QCRecordingUpload({
   city?: string | null;
   state?: string | null;
   zipCode?: string | null;
+  homeownerName?: string | null;
+  leadType?: string | null;
+  leadForm?: Record<string, unknown>;
 }) {
   const [uploading, setUploading] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -325,7 +288,7 @@ export function QCRecordingUpload({
   const [assessment, setAssessment] = useState<Assessment>(null);
 
   const appointmentInfo = { date: appointmentDate, time: appointmentTime, address, city, state, zipCode };
-  const inspectorNote = assessment ? buildInspectorNote(assessment, appointmentInfo) : '';
+  const inspectorNote = assessment ? buildInspectorNote(assessment, appointmentInfo, { homeownerName, leadType, form: leadForm }) : '';
 
   useEffect(() => {
     let active = true;
@@ -648,6 +611,7 @@ export function QCRecordingUpload({
               })}
             </div>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600">
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${getLane(leadType ?? assessment.lead_type).badgeTone}`}>{getLane(leadType ?? assessment.lead_type).shortLabel}</span>
               {assessment.payment_path && assessment.payment_path !== 'unknown' && <span>Payment path: <span className="font-bold">{assessment.payment_path}</span></span>}
               {assessment.genuine_call && <span>Call intent: <span className="font-bold">{assessment.genuine_call === 'yes' ? 'genuine' : assessment.genuine_call}</span></span>}
               {assessment.roof_age_damage_override && <span className="font-bold text-amber-700">Roof-age requirement overridden by reported damage</span>}
@@ -692,3 +656,4 @@ export function QCRecordingUpload({
     </div>
   );
 }
+
