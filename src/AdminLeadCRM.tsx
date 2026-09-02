@@ -83,6 +83,9 @@ export function AdminLeadCRM() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [requestedLeadId] = useState(
+    () => new URLSearchParams(window.location.search).get("lead") || "",
+  );
 
   const load = useCallback(
     async (quiet = false) => {
@@ -182,6 +185,10 @@ export function AdminLeadCRM() {
     } else setDetail(result as Obj);
     setDetailLoading(false);
   }
+
+  useEffect(() => {
+    if (requestedLeadId) void openDetail(requestedLeadId, false);
+  }, [requestedLeadId]);
 
   async function saveLeadEdits(
     leadId: string,

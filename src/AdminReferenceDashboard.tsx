@@ -3,6 +3,7 @@ import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
   ShieldCheck, ShieldX, Trash2, UsersRound, WalletCards, BarChart3, Wifi, Handshake, ThumbsDown, ThumbsUp, UserX,
+  LockKeyhole,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -43,6 +44,7 @@ const EMPTY_OUTCOME_METRICS: OutcomeMetrics = { good: 0, signed: 0, bad: 0, noSh
 type Props = {
   store: ScheduleStore;
   profile: Profile | null;
+  ownerAccess: boolean;
   signOut: () => Promise<void> | void;
 };
 
@@ -79,7 +81,7 @@ function getInitialView(): View {
     : 'overview';
 }
 
-export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
+export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }: Props) {
   const [view, setView] = useState<View>(getInitialView);
   const [staffTab, setStaffTab] = useState<StaffTab>('agents');
   const [search, setSearch] = useState('');
@@ -236,6 +238,7 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
     else if (key === 'payroll') setView('payroll');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'leads') window.location.href = '/admin/crm';
+    else if (key === 'paid-client-leads') window.location.href = '/admin/paid-client-leads';
     else openManage();
   }
 
@@ -314,7 +317,15 @@ export function AdminReferenceDashboard({ store, profile, signOut }: Props) {
         </button>
         <button type="button" className="readyops-sidebar-edge-toggle" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{sidebarCollapsed ? <ChevronRight size={15}/> : <ChevronLeft size={15}/>}</button>
         <SidebarGroup title="MAIN" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MAIN} active={currentSection} onSelect={navigate} />
-        <SidebarGroup title="MANAGEMENT" collapsed={sidebarCollapsed && !isMobile} items={SIDEBAR_MANAGEMENT} active={currentSection} onSelect={navigate} />
+        <SidebarGroup
+          title="MANAGEMENT"
+          collapsed={sidebarCollapsed && !isMobile}
+          items={ownerAccess
+            ? [...SIDEBAR_MANAGEMENT, ['paid-client-leads', 'Paid Client Leads', LockKeyhole] as const]
+            : SIDEBAR_MANAGEMENT}
+          active={currentSection}
+          onSelect={navigate}
+        />
       </aside>
 
       <div className="readyops-ref-workspace">

@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   FileText,
   Home,
+  LockKeyhole,
   Menu,
   Settings,
   ShieldCheck,
@@ -29,7 +30,8 @@ type AdminSection =
   | "active-users"
   | "reports"
   | "invoices"
-  | "payroll";
+  | "payroll"
+  | "paid-client-leads";
 type SidebarItem = readonly [AdminSection, string, IconComponent, string];
 
 const SIDEBAR_STORAGE_KEY = "readyops-sidebar-collapsed";
@@ -55,6 +57,13 @@ const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
   ["payroll", "Payroll", CircleDollarSign, "/?view=payroll"],
 ] as const;
 
+const OWNER_ITEM: SidebarItem = [
+  "paid-client-leads",
+  "Paid Client Leads",
+  LockKeyhole,
+  "/admin/paid-client-leads",
+];
+
 type Props = {
   active: AdminSection;
   title: string;
@@ -70,7 +79,7 @@ export function AdminWorkspaceShell({
   actions,
   children,
 }: Props) {
-  const { profile, signOut } = useAuth();
+  const { profile, ownerAccess, signOut } = useAuth();
   const managerMode = profile?.role === "manager";
   const [collapsed, setCollapsed] = useState(
     () => window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1",
@@ -158,7 +167,7 @@ export function AdminWorkspaceShell({
         {!managerMode && (
           <AdminNavGroup
             title="MANAGEMENT"
-            items={MANAGEMENT_ITEMS}
+            items={ownerAccess ? [...MANAGEMENT_ITEMS, OWNER_ITEM] : MANAGEMENT_ITEMS}
             active={active}
             collapsed={collapsed && !isMobile}
             onSelect={navigate}

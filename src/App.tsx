@@ -18,6 +18,7 @@ const CompanyOnboarding = lazy(() => import("./CompanyOnboarding").then(module =
 const QCQueue = lazy(() => import("./QCQueue").then(module => ({ default: module.QCQueue })));
 const ActiveUsers = lazy(() => import("./ActiveUsers").then(module => ({ default: module.ActiveUsers })));
 const AdminLeadCRM = lazy(() => import("./AdminLeadCRM").then(module => ({ default: module.AdminLeadCRM })));
+const OwnerPaidClientLeads = lazy(() => import("./OwnerPaidClientLeads").then(module => ({ default: module.OwnerPaidClientLeads })));
 
 function pathParts(): string[] {
   return window.location.pathname
@@ -52,7 +53,7 @@ function FloatingThemeControl() {
 }
 
 function AppContent() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, ownerAccess, loading } = useAuth();
   usePresenceTracker(session && profile ? session.user.id : null);
   const parts = pathParts();
   const portalAdminRequested =
@@ -60,6 +61,8 @@ function AppContent() {
   const activeUsersRequested =
     parts[0] === "admin" && parts[1] === "active-users";
   const adminCrmRequested = parts[0] === "admin" && parts[1] === "crm";
+  const ownerPaidLeadsRequested =
+    parts[0] === "admin" && parts[1] === "paid-client-leads";
   const qcRequested = parts[0] === "qc";
   const managerRequested = parts[0] === "manager";
   const isResetPasswordRoute =
@@ -96,6 +99,10 @@ function AppContent() {
   if (adminCrmRequested) {
     if (profile?.role !== "admin") return <AccessDenied />;
     return <AdminLeadCRM />;
+  }
+  if (ownerPaidLeadsRequested) {
+    if (!ownerAccess) return <AccessDenied />;
+    return <OwnerPaidClientLeads />;
   }
   if (portalAdminRequested) {
     if (profile?.role !== "admin") return <AccessDenied />;

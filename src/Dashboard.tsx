@@ -14,7 +14,7 @@ import { AdminReferenceDashboard } from './AdminReferenceDashboard';
 
 export function Dashboard() {
   const initialParams = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
-  const { profile, signOut } = useAuth();
+  const { profile, ownerAccess, signOut } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const store = useScheduleStore();
 
@@ -120,6 +120,7 @@ export function Dashboard() {
       <AdminReferenceDashboard
         store={store}
         profile={profile}
+        ownerAccess={ownerAccess}
         signOut={signOut}
       />
     );
