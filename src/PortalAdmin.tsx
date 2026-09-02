@@ -40,6 +40,7 @@ import { useScheduleStore } from "./useScheduleStore";
 import { TIME_SLOTS, formatTimeAmPm, type CompanyLocation } from "./types";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
+import { useAuth } from "./AuthContext";
 import {
   activeOpenLeads,
   hasActivePackage,
@@ -59,9 +60,7 @@ type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type PackageDraft = {
   lead_target: string;
   amount_per_lead: string;
-  package_total: string;
-  payment_date: string;
-  payment_status: string;
+  start_date: string;
 };
 type SlugEditorState = {
   companyId: string;
@@ -106,9 +105,7 @@ type CompanyOutcome = {
 const EMPTY_PACKAGE: PackageDraft = {
   lead_target: "",
   amount_per_lead: "",
-  package_total: "",
-  payment_date: "",
-  payment_status: "pending",
+  start_date: localDate(new Date()),
 };
 const EMPTY_OUTCOME: CompanyOutcome = {
   total: 0,
@@ -152,6 +149,7 @@ function normalizeSlug(value: string): string {
 }
 
 export function PortalAdmin() {
+  const { ownerAccess } = useAuth();
   const store = useScheduleStore();
   const [companies, setCompanies] = useState<Obj[]>([]);
   const [agents, setAgents] = useState<Obj[]>([]);
@@ -490,9 +488,16 @@ export function PortalAdmin() {
       return;
     }
     setExpanded(company.company_id);
-    setPkg(EMPTY_PACKAGE);
-    setPackageAllLocations(true);
-    setPackageLocationIds([]);
+    setPkg(company.package ? {
+      lead_target: String(company.package.lead_target || ""),
+      amount_per_lead: String(company.package.amount_per_lead ?? ""),
+      start_date: String(company.package.start_date || localDate(new Date())),
+    } : EMPTY_PACKAGE);
+    const activeScopeIds = packageScopes
+      .filter((scope) => scope.package_id === company.package?.id)
+      .map((scope) => String(scope.location_id));
+    setPackageAllLocations(activeScopeIds.length === 0);
+    setPackageLocationIds(activeScopeIds);
     const { data, error: queueError } = await supabase.rpc("get_qc_queue", {
       p_start_date: localDate(new Date(Date.now() - 60 * 86400000)),
       p_end_date: localDate(new Date(Date.now() + 120 * 86400000)),
@@ -543,34 +548,82 @@ export function PortalAdmin() {
     }
   }
 
-  async function createPackage(companyId: string) {
-    if (!pkg.lead_target) return;
+  async function savePackage(companyId: string, packageId: string | null) {
+    if (!pkg.lead_target) return false;
     if (!packageAllLocations && packageLocationIds.length === 0) {
       setError("Select at least one location or choose All company locations.");
-      return;
+      return false;
     }
-    const calculatedPackageTotal = Number(pkg.lead_target || 0) * Number(pkg.amount_per_lead || 0);
-    const { error: createError } = await supabase.rpc(
-      "create_location_scoped_company_package",
+    setError("");
+    const { error: saveError } = await supabase.rpc(
+      "save_company_package_admin",
       {
         p_company_id: companyId,
+        p_package_id: packageId,
         p_lead_target: Number(pkg.lead_target),
         p_amount_per_lead: Number(pkg.amount_per_lead || 0),
-        p_package_total: calculatedPackageTotal,
-        p_payment_date: pkg.payment_date || null,
-        p_payment_status: pkg.payment_status,
-        p_package_name: "Lead Package",
+        p_start_date: pkg.start_date || localDate(new Date()),
         p_location_ids: packageAllLocations ? [] : packageLocationIds,
+        p_override_price: ownerAccess,
       },
     );
-    if (createError) setError(rpcError(createError));
-    else {
-      setMessage("New location-aware package created.");
-      setPkg(EMPTY_PACKAGE);
-      setPackageAllLocations(true);
-      setPackageLocationIds([]);
-      await load();
+    if (saveError) {
+      setError(rpcError(saveError));
+      return false;
     }
+    else {
+      setMessage(packageId ? "Lead package updated." : "Lead package created.");
+      await load();
+      return true;
+    }
+  }
+
+  async function recordPackagePayment(
+    packageId: string,
+    amount: number,
+    paymentDate: string,
+    reference: string,
+  ) {
+    setError("");
+    const { error: paymentError } = await supabase.rpc(
+      "record_company_package_payment",
+      {
+        p_package_id: packageId,
+        p_amount: amount,
+        p_payment_date: paymentDate || localDate(new Date()),
+        p_method: null,
+        p_reference: reference || null,
+        p_notes: null,
+      },
+    );
+    if (paymentError) {
+      setError(rpcError(paymentError));
+      return false;
+    }
+    setMessage("Package payment recorded.");
+    await load();
+    return true;
+  }
+
+  async function completePackage(packageId: string) {
+    if (!window.confirm("Complete this lead package? Its completion date will be set to today.")) {
+      return false;
+    }
+    setError("");
+    const { error: completeError } = await supabase.rpc(
+      "complete_company_package_admin",
+      { p_package_id: packageId },
+    );
+    if (completeError) {
+      setError(rpcError(completeError));
+      return false;
+    }
+    setMessage("Lead package completed.");
+    await load();
+    setPkg(EMPTY_PACKAGE);
+    setPackageAllLocations(true);
+    setPackageLocationIds([]);
+    return true;
   }
 
   async function createInvite() {
@@ -1149,9 +1202,12 @@ export function PortalAdmin() {
                         setPackageAllLocations={setPackageAllLocations}
                         packageLocationIds={packageLocationIds}
                         setPackageLocationIds={setPackageLocationIds}
-                        onCreatePackage={() =>
-                          void createPackage(company.company_id)
+                        ownerAccess={ownerAccess}
+                        onSavePackage={(packageId) =>
+                          savePackage(company.company_id, packageId)
                         }
+                        onRecordPayment={recordPackagePayment}
+                        onCompletePackage={completePackage}
                         onEditLocation={(locationId) =>
                           setManager({
                             companyId: company.company_id,
@@ -1296,7 +1352,15 @@ type CompanyRowProps = {
   setPackageAllLocations: (value: boolean) => void;
   packageLocationIds: string[];
   setPackageLocationIds: (value: string[]) => void;
-  onCreatePackage: () => void;
+  ownerAccess: boolean;
+  onSavePackage: (packageId: string | null) => Promise<boolean>;
+  onRecordPayment: (
+    packageId: string,
+    amount: number,
+    paymentDate: string,
+    reference: string,
+  ) => Promise<boolean>;
+  onCompletePackage: (packageId: string) => Promise<boolean>;
   onEditLocation: (locationId: string) => void;
   onEditCompany: () => void;
   onCompanyUpdated: () => void | Promise<void>;
@@ -1351,7 +1415,10 @@ function CompanyRow(props: CompanyRowProps) {
     setPackageAllLocations,
     packageLocationIds,
     setPackageLocationIds,
-    onCreatePackage,
+    ownerAccess,
+    onSavePackage,
+    onRecordPayment,
+    onCompletePackage,
     onEditLocation,
     onEditCompany,
     onCompanyUpdated,
@@ -1537,10 +1604,12 @@ function CompanyRow(props: CompanyRowProps) {
                 className={`rounded-full px-2 py-1 text-[10px] font-bold ${
                   packagePaymentState(company) === "paid"
                     ? "bg-emerald-100 text-emerald-700"
-                    : "bg-red-100 text-red-700"
+                    : packagePaymentState(company) === "partial"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700"
                 }`}
               >
-                {packagePaymentState(company) === "paid" ? "PAID" : "PENDING"}
+                {packagePaymentState(company).toUpperCase()}
               </span>
               <div className="mt-1 text-[10px] text-slate-400">
                 {company.package.payment_date || "No date"}
@@ -1900,7 +1969,10 @@ function CompanyRow(props: CompanyRowProps) {
                   setPackageAllLocations={setPackageAllLocations}
                   packageLocationIds={packageLocationIds}
                   setPackageLocationIds={setPackageLocationIds}
-                  onCreatePackage={onCreatePackage}
+                  ownerAccess={ownerAccess}
+                  onSavePackage={onSavePackage}
+                  onRecordPayment={onRecordPayment}
+                  onCompletePackage={onCompletePackage}
                 />
                 <section className="rounded-xl border bg-white p-4">
                   <h3 className="font-bold">Scheduling</h3>
@@ -2326,7 +2398,10 @@ function PackageSection({
   setPackageAllLocations,
   packageLocationIds,
   setPackageLocationIds,
-  onCreatePackage,
+  ownerAccess,
+  onSavePackage,
+  onRecordPayment,
+  onCompletePackage,
 }: {
   company: Obj;
   locations: CompanyLocation[];
@@ -2337,71 +2412,161 @@ function PackageSection({
   setPackageAllLocations: (value: boolean) => void;
   packageLocationIds: string[];
   setPackageLocationIds: (value: string[]) => void;
-  onCreatePackage: () => void;
+  ownerAccess: boolean;
+  onSavePackage: (packageId: string | null) => Promise<boolean>;
+  onRecordPayment: (
+    packageId: string,
+    amount: number,
+    paymentDate: string,
+    reference: string,
+  ) => Promise<boolean>;
+  onCompletePackage: (packageId: string) => Promise<boolean>;
 }) {
+  const current = company.package as Obj | null;
+  const delivered = packageDelivered(company);
+  const target = Number(pkg.lead_target || 0);
+  const price = Number(pkg.amount_per_lead || 0);
   const calculatedTotal =
-    pkg.lead_target && pkg.amount_per_lead
-      ? (Number(pkg.lead_target) * Number(pkg.amount_per_lead)).toFixed(2)
-      : "";
+    target > 0 ? target * price : 0;
+  const amountPaid = Number(current?.amount_paid || 0);
+  const remainingBalance = Math.max(calculatedTotal - amountPaid, 0);
+  const completionPercentage = target
+    ? Math.min(100, (delivered / target) * 100)
+    : 0;
+  const priceLocked = Boolean(current && delivered > 0 && !ownerAccess);
+  const [editing, setEditing] = useState(!current);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(localDate(new Date()));
+  const [paymentReference, setPaymentReference] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setEditing(!current?.id);
+    setShowPayment(false);
+  }, [current?.id]);
+
+  async function save() {
+    setBusy(true);
+    const saved = await onSavePackage(current?.id ? String(current.id) : null);
+    setBusy(false);
+    if (saved) setEditing(false);
+  }
+
+  async function recordPayment() {
+    const amount = Number(paymentAmount);
+    if (!current?.id || !Number.isFinite(amount) || amount <= 0) return;
+    setBusy(true);
+    const recorded = await onRecordPayment(
+      String(current.id),
+      amount,
+      paymentDate,
+      paymentReference,
+    );
+    setBusy(false);
+    if (recorded) {
+      setShowPayment(false);
+      setPaymentAmount("");
+      setPaymentReference("");
+    }
+  }
+
   return (
-    <section className="rounded-xl border bg-white p-4">
-      <h3 className="font-bold">Package Details</h3>
-      {company.package && (
-        <div className="mt-2 rounded-lg bg-blue-50 p-3 text-xs">
-          <strong>{company.package.package_name}</strong> •{" "}
-          {packageDelivered(company)}/{packageTarget(company)} delivered
-          <div className="mt-1 text-blue-700">
-            Scope:{" "}
-            {activeScopeIds.length
-              ? locations
-                  .filter((item) => activeScopeIds.includes(item.id))
-                  .map((item) => item.location_label)
-                  .join(", ")
-              : "All company locations"}
-          </div>
+    <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
+            ReadyOps Admin
+          </p>
+          <h3 className="mt-1 text-lg font-black">Lead Package</h3>
+          <p className="text-xs text-slate-500">
+            {current
+              ? `${current.package_name || "Lead Package"} • Package #${current.package_number || "—"}`
+              : "Create the company’s first lead package."}
+          </p>
         </div>
-      )}
+        {current && (
+          <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+            String(current.payment_status) === "paid"
+              ? "bg-emerald-100 text-emerald-700"
+              : String(current.payment_status) === "partial"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-red-100 text-red-700"
+          }`}>
+            {String(current.payment_status || "unpaid")}
+          </span>
+        )}
+      </div>
+
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Input
-          label="How Many Leads"
+          label="Package Leads"
           value={pkg.lead_target}
           onChange={(value) => setPkg({ ...pkg, lead_target: value })}
+          readOnly={!editing}
         />
         <Input
-          label="Price per Lead"
+          label="Price Per Lead"
           value={pkg.amount_per_lead}
           onChange={(value) => setPkg({ ...pkg, amount_per_lead: value })}
+          readOnly={!editing || priceLocked}
         />
         <Input
           label="Total Amount"
-          value={calculatedTotal}
+          value={calculatedTotal.toFixed(2)}
           onChange={() => undefined}
           readOnly
         />
         <Input
-          label="Payment Date"
-          type="date"
-          value={pkg.payment_date}
-          onChange={(value) => setPkg({ ...pkg, payment_date: value })}
+          label="Amount Paid"
+          value={amountPaid.toFixed(2)}
+          onChange={() => undefined}
+          readOnly
         />
-        <label className="col-span-2 text-[10px] font-bold text-slate-500">
+        <label className="text-[10px] font-bold text-slate-500">
           Payment Status
-          <select
-            value={pkg.payment_status}
-            onChange={(event) =>
-              setPkg({ ...pkg, payment_status: event.target.value })
-            }
-            className="mt-1 w-full rounded-lg border p-2 text-xs"
-          >
-            <option value="pending">Pending Payment</option>
-            <option value="complete">Payment Complete</option>
-          </select>
+          <div className="mt-1 rounded-lg border bg-slate-50 p-2.5 text-xs font-black capitalize text-slate-700">
+            {String(current?.payment_status || "unpaid")}
+          </div>
         </label>
+        <Input
+          label="Start Date"
+          type="date"
+          value={pkg.start_date}
+          onChange={(value) => setPkg({ ...pkg, start_date: value })}
+          readOnly={!editing}
+        />
+        <Input
+          label="Completion Date"
+          type="text"
+          value={current?.completed_at ? String(current.completed_at).slice(0, 10) : "In Progress"}
+          onChange={() => undefined}
+          readOnly
+        />
+        <Input
+          label="Remaining Balance"
+          value={remainingBalance.toFixed(2)}
+          onChange={() => undefined}
+          readOnly
+        />
       </div>
+
+      {priceLocked && (
+        <p className="mt-2 rounded-lg bg-amber-50 p-2 text-[10px] font-bold text-amber-700">
+          Price is locked because delivery has started. The owner account can override it.
+        </p>
+      )}
+      {current && delivered > 0 && ownerAccess && editing && (
+        <p className="mt-2 rounded-lg bg-blue-50 p-2 text-[10px] font-bold text-blue-700">
+          Owner price override is enabled for this package.
+        </p>
+      )}
+
       <label className="mt-3 flex items-center gap-2 text-xs font-bold">
         <input
           type="checkbox"
           checked={packageAllLocations}
+          disabled={!editing}
           onChange={(event) => {
             setPackageAllLocations(event.target.checked);
             if (event.target.checked) setPackageLocationIds([]);
@@ -2416,6 +2581,7 @@ function PackageSection({
               <input
                 type="checkbox"
                 className="mr-2"
+                disabled={!editing}
                 checked={packageLocationIds.includes(item.id)}
                 onChange={() =>
                   setPackageLocationIds(
@@ -2430,12 +2596,86 @@ function PackageSection({
           ))}
         </div>
       )}
-      <button
-        onClick={onCreatePackage}
-        className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 p-2 text-xs font-bold text-white"
-      >
-        <Plus size={13} /> Create Package
-      </button>
+
+      <div className="mt-4 rounded-xl border bg-slate-50 p-3">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <strong>{delivered} of {target || 0} Leads Delivered</strong>
+          <strong className="text-blue-700">{completionPercentage.toFixed(0)}%</strong>
+        </div>
+        <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200">
+          <span
+            className="block h-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all"
+            style={{ width: `${completionPercentage}%` }}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500">
+          <span>Scope: {activeScopeIds.length
+            ? locations.filter((item) => activeScopeIds.includes(item.id)).map((item) => item.location_label).join(", ")
+            : "All company locations"}</span>
+          <strong>{packageMoney(remainingBalance)} remaining</strong>
+        </div>
+      </div>
+
+      {showPayment && current && (
+        <div className="mt-3 grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:grid-cols-3">
+          <Input label="Payment Amount" value={paymentAmount} onChange={setPaymentAmount} />
+          <Input label="Payment Date" type="date" value={paymentDate} onChange={setPaymentDate} />
+          <Input label="Reference" type="text" value={paymentReference} onChange={setPaymentReference} />
+          <div className="flex gap-2 sm:col-span-3">
+            <button
+              type="button"
+              disabled={busy || Number(paymentAmount) <= 0}
+              onClick={() => void recordPayment()}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+            >
+              Confirm Payment
+            </button>
+            <button type="button" onClick={() => setShowPayment(false)} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <button
+          type="button"
+          disabled={busy || !editing || !target}
+          onClick={() => void save()}
+          className="inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-45"
+        >
+          {busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save Package
+        </button>
+        <button
+          type="button"
+          disabled={!current || busy}
+          onClick={() => setShowPayment(true)}
+          className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-45"
+        >
+          <WalletCards size={13} /> Record Payment
+        </button>
+        <button
+          type="button"
+          disabled={!current || busy}
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-black text-blue-700 disabled:opacity-45"
+        >
+          <Pencil size={13} /> Edit Package
+        </button>
+        <button
+          type="button"
+          disabled={!current || busy || String(current?.status) !== "active"}
+          onClick={async () => {
+            if (!current?.id) return;
+            setBusy(true);
+            await onCompletePackage(String(current.id));
+            setBusy(false);
+          }}
+          className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2.5 text-xs font-black text-white disabled:opacity-45"
+        >
+          <PackageCheck size={13} /> Complete Package
+        </button>
+      </div>
     </section>
   );
 }
@@ -2473,6 +2713,14 @@ function Metric({
     </button>
   );
 }
+
+function packageMoney(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(value || 0));
+}
+
 function Input({
   label,
   value,

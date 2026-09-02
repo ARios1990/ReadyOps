@@ -3,7 +3,8 @@ import { Building2, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "./supabase";
 import { rpcError } from "./portalUtils";
 
-// The public onboarding RPC returns a validated JSON payload with optional package fields.
+// The public onboarding RPC accepts company details only. Package pricing and
+// payments are intentionally managed from the authenticated ReadyOps admin.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = Record<string, any>;
 export function CompanyOnboarding({
@@ -23,11 +24,6 @@ export function CompanyOnboarding({
     website: "",
     location: "",
     requirements: "",
-    lead_target: "",
-    amount_per_lead: "",
-    package_total: "",
-    payment_date: "",
-    payment_status: "pending",
   });
   const [result, setResult] = useState<Obj | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +100,7 @@ export function CompanyOnboarding({
             </p>
             <h1 className="text-2xl font-bold">Company Setup</h1>
             <p className="text-sm text-slate-500">
-              Complete your company information and initial package details.
+              Complete your company information. ReadyOps will configure your lead package.
             </p>
           </div>
         </div>
@@ -160,49 +156,6 @@ export function CompanyOnboarding({
               className="mt-1 min-h-24 w-full rounded-xl border p-3 text-sm"
               placeholder="Roof age, home type, language, square footage, scheduling rules..."
             />
-          </label>
-          <div className="sm:col-span-2 mt-2 border-t pt-4">
-            <h2 className="font-bold">
-              Initial Lead Package{" "}
-              <span className="text-xs font-normal text-slate-400">
-                (optional)
-              </span>
-            </h2>
-          </div>
-          <Field
-            label="Package Lead Total"
-            type="number"
-            value={form.lead_target}
-            onChange={(v) => set("lead_target", v)}
-          />
-          <Field
-            label="Amount Per Lead"
-            type="number"
-            value={form.amount_per_lead}
-            onChange={(v) => set("amount_per_lead", v)}
-          />
-          <Field
-            label="Package Total"
-            type="number"
-            value={form.package_total}
-            onChange={(v) => set("package_total", v)}
-          />
-          <Field
-            label="Payment Date"
-            type="date"
-            value={form.payment_date}
-            onChange={(v) => set("payment_date", v)}
-          />
-          <label className="text-xs font-bold text-slate-500">
-            Payment Status
-            <select
-              value={form.payment_status}
-              onChange={(e) => set("payment_status", e.target.value)}
-              className="mt-1 w-full rounded-xl border p-3 text-sm text-slate-800"
-            >
-              <option value="pending">Pending Payment</option>
-              <option value="complete">Payment Complete</option>
-            </select>
           </label>
         </div>
         <button

@@ -218,10 +218,16 @@ interface CompanyDashboardSummary {
     package_name: string | null;
     lead_target: number;
     amount_per_lead: number | null;
+    package_total: number;
+    amount_paid: number;
     payment_status: string;
+    status: string;
     start_date: string | null;
+    completed_at: string | null;
+    completion_date: string | null;
     delivered_leads: number;
     remaining_leads: number;
+    remaining_balance: number;
     completion_percentage: number;
     agreement_type?: string | null;
   };
@@ -2831,7 +2837,7 @@ function CompanyAppointmentsDashboard({
   const pendingUpdates = performance.pending_updates;
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 xl:grid-cols-[1.65fr_1.1fr_250px]">
+      <div className="grid gap-3 xl:grid-cols-[1.55fr_1.35fr_250px]">
         <section className="rounded-2xl border bg-white p-3 shadow-sm">
           <h2 className="mb-3 font-black">Company Performance</h2>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -2902,57 +2908,64 @@ function CompanyAppointmentsDashboard({
             </div>
           </div>
         </section>
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="font-black">Lead Packages</h2>
+        <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
+                Package Management
+              </p>
+              <h2 className="mt-1 font-black">Lead Package</h2>
+            </div>
+            {pkg && (
+              <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+                pkg.payment_status === "paid"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : pkg.payment_status === "partial"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-red-100 text-red-700"
+              }`}>
+                {pkg.payment_status}
+              </span>
+            )}
+          </div>
           {pkg ? (
             <>
-              <div className="mt-3 flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold">
-                    {pkg.package_name || `Package #${pkg.package_number || ""}`}
-                  </p>
-                  <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                    Active
-                  </span>
-                  <p className="mt-2 text-[10px] text-slate-500">
-                    Started{" "}
-                    {pkg.start_date ? formatDateLong(pkg.start_date) : "—"}
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <PackageNumber value={pkg.lead_target} label="Purchased" />
-                  <PackageNumber
-                    value={pkg.delivered_leads}
-                    label="Delivered"
-                  />
-                  <PackageNumber
-                    value={pkg.remaining_leads}
-                    label="Remaining"
-                  />
-                </div>
+              <p className="mt-2 text-xs font-bold text-slate-700">
+                {pkg.package_name || `Package #${pkg.package_number || ""}`}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <PackageField label="Package Leads" value={String(pkg.lead_target)} />
+                <PackageField label="Price Per Lead" value={formatPackageMoney(pkg.amount_per_lead)} />
+                <PackageField label="Total Amount" value={formatPackageMoney(pkg.package_total)} />
+                <PackageField label="Amount Paid" value={formatPackageMoney(pkg.amount_paid)} />
+                <PackageField label="Payment Status" value={packageStatusLabel(pkg.payment_status)} />
+                <PackageField label="Remaining Balance" value={formatPackageMoney(pkg.remaining_balance)} />
+                <PackageField
+                  label="Start Date"
+                  value={pkg.start_date ? formatDateLong(pkg.start_date) : "—"}
+                />
+                <PackageField
+                  label="Completion Date"
+                  value={pkg.completion_date ? formatDateLong(pkg.completion_date) : "In Progress"}
+                />
               </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-4 flex items-center justify-between gap-3 text-xs">
+                <strong>{pkg.delivered_leads} of {pkg.lead_target} Leads Delivered</strong>
+                <strong className="text-blue-700">
+                  {Number(pkg.completion_percentage || 0).toFixed(0)}%
+                </strong>
+              </div>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200">
                 <span
-                  className="block h-full rounded-full bg-emerald-500"
+                  className="block h-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all"
                   style={{
                     width: `${Math.min(100, Number(pkg.completion_percentage || 0))}%`,
                   }}
                 />
               </div>
-              <p className="mt-1 text-right text-[10px] font-bold text-slate-500">
-                {Number(pkg.completion_percentage || 0).toFixed(0)}% Complete
+              <p className="mt-3 rounded-lg bg-blue-50 p-2 text-[10px] font-bold text-blue-700">
+                Package pricing and payments are managed by ReadyOps. {dashboard?.package_history.length || 0} package{dashboard?.package_history.length === 1 ? "" : "s"} in history.
               </p>
-              <div className="mt-4 flex gap-2">
-                <button
-                  disabled
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white opacity-60"
-                >
-                  <Plus size={13} className="mr-1 inline" /> Start New Package
-                </button>
-                <span className="rounded-lg border px-3 py-2 text-xs font-bold">
-                  {dashboard?.package_history.length || 0} in History
-                </span>
-              </div>
             </>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-slate-400">
@@ -3488,13 +3501,29 @@ interface CompanyLeadSheetData {
     pending: number;
   };
 }
-function PackageNumber({ value, label }: { value: number; label: string }) {
+function PackageField({ value, label }: { value: string; label: string }) {
   return (
-    <div>
-      <strong className="block text-lg">{value}</strong>
-      <span className="text-[9px] text-slate-500">{label}</span>
+    <div className="rounded-xl border bg-slate-50 p-2.5">
+      <span className="block text-[9px] font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <strong className="mt-1 block text-sm text-slate-900">{value}</strong>
     </div>
   );
+}
+
+function formatPackageMoney(value: number | null | undefined): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(value || 0));
+}
+
+function packageStatusLabel(value: string): string {
+  const status = String(value || "unpaid").toLowerCase();
+  if (status === "paid") return "Paid";
+  if (status === "partial") return "Partial";
+  return "Unpaid";
 }
 function ReportValue({
   label,

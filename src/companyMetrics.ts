@@ -19,11 +19,12 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CompanyOverview = Record<string, any>;
 
-export type CompanyPackagePaymentState = "paid" | "pending" | "none";
+export type CompanyPackagePaymentState = "paid" | "partial" | "unpaid" | "none";
 
 const PAID_STATES = new Set(["complete", "paid", "completed"]);
 const PENDING_STATES = new Set([
   "pending",
+  "partial",
   "unpaid",
   "not_yet_active",
   "awaiting_payment",
@@ -56,7 +57,8 @@ export function packagePaymentState(
   if (!company?.package) return "none";
   const status = normalize(company.package.payment_status);
   if (PAID_STATES.has(status)) return "paid";
-  return "pending";
+  if (status === "partial") return "partial";
+  return "unpaid";
 }
 
 export function isPendingPackage(company: CompanyOverview): boolean {
