@@ -74,6 +74,7 @@ const EMPTY_REFS: RefData = {
 };
 const EMPTY_QUEUE: QueueData = { days: [], summary: {}, rows: [] };
 const DAY_MS = 86_400_000;
+const OWNER_OVERRIDE_EMAIL = "mastersreadyservices2025@gmail.com";
 // City, state, and ZIP stay on each lead for search/filtering, but the QC form
 // shows the complete canonical address once instead of repeating its parts.
 function weekStart(value = new Date()): Date {
@@ -92,9 +93,12 @@ function quoteCsv(value: unknown): string {
 }
 
 export function QCQueue() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const isManager = profile?.role === "manager";
   const isAdmin = profile?.role === "admin";
+  const canOverrideScheduling =
+    isAdmin &&
+    session?.user.email?.trim().toLowerCase() === OWNER_OVERRIDE_EMAIL;
   const initialParams =
     typeof window === "undefined"
       ? new URLSearchParams()
@@ -523,6 +527,10 @@ export function QCQueue() {
     setBusy(false);
   }
   async function moveLead(closeAfter = false, reasonOverride = "") {
+    if (!canOverrideScheduling) {
+      setError("Owner account access is required to move or reschedule a lead.");
+      return false;
+    }
     if (!selected || !targetCompany || !targetDate || !targetTime) {
       setError("Choose a company, appointment date, and appointment time.");
       return false;
@@ -608,7 +616,10 @@ export function QCQueue() {
   }
 
   async function overrideSchedule() {
-    if (!selected || !isAdmin) return;
+    if (!selected || !canOverrideScheduling) {
+      setError("Owner account access is required to override an appointment time.");
+      return;
+    }
     const originalTime = String(selected.appointment.start_time).slice(0, 5);
     if (!targetDate || !targetTime) {
       setError("Choose the new appointment date and time.");
@@ -1245,13 +1256,23 @@ export function QCQueue() {
           setTargetCompany={(value) => {
             setTargetCompany(value);
             setTargetLocation("");
+            setError("");
           }}
           targetLocation={targetLocation}
-          setTargetLocation={setTargetLocation}
+          setTargetLocation={(value) => {
+            setTargetLocation(value);
+            setError("");
+          }}
           targetDate={targetDate}
-          setTargetDate={setTargetDate}
+          setTargetDate={(value) => {
+            setTargetDate(value);
+            setError("");
+          }}
           targetTime={targetTime}
-          setTargetTime={setTargetTime}
+          setTargetTime={(value) => {
+            setTargetTime(value);
+            setError("");
+          }}
           decisionReason={decisionReason}
           setDecisionReason={(value) => {
             setDecisionReason(value);
@@ -1276,6 +1297,7 @@ export function QCQueue() {
           openExternal={openExternal}
           isManager={isManager}
           canSend={isAdmin}
+          canOverrideScheduling={canOverrideScheduling}
           send={() => sendLead(selected)}
           selectedAgentId={selectedAgentId}
           setSelectedAgentId={setSelectedAgentId}
@@ -1516,6 +1538,7 @@ type DialogProps = {
   openExternal: (row: Obj) => void;
   isManager: boolean;
   canSend: boolean;
+  canOverrideScheduling: boolean;
   send: () => Promise<void>;
   selectedAgentId: string;
   setSelectedAgentId: (value: string) => void;
@@ -1538,17 +1561,24 @@ function ReviewDialog(props: DialogProps) {
   const scheduleChanged =
     props.targetDate !== props.row.appointment.appointment_date ||
     props.targetTime !== originalTime;
-  const adminTransfer = finalCompleted && props.canSend && companyChanged;
-  const scheduleReasonRequired = completed && props.canSend;
+  const adminTransfer =
+    finalCompleted && props.canOverrideScheduling && companyChanged;
+  const scheduleReasonRequired = completed && props.canOverrideScheduling;
   const scheduleReasonMissing =
     scheduleReasonRequired && !props.scheduleOverrideReason.trim();
   const reopenReasonMissing =
     finalCompleted && props.canSend && !props.decisionReason.trim();
+  const scheduleError = /requested time is blocked|appointment time was just taken|hourly appointment capacity|day has reached its appointment capacity/i.test(
+    props.error,
+  )
+    ? props.error
+    : "";
+  const dialogError = scheduleError ? "" : props.error;
 
   function runScheduleAction() {
     if (scheduleReasonMissing) scheduleReasonRef.current?.focus();
     if (adminTransfer) props.move();
-    else if (completed && props.canSend) props.overrideSchedule();
+    else if (completed && props.canOverrideScheduling) props.overrideSchedule();
     else props.move();
   }
 
@@ -1599,21 +1629,21 @@ function ReviewDialog(props: DialogProps) {
             </button>
           </div>
         </header>
-        {(props.error || props.message) && (
+        {(dialogError || props.message) && (
           <div
-            role={props.error ? "alert" : "status"}
+            role={dialogError ? "alert" : "status"}
             className={`sticky top-[73px] z-10 mx-5 mt-3 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm ${
-              props.error
+              dialogError
                 ? "border-red-200 bg-red-50 text-red-800"
                 : "border-blue-200 bg-blue-50 text-blue-800"
             }`}
           >
-            {props.error ? (
+            {dialogError ? (
               <AlertTriangle className="mt-0.5 shrink-0" size={17} />
             ) : (
               <CheckCircle2 className="mt-0.5 shrink-0" size={17} />
             )}
-            <span>{props.error || props.message}</span>
+            <span>{dialogError || props.message}</span>
           </div>
         )}
         <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
@@ -1703,11 +1733,11 @@ function ReviewDialog(props: DialogProps) {
                   "No quick requirements entered."}
               </p>
             </div>
-            <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
+            {props.canOverrideScheduling && (
+              <div className="order-3 min-w-0 rounded-xl border bg-white p-4">
               <h3 className="font-bold">Transfer / Reschedule</h3>
               <select
                 value={props.targetCompany}
-                disabled={completed && !props.canSend}
                 onChange={(event) => props.setTargetCompany(event.target.value)}
                 className="mt-3 w-full rounded-lg border p-2 text-sm"
               >
@@ -1719,7 +1749,6 @@ function ReviewDialog(props: DialogProps) {
               </select>
               <select
                 value={props.targetLocation}
-                disabled={completed && !props.canSend}
                 onChange={(event) =>
                   props.setTargetLocation(event.target.value)
                 }
@@ -1740,19 +1769,17 @@ function ReviewDialog(props: DialogProps) {
                 <input
                   type="date"
                   value={props.targetDate}
-                  disabled={completed && !props.canSend}
                   onChange={(event) => props.setTargetDate(event.target.value)}
                   className="rounded-lg border p-2 text-sm"
                 />
                 <input
                   type="time"
                   value={props.targetTime}
-                  disabled={completed && !props.canSend}
                   onChange={(event) => props.setTargetTime(event.target.value)}
                   className="rounded-lg border p-2 text-sm"
                 />
               </div>
-              {completed && props.canSend && (
+              {completed && props.canOverrideScheduling && (
                 <div className="mt-2">
                   <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
                     {adminTransfer ? "Reopen / transfer reason" : "Override reason"} (required)
@@ -1787,12 +1814,15 @@ function ReviewDialog(props: DialogProps) {
                 disabled={
                   props.busy ||
                   managerSubmitted ||
-                  (completed && props.canSend && !companyChanged && !scheduleChanged)
+                  (completed &&
+                    props.canOverrideScheduling &&
+                    !companyChanged &&
+                    !scheduleChanged)
                 }
                 onClick={runScheduleAction}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs font-bold text-blue-700 disabled:opacity-40"
               >
-                {completed && props.canSend ? (
+                {completed && props.canOverrideScheduling ? (
                   <>
                     {adminTransfer ? <Shuffle size={14} /> : <Clock3 size={14} />}
                     {adminTransfer
@@ -1807,7 +1837,17 @@ function ReviewDialog(props: DialogProps) {
                   </>
                 )}
               </button>
-            </div>
+              {scheduleError && (
+                <div
+                  role="alert"
+                  className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2.5 text-xs font-semibold text-amber-900"
+                >
+                  <AlertTriangle className="mt-0.5 shrink-0" size={15} />
+                  <span>{scheduleError}</span>
+                </div>
+              )}
+              </div>
+            )}
             {awaitingSend && (
               <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
                 <div className="flex items-center gap-2 text-emerald-950">

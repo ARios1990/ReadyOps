@@ -290,7 +290,7 @@ export function ClientLeadTemplate({
     `Contract: ${copyValue(formValue(copyLead, 'contract'))}`,
     `Home Value: ${copyValue(formatCurrency(leadValue(copyLead, 'home_value', 'home_value')))}`,
     `SQ FT: ${copyValue(formatInteger(leadValue(copyLead, 'sq_ft', 'sq_ft', 'square_feet', 'square_footage')))}`,
-    `Web Link: ${copyWebLink ? 'Open Property Link' : EMPTY}`,
+    `Web Link: ${copyValue(copyWebLink)}`,
     '**Additional Information**',
     `Notes: ${copyValue(leadValue(copyLead, 'notes', 'notes'))}`,
     `Last Checked On: ${copyValue(normalizeLastChecked(formValue(copyLead, 'last_checked_on', 'last_inspection_date')))}`,
