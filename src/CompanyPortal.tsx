@@ -49,6 +49,7 @@ import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import { SharedRecordingPlayer } from "./SharedRecordingPlayer";
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
+import { useAuth } from "./AuthContext";
 import {
   ClientStatusActions,
   LeadReceivedIndicator,
@@ -332,7 +333,7 @@ export function CompanyPortal({
   companyId: string;
   token: string;
 }) {
-  const [ownerAccess, setOwnerAccess] = useState(false);
+  const { ownerAccess } = useAuth();
   const [data, setData] = useState<CompanyPortalData | null>(null);
   const [dashboard, setDashboard] = useState<CompanyDashboardSummary | null>(
     null,
@@ -370,29 +371,6 @@ export function CompanyPortal({
   });
   const [scheduleLocation, setScheduleLocation] = useState<string>("");
   const [selectedDay, setSelectedDay] = useState(() => localDate(new Date()));
-
-  useEffect(() => {
-    let active = true;
-    const checkOwnerAccess = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        if (active) setOwnerAccess(false);
-        return;
-      }
-      const { data: hasOwnerAccess } = await supabase.rpc(
-        "readyops_owner_access",
-      );
-      if (active) setOwnerAccess(hasOwnerAccess === true);
-    };
-    void checkOwnerAccess();
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void checkOwnerAccess();
-    });
-    return () => {
-      active = false;
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
 
   useCompanyPortalPresence(companyId, token, tab);
 
