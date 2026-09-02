@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
 import { formatDateLong, formatTime, rpcError } from "./portalUtils";
 import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
@@ -499,7 +500,10 @@ export function AdminLeadCRM() {
             </div>
           </div>
         ) : (
-          <div className="readyops-lead-spreadsheet-scroll">
+          <HorizontalScrollFrame
+            className="readyops-lead-spreadsheet-scroll"
+            ariaLabel="All companies lead spreadsheet horizontal scroll"
+          >
             <table className="w-full min-w-[3500px] border-separate border-spacing-0 text-xs">
               <thead className="readyops-lead-spreadsheet-columns sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
@@ -560,7 +564,7 @@ export function AdminLeadCRM() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollFrame>
         )}
       </section>
 

@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
 import {
   addDays,
@@ -306,7 +307,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
             {message}
           </div>
         )}
-        <section className="readyops-agent-range-nav rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm">
+        <section className="readyops-agent-range-nav sticky top-[57px] z-20 rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm sm:top-[73px]">
           <div className="flex flex-wrap items-end gap-2">
             <button
               onClick={() => setMode("this")}
@@ -644,7 +645,9 @@ function LeadSection({
           No appointments in this section.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <HorizontalScrollFrame
+          ariaLabel={`${title} appointments horizontal scroll`}
+        >
           <table className="readyops-agent-table w-full min-w-[1100px] text-sm">
             <thead className="table-header bg-[#0b223a] text-white">
               <tr className="text-left text-[10px] uppercase tracking-wide">
@@ -733,7 +736,7 @@ function LeadSection({
               ))}
             </tbody>
           </table>
-        </div>
+        </HorizontalScrollFrame>
       )}
     </section>
   );

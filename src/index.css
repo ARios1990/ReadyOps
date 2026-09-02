@@ -657,6 +657,11 @@ html[data-theme='dark'] .readyops-brand-header .readyops-solid-action {
 
 .readyops-sticky-table {
   max-height: min(70vh, 760px);
+  overflow: hidden;
+}
+
+.readyops-sticky-table .readyops-hscroll-body {
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;

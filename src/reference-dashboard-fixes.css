@@ -198,6 +198,7 @@
 }
 
 .readyops-hscroll-top {
+  flex: 0 0 14px;
   overflow-x: auto;
   overflow-y: hidden;
   height: 14px;
@@ -214,6 +215,7 @@
 }
 
 .readyops-hscroll-top[data-overflow="false"] {
+  flex-basis: 0;
   height: 0;
   border: 0;
   opacity: 0;

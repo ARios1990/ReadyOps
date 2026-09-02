@@ -3,6 +3,7 @@ import { ClipboardCopy, ExternalLink, Loader2, RefreshCw, ShieldCheck, Users } f
 import { supabase } from './supabase';
 import { buildReadyModeBookingLink, copyText, rpcError } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
+import { HorizontalScrollFrame } from './HorizontalScrollFrame';
 
 type TeamInfo = { id: string; name: string; abbreviation: string };
 type AgentSummary = {
@@ -157,7 +158,10 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
             <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Open an agent's private lead portal to review QC pending, approved and denied leads.</p></div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..." className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400" />
           </div>
-          <div className="readyops-sticky-table overflow-x-auto">
+          <HorizontalScrollFrame
+            className="readyops-sticky-table"
+            ariaLabel="Manager agents horizontal scroll"
+          >
             <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-[#071525] text-[10px] uppercase tracking-wide text-white"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">Client Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
@@ -178,7 +182,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
                 })}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollFrame>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

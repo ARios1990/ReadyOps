@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, MapPin } from 'lucide-react';
 import { ScheduleRow, Team, Company, CompanyLocation, TIME_SLOTS, formatTimeAmPm, ACCOUNT_STATUSES } from './types';
+import { HorizontalScrollFrame } from './HorizontalScrollFrame';
 
 interface ScheduleGridProps {
   rows: ScheduleRow[];
@@ -33,7 +34,9 @@ export function ScheduleGrid({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <HorizontalScrollFrame
+      ariaLabel={`${activeDay} schedule horizontal scroll`}
+    >
       <table className="w-full border-collapse min-w-[1000px]">
         <thead>
           <tr className="bg-gray-50">
@@ -192,7 +195,7 @@ export function ScheduleGrid({
           })}
         </tbody>
       </table>
-    </div>
+    </HorizontalScrollFrame>
   );
 }
 

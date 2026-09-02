@@ -34,6 +34,7 @@ import {
 import { supabase } from "./supabase";
 import { isLeadOutcome } from "./leadOutcome";
 import { PortalFormField, PortalFormSection } from "./DynamicLeadForm";
+import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import {
   addDays,
   calendarWeekStart,
@@ -2450,7 +2451,10 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
               })}
             </div>
 
-            <div className="readyops-sticky-table hidden overflow-x-auto md:block">
+            <HorizontalScrollFrame
+              className="readyops-sticky-table hidden md:block"
+              ariaLabel="Company leads horizontal scroll"
+            >
               <table className="readyops-company-leads-table w-full min-w-[1380px] border-separate border-spacing-0 text-xs">
                 <thead className="table-header sticky top-0 z-10 bg-[#071525] text-left uppercase tracking-wide text-white">
                   <tr>
@@ -2599,7 +2603,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                   })}
                 </tbody>
               </table>
-            </div>
+            </HorizontalScrollFrame>
           </>
         )}
         <div className="flex justify-between gap-2 border-t p-3 sm:justify-end">
