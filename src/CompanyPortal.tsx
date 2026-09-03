@@ -936,6 +936,62 @@ export function CompanyPortal({
     return true;
   }
 
+  async function createLeadPackage(
+    leadTarget: number,
+    amountPerLead: number,
+    startDate: string,
+  ): Promise<boolean> {
+    if (!ownerAccess) {
+      setError("Owner access is required to create a lead package.");
+      return false;
+    }
+    if (!Number.isInteger(leadTarget) || leadTarget <= 0) {
+      setError("Package leads must be a whole number greater than zero.");
+      return false;
+    }
+    if (!Number.isFinite(amountPerLead) || amountPerLead < 0) {
+      setError("Price per lead cannot be negative.");
+      return false;
+    }
+    if (!startDate) {
+      setError("Start date is required.");
+      return false;
+    }
+
+    setBusy(true);
+    setError("");
+    const { data: created, error: packageError } = await supabase.rpc(
+      "save_company_package_admin",
+      {
+        p_company_id: companyId,
+        p_package_id: null,
+        p_lead_target: leadTarget,
+        p_amount_per_lead: amountPerLead,
+        p_start_date: startDate,
+        p_location_ids: [],
+        p_override_price: true,
+      },
+    );
+    if (packageError) {
+      setError(rpcError(packageError));
+      setBusy(false);
+      return false;
+    }
+
+    const activePackage = created as
+      | CompanyDashboardSummary["active_package"]
+      | null;
+    if (activePackage) {
+      setDashboard((current) =>
+        current ? { ...current, active_package: activePackage } : current,
+      );
+    }
+    notify("Lead package created.");
+    await load();
+    setBusy(false);
+    return true;
+  }
+
   async function confirmLeadReceipt(appointment: Appointment) {
     const previousData = data;
     const previousSelected = selectedLead;
@@ -1310,6 +1366,7 @@ export function CompanyPortal({
             ownerAccess={ownerAccess}
             updateLeadPackage={updateLeadPackage}
             createNextLeadPackage={createNextLeadPackage}
+            createLeadPackage={createLeadPackage}
             openLeads={(filter) => {
               setCompanyLeadFilter(filter);
               setCompanyLeadLocationId("");
@@ -2966,6 +3023,7 @@ function CompanyAppointmentsDashboard({
   ownerAccess,
   updateLeadPackage,
   createNextLeadPackage,
+  createLeadPackage,
   openLeads,
 }: {
   data: CompanyPortalData;
@@ -2998,6 +3056,11 @@ function CompanyAppointmentsDashboard({
     amountPerLead: number,
     startDate: string,
   ) => Promise<boolean>;
+  createLeadPackage: (
+    leadTarget: number,
+    amountPerLead: number,
+    startDate: string,
+  ) => Promise<boolean>;
   openLeads: (filter: string) => void;
 }) {
   const delivered = data.appointments;
@@ -3006,6 +3069,7 @@ function CompanyAppointmentsDashboard({
   const pkg = dashboard?.active_package;
   const [editingPackage, setEditingPackage] = useState(false);
   const [addingPackage, setAddingPackage] = useState(false);
+  const [creatingPackage, setCreatingPackage] = useState(false);
   const [packageDraft, setPackageDraft] = useState({
     leadTarget: "",
     amountPerLead: "",
@@ -3014,6 +3078,7 @@ function CompanyAppointmentsDashboard({
   useEffect(() => {
     setEditingPackage(false);
     setAddingPackage(false);
+    setCreatingPackage(false);
     setPackageDraft({
       leadTarget: pkg ? String(pkg.lead_target) : "",
       amountPerLead: pkg ? String(pkg.amount_per_lead ?? 0) : "",
@@ -3022,25 +3087,47 @@ function CompanyAppointmentsDashboard({
   }, [pkg]);
 
   async function savePackageDraft() {
-    if (!pkg) return;
-    const saveAction = addingPackage
-      ? createNextLeadPackage
-      : updateLeadPackage;
-    const saved = await saveAction(
-      pkg.id,
-      Number(packageDraft.leadTarget),
-      Number(packageDraft.amountPerLead),
-      packageDraft.startDate,
-    );
+    const leadTarget = Number(packageDraft.leadTarget);
+    const amountPerLead = Number(packageDraft.amountPerLead);
+    let saved = false;
+    if (creatingPackage) {
+      saved = await createLeadPackage(
+        leadTarget,
+        amountPerLead,
+        packageDraft.startDate,
+      );
+    } else if (pkg) {
+      const saveAction = addingPackage
+        ? createNextLeadPackage
+        : updateLeadPackage;
+      saved = await saveAction(
+        pkg.id,
+        leadTarget,
+        amountPerLead,
+        packageDraft.startDate,
+      );
+    }
     if (saved) {
       setEditingPackage(false);
       setAddingPackage(false);
+      setCreatingPackage(false);
     }
+  }
+  function beginFirstPackage() {
+    setEditingPackage(false);
+    setAddingPackage(false);
+    setCreatingPackage(true);
+    setPackageDraft({
+      leadTarget: "",
+      amountPerLead: "0",
+      startDate: localDate(new Date()),
+    });
   }
   function beginNextPackage() {
     if (!pkg) return;
     setEditingPackage(false);
     setAddingPackage(true);
+    setCreatingPackage(false);
     setPackageDraft({
       leadTarget: "",
       amountPerLead: String(pkg.amount_per_lead ?? 0),
@@ -3050,6 +3137,7 @@ function CompanyAppointmentsDashboard({
   function cancelPackageDraft() {
     setEditingPackage(false);
     setAddingPackage(false);
+    setCreatingPackage(false);
     setPackageDraft({
       leadTarget: pkg ? String(pkg.lead_target) : "",
       amountPerLead: pkg ? String(pkg.amount_per_lead ?? 0) : "",
@@ -3268,6 +3356,7 @@ function CompanyAppointmentsDashboard({
                       disabled={busy}
                       onClick={() => {
                         setAddingPackage(false);
+                        setCreatingPackage(false);
                         setEditingPackage(true);
                       }}
                       className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100 disabled:opacity-50"
@@ -3279,8 +3368,69 @@ function CompanyAppointmentsDashboard({
               </div>
             </>
           ) : (
-            <div className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-slate-400">
-              No active package.
+            <div className="mt-4 rounded-xl border border-dashed p-4">
+              {ownerAccess && creatingPackage ? (
+                <div className="grid grid-cols-2 gap-2 text-left">
+                  <div className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-[10px] font-bold text-blue-800">
+                    Create a new active package for all current company locations. Completed packages remain in history.
+                  </div>
+                  <PackageEditField
+                    label="Package Leads"
+                    value={packageDraft.leadTarget}
+                    onChange={(leadTarget) =>
+                      setPackageDraft((current) => ({ ...current, leadTarget }))
+                    }
+                  />
+                  <PackageEditField
+                    label="Price Per Lead"
+                    value={packageDraft.amountPerLead}
+                    onChange={(amountPerLead) =>
+                      setPackageDraft((current) => ({ ...current, amountPerLead }))
+                    }
+                  />
+                  <PackageEditField
+                    label="Start Date"
+                    type="date"
+                    value={packageDraft.startDate}
+                    onChange={(startDate) =>
+                      setPackageDraft((current) => ({ ...current, startDate }))
+                    }
+                  />
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void savePackageDraft()}
+                      className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                      Create Package
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={cancelPackageDraft}
+                      className="min-h-9 flex-1 rounded-lg border bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-sm text-slate-400">
+                  <p>No active package.</p>
+                  {ownerAccess && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={beginFirstPackage}
+                      className="mt-3 inline-flex min-h-9 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      <Plus size={13} /> Create Package
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>
