@@ -195,10 +195,20 @@ function Section({ title, children, columns = false }: { title: string; children
   );
 }
 
+const STATUS_BUTTONS = [
+  ['QC DENIED', 'bg-[#E52420] text-white'],
+  ['GOOD', 'bg-[#059669] text-white'],
+  ['SIGNED CONTRACT', 'bg-[#006B3C] text-white'],
+  ['BAD', 'bg-[#E52420] text-white'],
+  ['NO SHOW', 'bg-[#FBBF24] text-slate-950'],
+  ['RESCHEDULED', 'bg-[#FF7A1A] text-slate-950'],
+] as const;
+
 export function ClientLeadTemplate({
   lead,
   appointment,
   showLabel = true,
+  showStatusButtons = false,
   showCopySection = true,
   editValues,
   onChange,
@@ -208,6 +218,7 @@ export function ClientLeadTemplate({
   lead: LeadLike;
   appointment: AppointmentLike;
   showLabel?: boolean;
+  showStatusButtons?: boolean;
   showCopySection?: boolean;
   editValues?: Record<string, unknown>;
   onChange?: (key: string, value: string) => void;
@@ -363,6 +374,19 @@ export function ClientLeadTemplate({
           </div>
         )}
 
+        {showStatusButtons && (
+          <div className="flex flex-wrap gap-2 border-t border-slate-100 px-3 py-3">
+            {STATUS_BUTTONS.map(([label, tone]) => (
+              <button
+                key={label}
+                type="button"
+                className={'min-w-0 flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-[10px] font-black shadow-sm ' + tone}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {showCopySection && (
