@@ -9,15 +9,21 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Columns3,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileText,
+  GripVertical,
   Headphones,
   History,
   Home,
+  LockKeyhole,
   Loader2,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Save,
   Search,
   ShieldCheck,
@@ -58,6 +64,85 @@ const EMPTY_DATA: CrmData = {
   sources: [],
 };
 
+type LeadColumnKey =
+  | "leadId"
+  | "status"
+  | "homeownerName"
+  | "phone"
+  | "email"
+  | "address"
+  | "city"
+  | "state"
+  | "zip"
+  | "appointmentDate"
+  | "appointmentTime"
+  | "leadReceived"
+  | "company"
+  | "agent"
+  | "service"
+  | "roofAge"
+  | "roofType"
+  | "insurance"
+  | "insuranceCarrier"
+  | "visibleDamage"
+  | "stormDate"
+  | "qcStatus"
+  | "inspectorStatus"
+  | "clientStatus"
+  | "source"
+  | "notes"
+  | "actions";
+
+type LeadColumnDefinition = {
+  key: LeadColumnKey;
+  label: string;
+  width: number;
+  editable?: boolean;
+  locked?: boolean;
+};
+
+const LEAD_COLUMNS: LeadColumnDefinition[] = [
+  { key: "leadId", label: "Lead ID", width: 126, locked: true },
+  { key: "status", label: "Status", width: 125, editable: true },
+  { key: "homeownerName", label: "Homeowner Name", width: 180, editable: true },
+  { key: "phone", label: "Phone", width: 135, editable: true },
+  { key: "email", label: "Email", width: 210, editable: true },
+  { key: "address", label: "Address", width: 260, editable: true },
+  { key: "city", label: "City", width: 145, editable: true },
+  { key: "state", label: "State", width: 80, editable: true },
+  { key: "zip", label: "ZIP", width: 95, editable: true },
+  { key: "appointmentDate", label: "Appointment Date", width: 150, editable: true },
+  { key: "appointmentTime", label: "Appointment Time", width: 145, editable: true },
+  { key: "leadReceived", label: "Lead Received", width: 190 },
+  { key: "company", label: "Company", width: 190, editable: true },
+  { key: "agent", label: "Agent", width: 155, editable: true },
+  { key: "service", label: "Service", width: 160, editable: true },
+  { key: "roofAge", label: "Roof Age", width: 115, editable: true },
+  { key: "roofType", label: "Roof Type", width: 130, editable: true },
+  { key: "insurance", label: "Insurance", width: 120, editable: true },
+  { key: "insuranceCarrier", label: "Insurance Carrier", width: 165, editable: true },
+  { key: "visibleDamage", label: "Visible Damage", width: 150, editable: true },
+  { key: "stormDate", label: "Storm / Hail Date", width: 155, editable: true },
+  { key: "qcStatus", label: "QC Status", width: 135, editable: true },
+  { key: "inspectorStatus", label: "Inspector Status", width: 145, editable: true },
+  { key: "clientStatus", label: "Client Status", width: 135, editable: true },
+  { key: "source", label: "Source", width: 155, editable: true },
+  { key: "notes", label: "Notes", width: 300, editable: true },
+  { key: "actions", label: "Actions", width: 100, locked: true },
+];
+
+const LEAD_COLUMN_MAP = new Map(
+  LEAD_COLUMNS.map((column) => [column.key, column]),
+);
+const DEFAULT_LEAD_COLUMN_ORDER = LEAD_COLUMNS.map((column) => column.key);
+const COLUMN_PREFERENCES_STORAGE_KEY = "readyops-admin-lead-columns-v1";
+
+type EditingCell = {
+  leadId: string;
+  column: LeadColumnKey;
+  value: string;
+};
+
 export function AdminLeadCRM() {
   const [data, setData] = useState<CrmData>(EMPTY_DATA);
   const [searchInput, setSearchInput] = useState("");
@@ -83,6 +168,20 @@ export function AdminLeadCRM() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [columnOrder, setColumnOrder] = useState<LeadColumnKey[]>(
+    () => loadColumnPreferences().order,
+  );
+  const [hiddenColumns, setHiddenColumns] = useState<Set<LeadColumnKey>>(
+    () => new Set(loadColumnPreferences().hidden),
+  );
+  const [columnPanel, setColumnPanel] = useState<
+    "visibility" | "order" | null
+  >(null);
+  const [draggedColumn, setDraggedColumn] = useState<LeadColumnKey | null>(
+    null,
+  );
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [inlineSaving, setInlineSaving] = useState("");
   const [requestedLeadId] = useState(
     () => new URLSearchParams(window.location.search).get("lead") || "",
   );
@@ -137,6 +236,12 @@ export function AdminLeadCRM() {
     void load();
   }, [load]);
   useEffect(() => {
+    window.localStorage.setItem(
+      COLUMN_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ order: columnOrder, hidden: [...hiddenColumns] }),
+    );
+  }, [columnOrder, hiddenColumns]);
+  useEffect(() => {
     const channel = supabase
       .channel("readyops-admin-crm-live")
       .on(
@@ -168,6 +273,19 @@ export function AdminLeadCRM() {
   const visibleRange = data.total
     ? `${offset + 1}–${Math.min(offset + data.rows.length, data.total)} of ${data.total}`
     : "0 records";
+  const visibleColumns = useMemo(
+    () =>
+      columnOrder
+        .filter(
+          (key) =>
+            key === "leadId" ||
+            key === "actions" ||
+            !hiddenColumns.has(key),
+        )
+        .map((key) => LEAD_COLUMN_MAP.get(key))
+        .filter((column): column is LeadColumnDefinition => Boolean(column)),
+    [columnOrder, hiddenColumns],
+  );
 
   async function openDetail(leadId: string, edit = false) {
     setSelectedId(leadId);
@@ -208,6 +326,118 @@ export function AdminLeadCRM() {
     await load(true);
     await openDetail(leadId, false);
     return true;
+  }
+
+  async function saveInlineCell(
+    row: Obj,
+    column: LeadColumnKey,
+    nextValue: string,
+  ) {
+    const clearSavedCell = () =>
+      setEditingCell((current) =>
+        current?.leadId === row.lead.id && current?.column === column
+          ? null
+          : current,
+      );
+    const currentValue = inlineCellValue(row, column);
+    const normalizedNext = nextValue.trim();
+    if (normalizedNext === currentValue.trim()) {
+      clearSavedCell();
+      return;
+    }
+    if (
+      ["homeownerName", "phone", "address"].includes(column) &&
+      !normalizedNext
+    ) {
+      setError(`${LEAD_COLUMN_MAP.get(column)?.label} is required.`);
+      return;
+    }
+
+    const patches = inlineCellPatches(row, column, normalizedNext);
+    if (!patches) {
+      clearSavedCell();
+      return;
+    }
+
+    const savingKey = `${row.lead.id}:${column}`;
+    setInlineSaving(savingKey);
+    setError("");
+    const { data: updated, error: updateError } = await supabase.rpc(
+      "admin_update_lead_crm",
+      {
+        p_lead_id: row.lead.id,
+        p_lead_patch: patches.leadPatch,
+        p_appointment_patch: patches.appointmentPatch,
+      },
+    );
+    if (updateError) {
+      setError(rpcError(updateError));
+      setInlineSaving("");
+      return;
+    }
+
+    const updatedRecord = (updated || {}) as Obj;
+    setData((current) => ({
+      ...current,
+      rows: current.rows.map((currentRow) => {
+        if (currentRow.lead.id !== row.lead.id) return currentRow;
+        const nextRow: Obj = {
+          ...currentRow,
+          lead: updatedRecord.lead || currentRow.lead,
+          appointment: updatedRecord.appointment || currentRow.appointment,
+        };
+        if (column === "company") {
+          nextRow.company =
+            references.companies.find(
+              (company) => company.id === normalizedNext,
+            ) || nextRow.company;
+        }
+        if (column === "agent") {
+          nextRow.agent =
+            references.agents.find((agent) => agent.id === normalizedNext) ||
+            { id: "", name: "Unassigned" };
+        }
+        return nextRow;
+      }),
+    }));
+    clearSavedCell();
+    setInlineSaving("");
+    await load(true);
+  }
+
+  function toggleColumn(column: LeadColumnKey) {
+    if (column === "leadId" || column === "actions") return;
+    setHiddenColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) next.delete(column);
+      else next.add(column);
+      return next;
+    });
+  }
+
+  function moveColumn(sourceColumn: LeadColumnKey, targetColumn: LeadColumnKey) {
+    if (
+      sourceColumn === targetColumn ||
+      sourceColumn === "leadId" ||
+      sourceColumn === "actions" ||
+      targetColumn === "leadId" ||
+      targetColumn === "actions"
+    )
+      return;
+    setColumnOrder((current) => {
+      const movable = current.filter(
+        (key) => key !== "leadId" && key !== "actions" && key !== sourceColumn,
+      );
+      const targetIndex = movable.indexOf(targetColumn);
+      movable.splice(targetIndex < 0 ? movable.length : targetIndex, 0, sourceColumn);
+      return ["leadId", ...movable, "actions"];
+    });
+  }
+
+  function resetColumns() {
+    setColumnOrder([...DEFAULT_LEAD_COLUMN_ORDER]);
+    setHiddenColumns(new Set());
+    setDraggedColumn(null);
   }
 
   function updateFilter(action: () => void) {
@@ -480,10 +710,129 @@ export function AdminLeadCRM() {
           <div>
             <h3 className="font-black">All Companies Lead Spreadsheet</h3>
             <p className="text-xs text-slate-500">
-              {visibleRange} • click a row for the complete record or use Edit
+              {visibleRange} • click any business cell to edit; Lead ID opens the complete record
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold">
+          <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold">
+            <div className="relative flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setColumnPanel((current) =>
+                    current === "visibility" ? null : "visibility",
+                  )
+                }
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition ${
+                  columnPanel === "visibility"
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                <Eye size={14} /> Show / Hide Columns
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setColumnPanel((current) =>
+                    current === "order" ? null : "order",
+                  )
+                }
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition ${
+                  columnPanel === "order"
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                <Columns3 size={14} /> Reorder Columns
+              </button>
+              {columnPanel && (
+                <div className="absolute right-0 top-11 z-50 w-[330px] overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-2xl">
+                  <div className="border-b bg-slate-50 px-4 py-3">
+                    <p className="font-black text-slate-900">Customize Columns</p>
+                    <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                      Drag to reorder. Use the eye to show or hide a column.
+                    </p>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto p-2">
+                    {columnOrder
+                      .filter((key) => key !== "actions")
+                      .map((key) => {
+                        const column = LEAD_COLUMN_MAP.get(key);
+                        if (!column) return null;
+                        const leadIdColumn = key === "leadId";
+                        const hidden = hiddenColumns.has(key);
+                        return (
+                          <div
+                            key={key}
+                            draggable={!leadIdColumn}
+                            onDragStart={() => setDraggedColumn(key)}
+                            onDragEnd={() => setDraggedColumn(null)}
+                            onDragOver={(event) => {
+                              if (!leadIdColumn) event.preventDefault();
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              if (draggedColumn)
+                                moveColumn(draggedColumn, key);
+                              setDraggedColumn(null);
+                            }}
+                            className={`flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-2 transition ${
+                              draggedColumn === key
+                                ? "border-blue-300 bg-blue-50 opacity-60"
+                                : "border-transparent hover:border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            {leadIdColumn ? (
+                              <LockKeyhole
+                                size={14}
+                                className="shrink-0 text-slate-400"
+                              />
+                            ) : (
+                              <GripVertical
+                                size={15}
+                                className="shrink-0 cursor-grab text-slate-400 active:cursor-grabbing"
+                              />
+                            )}
+                            <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700">
+                              {column.label}
+                              {leadIdColumn && (
+                                <small className="ml-1 font-semibold text-slate-400">
+                                  Always visible
+                                </small>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={leadIdColumn}
+                              onClick={() => toggleColumn(key)}
+                              aria-label={`${hidden ? "Show" : "Hide"} ${column.label}`}
+                              className="rounded-md p-1.5 text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                            >
+                              {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t bg-slate-50 p-3">
+                    <button
+                      type="button"
+                      onClick={resetColumns}
+                      className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-2 text-[11px] font-black text-slate-600 hover:bg-slate-100"
+                    >
+                      <RotateCcw size={13} /> Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setColumnPanel(null)}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-[11px] font-black text-white hover:bg-blue-700"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               disabled={page <= 1 || loading}
               onClick={() =>
@@ -519,51 +868,41 @@ export function AdminLeadCRM() {
             className="readyops-lead-spreadsheet-scroll"
             ariaLabel="All companies lead spreadsheet horizontal scroll"
           >
-            <table className="w-full min-w-[3500px] border-separate border-spacing-0 text-xs">
+            <table
+              className="w-full border-separate border-spacing-0 text-xs"
+              style={{
+                minWidth: visibleColumns.reduce(
+                  (total, column) => total + column.width,
+                  0,
+                ),
+              }}
+            >
               <thead className="readyops-lead-spreadsheet-columns sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  {[
-                    "Lead ID",
-                    "Status",
-                    "Homeowner Name",
-                    "Phone",
-                    "Email",
-                    "Address",
-                    "City",
-                    "State",
-                    "ZIP",
-                    "Appointment Date",
-                    "Appointment Time",
-                    "Lead Received",
-                    "Company",
-                    "Agent",
-                    "Service",
-                    "Roof Age",
-                    "Roof Type",
-                    "Insurance",
-                    "Insurance Carrier",
-                    "Visible Damage",
-                    "Storm / Hail Date",
-                    "QC Status",
-                    "Inspector Status",
-                    "Client Status",
-                    "Source",
-                    "Notes",
-                    "Actions",
-                  ].map((label, index, labels) => (
+                  {visibleColumns.map((column) => (
                     <th
-                      key={label}
+                      key={column.key}
+                      style={{
+                        width: column.width,
+                        minWidth: column.width,
+                        maxWidth: column.width,
+                      }}
                       className={`whitespace-nowrap border-b px-3 py-3 ${
-                        index === 0
-                          ? "sticky left-0 z-40 w-[116px] min-w-[116px] max-w-[116px] bg-slate-50"
-                          : index === 1
-                            ? "sticky left-[116px] z-40 w-[100px] min-w-[100px] max-w-[100px] bg-slate-50"
-                            : index === 2
-                              ? "sticky left-[216px] z-40 w-[160px] min-w-[160px] max-w-[160px] border-r bg-slate-50 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)]"
-                              : ""
-                      } ${index === labels.length - 1 ? "sticky right-0 z-40 bg-slate-50" : ""}`}
+                        column.key === "leadId"
+                          ? "sticky left-0 z-40 border-r bg-slate-50 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)]"
+                          : column.key === "actions"
+                            ? "sticky right-0 z-40 border-l bg-slate-50"
+                            : ""
+                      }`}
                     >
-                      {label}
+                      <span className="inline-flex items-center gap-1.5">
+                        {column.label}
+                        {column.key === "leadId" ? (
+                          <LockKeyhole size={11} className="opacity-60" />
+                        ) : column.editable ? (
+                          <Pencil size={10} className="opacity-45" />
+                        ) : null}
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -573,7 +912,31 @@ export function AdminLeadCRM() {
                   <LeadRow
                     key={row.lead.id}
                     row={row}
-                    onOpen={() => void openDetail(row.lead.id, true)}
+                    columns={visibleColumns}
+                    editingCell={editingCell}
+                    savingKey={inlineSaving}
+                    agents={references.agents}
+                    companies={references.companies}
+                    onStartEdit={(column, cellValue) => {
+                      if (inlineSaving) return;
+                      setEditingCell({
+                        leadId: row.lead.id,
+                        column,
+                        value: cellValue,
+                      });
+                    }}
+                    onChangeEdit={(cellValue) =>
+                      setEditingCell((current) =>
+                        current && current.leadId === row.lead.id
+                          ? { ...current, value: cellValue }
+                          : current,
+                      )
+                    }
+                    onCancelEdit={() => setEditingCell(null)}
+                    onSaveEdit={(column, cellValue) =>
+                      void saveInlineCell(row, column, cellValue)
+                    }
+                    onOpen={() => void openDetail(row.lead.id, false)}
                     onEdit={() => void openDetail(row.lead.id, true)}
                   />
                 ))}
@@ -604,89 +967,214 @@ export function AdminLeadCRM() {
 
 function LeadRow({
   row,
+  columns,
+  editingCell,
+  savingKey,
+  agents,
+  companies,
+  onStartEdit,
+  onChangeEdit,
+  onCancelEdit,
+  onSaveEdit,
   onOpen,
   onEdit,
 }: {
   row: Obj;
+  columns: LeadColumnDefinition[];
+  editingCell: EditingCell | null;
+  savingKey: string;
+  agents: Obj[];
+  companies: Obj[];
+  onStartEdit: (column: LeadColumnKey, value: string) => void;
+  onChangeEdit: (value: string) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (column: LeadColumnKey, value: string) => void;
   onOpen: () => void;
   onEdit: () => void;
 }) {
-  const form = row.lead.form_data || {};
-  const stormDate = form.storm_date || form.hail_date || form.last_checked_on;
   return (
-    <tr
-      onClick={onOpen}
-      className="group cursor-pointer border-t align-top hover:bg-blue-50/50"
-    >
-      <Cell className="sticky left-0 z-20 w-[116px] min-w-[116px] max-w-[116px] bg-white font-black text-blue-700 group-hover:bg-blue-50">
-        {row.lead.lead_code || shortId(row.lead.id)}
-      </Cell>
-      <Cell className="sticky left-[116px] z-20 w-[100px] min-w-[100px] max-w-[100px] bg-white group-hover:bg-blue-50">
-        <Status value={primaryStatus(row)} />
-      </Cell>
-      <Cell className="sticky left-[216px] z-20 w-[160px] min-w-[160px] max-w-[160px] border-r bg-white font-bold shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)] group-hover:bg-blue-50">
-        {value(row.lead.full_name)}
-      </Cell>
-      <Cell>{value(row.lead.phone_number)}</Cell>
-      <Cell>{value(row.lead.email)}</Cell>
-      <Cell className="max-w-[260px]">{value(row.lead.address)}</Cell>
-      <Cell>{value(row.lead.city)}</Cell>
-      <Cell>{value(row.lead.state)}</Cell>
-      <Cell>{value(row.lead.zip_code)}</Cell>
-      <Cell>{dateValue(row.appointment.appointment_date)}</Cell>
-      <Cell>{timeValue(row.appointment.start_time)}</Cell>
-      <Cell>
-        {row.lead.created_at
-          ? new Date(row.lead.created_at).toLocaleString()
-          : "—"}
-      </Cell>
-      <Cell className="font-semibold">
-        <a
-          href={`/admin/operations?company=${row.company.id}`}
-          onClick={(event) => event.stopPropagation()}
-          className="inline-flex items-center gap-1 text-blue-700 hover:underline"
-          title="Open this company in Companies & Scheduling"
-        >
-          {value(row.company.name)} <ExternalLink size={11} />
-        </a>
-      </Cell>
-      <Cell>{value(row.agent.name)}</Cell>
-      <Cell>{value(row.lead.service_needed)}</Cell>
-      <Cell>{value(form.roof_age)}</Cell>
-      <Cell>{value(form.roof_type)}</Cell>
-      <Cell>{value(form.insurance)}</Cell>
-      <Cell>{value(form.insurance_name)}</Cell>
-      <Cell>{value(form.visible_damage)}</Cell>
-      <Cell>{value(stormDate)}</Cell>
-      <Cell>
-        <Status value={row.lead.qc_status} />
-      </Cell>
-      <Cell>
-        <Status value={row.appointment.inspection_status} />
-      </Cell>
-      <Cell>
-        <Status
-          value={
-            row.appointment.client_status || row.appointment.canonical_status
-          }
+    <tr className="group border-t align-top hover:bg-blue-50/50">
+      {columns.map((column) => (
+        <LeadSpreadsheetCell
+          key={column.key}
+          row={row}
+          column={column}
+          editingCell={editingCell}
+          saving={savingKey === `${row.lead.id}:${column.key}`}
+          agents={agents}
+          companies={companies}
+          onStartEdit={onStartEdit}
+          onChangeEdit={onChangeEdit}
+          onCancelEdit={onCancelEdit}
+          onSaveEdit={onSaveEdit}
+          onOpen={onOpen}
+          onEdit={onEdit}
         />
-      </Cell>
-      <Cell>{value(row.lead.source)}</Cell>
-      <Cell className="max-w-[300px] truncate" title={row.lead.notes || ""}>
-        {value(row.lead.notes)}
-      </Cell>
-      <Cell className="sticky right-0 z-10 border-l bg-white">
+      ))}
+    </tr>
+  );
+}
+
+function LeadSpreadsheetCell({
+  row,
+  column,
+  editingCell,
+  saving,
+  agents,
+  companies,
+  onStartEdit,
+  onChangeEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onOpen,
+  onEdit,
+}: {
+  row: Obj;
+  column: LeadColumnDefinition;
+  editingCell: EditingCell | null;
+  saving: boolean;
+  agents: Obj[];
+  companies: Obj[];
+  onStartEdit: (column: LeadColumnKey, value: string) => void;
+  onChangeEdit: (value: string) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (column: LeadColumnKey, value: string) => void;
+  onOpen: () => void;
+  onEdit: () => void;
+}) {
+  const isEditing =
+    editingCell?.leadId === row.lead.id &&
+    editingCell?.column === column.key;
+  const editable =
+    Boolean(column.editable) &&
+    (!appointmentColumn(column.key) || Boolean(row.appointment?.id));
+  const rawValue = inlineCellValue(row, column.key);
+  const baseOptions = inlineCellOptions(column.key, agents, companies);
+  const options =
+    baseOptions && rawValue && !baseOptions.some((option) => option.value === rawValue)
+      ? [
+          {
+            value: rawValue,
+            label:
+              column.key === "company"
+                ? value(row.company?.name)
+                : column.key === "agent"
+                  ? value(row.agent?.name)
+                  : leadStatusLabel(rawValue),
+          },
+          ...baseOptions,
+        ]
+      : baseOptions;
+  const cellClasses = `${
+    column.key === "leadId"
+      ? "sticky left-0 z-20 border-r bg-white font-black text-blue-700 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)] group-hover:bg-blue-50"
+      : column.key === "actions"
+        ? "sticky right-0 z-10 border-l bg-white group-hover:bg-blue-50"
+        : ""
+  } px-3 py-2.5`;
+
+  if (column.key === "leadId") {
+    return (
+      <td className={cellClasses}>
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit();
-          }}
-          className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700"
+          type="button"
+          onClick={onOpen}
+          className="text-left font-black text-blue-700 hover:underline"
+          title="Open the complete lead record"
+        >
+          {row.lead.lead_code || shortId(row.lead.id)}
+        </button>
+      </td>
+    );
+  }
+
+  if (column.key === "actions") {
+    return (
+      <td className={cellClasses}>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
         >
           <Pencil size={12} /> Edit
         </button>
-      </Cell>
-    </tr>
+      </td>
+    );
+  }
+
+  if (isEditing && editingCell) {
+    const fieldClass =
+      "h-9 w-full min-w-0 rounded-md border border-blue-400 bg-white px-2 text-xs font-semibold text-slate-900 outline-none ring-2 ring-blue-100";
+    return (
+      <td className={cellClasses}>
+        <div className="relative min-w-0">
+          {options ? (
+            <select
+              autoFocus
+              value={editingCell.value}
+              disabled={saving}
+              onChange={(event) => {
+                onChangeEdit(event.target.value);
+                onSaveEdit(column.key, event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") onCancelEdit();
+              }}
+              className={fieldClass}
+            >
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              autoFocus
+              type={inlineCellInputType(column.key)}
+              value={editingCell.value}
+              disabled={saving}
+              onChange={(event) => onChangeEdit(event.target.value)}
+              onBlur={(event) => {
+                if (event.currentTarget.dataset.cancelled !== "true")
+                  onSaveEdit(column.key, event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  event.currentTarget.dataset.cancelled = "true";
+                  onCancelEdit();
+                }
+              }}
+              className={fieldClass}
+            />
+          )}
+          {saving && (
+            <Loader2
+              size={13}
+              className="absolute right-2 top-2.5 animate-spin text-blue-600"
+            />
+          )}
+        </div>
+      </td>
+    );
+  }
+
+  return (
+    <td className={cellClasses} title={editable ? "Click to edit" : undefined}>
+      <button
+        type="button"
+        disabled={!editable || saving}
+        onClick={() => onStartEdit(column.key, rawValue)}
+        className={`block w-full min-w-0 rounded-md px-1 py-1 text-left transition ${
+          editable
+            ? "cursor-text hover:bg-blue-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+            : "cursor-default"
+        }`}
+      >
+        {inlineCellDisplay(row, column.key)}
+      </button>
+    </td>
   );
 }
 
@@ -1711,21 +2199,250 @@ function HeroValue({
     </div>
   );
 }
-function Cell({
-  children,
-  className = "",
-  title,
-}: {
-  children: ReactNode;
-  className?: string;
-  title?: string;
-}) {
-  return (
-    <td className={`px-3 py-3 ${className}`} title={title}>
-      {children}
-    </td>
-  );
+
+function loadColumnPreferences(): {
+  order: LeadColumnKey[];
+  hidden: LeadColumnKey[];
+} {
+  const fallback = {
+    order: [...DEFAULT_LEAD_COLUMN_ORDER],
+    hidden: [] as LeadColumnKey[],
+  };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(COLUMN_PREFERENCES_STORAGE_KEY) || "{}",
+    ) as { order?: unknown; hidden?: unknown };
+    const known = new Set(DEFAULT_LEAD_COLUMN_ORDER);
+    const storedOrder = Array.isArray(parsed.order)
+      ? parsed.order.filter(
+          (key): key is LeadColumnKey =>
+            typeof key === "string" &&
+            known.has(key as LeadColumnKey) &&
+            key !== "leadId" &&
+            key !== "actions",
+        )
+      : [];
+    const uniqueOrder = [...new Set(storedOrder)];
+    const missing = DEFAULT_LEAD_COLUMN_ORDER.filter(
+      (key) =>
+        key !== "leadId" && key !== "actions" && !uniqueOrder.includes(key),
+    );
+    const hidden = Array.isArray(parsed.hidden)
+      ? parsed.hidden.filter(
+          (key): key is LeadColumnKey =>
+            typeof key === "string" &&
+            known.has(key as LeadColumnKey) &&
+            key !== "leadId" &&
+            key !== "actions",
+        )
+      : [];
+    return {
+      order: ["leadId", ...uniqueOrder, ...missing, "actions"],
+      hidden: [...new Set(hidden)],
+    };
+  } catch {
+    return fallback;
+  }
 }
+
+function appointmentColumn(column: LeadColumnKey): boolean {
+  return [
+    "status",
+    "appointmentDate",
+    "appointmentTime",
+    "inspectorStatus",
+    "clientStatus",
+  ].includes(column);
+}
+
+function inlineCellInputType(column: LeadColumnKey): string {
+  if (column === "appointmentDate" || column === "stormDate") return "date";
+  if (column === "appointmentTime") return "time";
+  if (column === "email") return "email";
+  return "text";
+}
+
+function inlineCellOptions(
+  column: LeadColumnKey,
+  agents: Obj[],
+  companies: Obj[],
+): Array<{ value: string; label: string }> | null {
+  if (column === "status")
+    return statusOptions([
+      "pending",
+      "confirmed",
+      "good",
+      "signed_contract",
+      "no_show",
+      "bad",
+      "rescheduled",
+      "qc_denied",
+    ]);
+  if (column === "company")
+    return companies.map((company) => ({
+      value: company.id,
+      label: value(company.name),
+    }));
+  if (column === "agent")
+    return [
+      { value: "", label: "Unassigned" },
+      ...agents.map((agent) => ({ value: agent.id, label: value(agent.name) })),
+    ];
+  if (column === "qcStatus")
+    return statusOptions([
+      "pending",
+      "in_review",
+      "manager_approved",
+      "approved",
+      "denied",
+      "needs_correction",
+    ]);
+  if (column === "inspectorStatus")
+    return statusOptions([
+      "not_started",
+      "started",
+      "completed",
+      "not_completed",
+    ]);
+  if (column === "clientStatus")
+    return statusOptions([
+      "pending",
+      "confirmed",
+      "good",
+      "signed_contract",
+      "no_show",
+      "bad",
+      "rescheduled",
+    ]);
+  return null;
+}
+
+function inlineCellValue(row: Obj, column: LeadColumnKey): string {
+  const lead = row.lead || {};
+  const appointment = row.appointment || {};
+  const form = lead.form_data || {};
+  const values: Partial<Record<LeadColumnKey, unknown>> = {
+    leadId: lead.lead_code || shortId(lead.id),
+    status: primaryStatus(row),
+    homeownerName: lead.full_name,
+    phone: lead.phone_number,
+    email: lead.email,
+    address: lead.address,
+    city: lead.city,
+    state: lead.state,
+    zip: lead.zip_code,
+    appointmentDate: appointment.appointment_date,
+    appointmentTime: String(appointment.start_time || "").slice(0, 5),
+    leadReceived: lead.created_at,
+    company: row.company?.id || lead.company_id,
+    agent: row.agent?.id || lead.agent_id,
+    service: lead.service_needed,
+    roofAge: form.roof_age,
+    roofType: form.roof_type,
+    insurance: form.insurance,
+    insuranceCarrier: form.insurance_name,
+    visibleDamage: form.visible_damage,
+    stormDate: form.storm_date || form.hail_date || form.last_checked_on,
+    qcStatus: lead.qc_status,
+    inspectorStatus: appointment.inspection_status,
+    clientStatus: appointment.client_status || appointment.canonical_status,
+    source: lead.source,
+    notes: lead.notes,
+  };
+  return String(values[column] ?? "");
+}
+
+function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
+  if (column === "status") return <Status value={primaryStatus(row)} />;
+  if (column === "qcStatus") return <Status value={row.lead?.qc_status} />;
+  if (column === "inspectorStatus")
+    return <Status value={row.appointment?.inspection_status} />;
+  if (column === "clientStatus")
+    return (
+      <Status
+        value={
+          row.appointment?.client_status || row.appointment?.canonical_status
+        }
+      />
+    );
+  if (column === "appointmentDate")
+    return dateValue(row.appointment?.appointment_date);
+  if (column === "appointmentTime")
+    return timeValue(row.appointment?.start_time);
+  if (column === "leadReceived")
+    return row.lead?.created_at
+      ? new Date(row.lead.created_at).toLocaleString()
+      : "—";
+  if (column === "company")
+    return <span className="font-semibold">{value(row.company?.name)}</span>;
+  if (column === "agent") return value(row.agent?.name);
+  if (column === "notes")
+    return (
+      <span className="block max-w-[280px] truncate" title={row.lead?.notes || ""}>
+        {value(row.lead?.notes)}
+      </span>
+    );
+  return value(inlineCellValue(row, column));
+}
+
+function inlineCellPatches(
+  row: Obj,
+  column: LeadColumnKey,
+  nextValue: string,
+): { leadPatch: Obj; appointmentPatch: Obj } | null {
+  const leadPatch: Obj = {};
+  const appointmentPatch: Obj = {};
+  const leadFields: Partial<Record<LeadColumnKey, string>> = {
+    homeownerName: "full_name",
+    phone: "phone_number",
+    email: "email",
+    address: "address",
+    city: "city",
+    state: "state",
+    zip: "zip_code",
+    service: "service_needed",
+    source: "source",
+    notes: "notes",
+    qcStatus: "qc_status",
+  };
+  const formFields: Partial<Record<LeadColumnKey, string>> = {
+    roofAge: "roof_age",
+    roofType: "roof_type",
+    insurance: "insurance",
+    insuranceCarrier: "insurance_name",
+    visibleDamage: "visible_damage",
+    stormDate: "storm_date",
+  };
+  const appointmentFields: Partial<Record<LeadColumnKey, string>> = {
+    appointmentDate: "appointment_date",
+    appointmentTime: "start_time",
+    inspectorStatus: "inspection_status",
+    clientStatus: "client_status",
+  };
+
+  if (column === "status") {
+    if (nextValue === "qc_denied") leadPatch.qc_status = "denied";
+    else {
+      appointmentPatch.client_status = nextValue;
+      if (row.lead?.qc_status === "denied") leadPatch.qc_status = "pending";
+    }
+  } else if (column === "company") {
+    leadPatch.company_id = nextValue;
+    leadPatch.location_id = "";
+  } else if (column === "agent") {
+    leadPatch.agent_id = nextValue;
+  } else if (leadFields[column]) {
+    leadPatch[leadFields[column]!] = nextValue;
+  } else if (formFields[column]) {
+    leadPatch.form_data = { [formFields[column]!]: nextValue };
+  } else if (appointmentFields[column]) {
+    appointmentPatch[appointmentFields[column]!] = nextValue;
+  } else return null;
+
+  return { leadPatch, appointmentPatch };
+}
+
 function Filter({
   value: selected,
   onChange,
