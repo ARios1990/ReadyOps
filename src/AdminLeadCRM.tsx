@@ -37,6 +37,7 @@ import {
   leadStatusClasses,
   leadStatusExportValue,
   leadStatusLabel,
+  normalizeLeadDisposition,
 } from "./leadStatusPresentation";
 
 // RPC payloads intentionally stay flexible because legacy form_data keys remain visible in CRM.
@@ -85,7 +86,9 @@ type LeadColumnKey =
   | "insurance"
   | "insuranceCarrier"
   | "visibleDamage"
-  | "stormDate"
+  | "lastInspectionDate"
+  | "workflowProgress"
+  | "inspectorNotes"
   | "qcStatus"
   | "inspectorStatus"
   | "clientStatus"
@@ -103,29 +106,28 @@ type LeadColumnDefinition = {
 
 const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "leadId", label: "Lead ID", width: 126, locked: true },
-  { key: "status", label: "Status", width: 125, editable: true },
+  { key: "agent", label: "Agent", width: 155, editable: true },
+  { key: "status", label: "Overall Status", width: 145, editable: true },
   { key: "homeownerName", label: "Homeowner Name", width: 180, editable: true },
   { key: "phone", label: "Phone", width: 135, editable: true },
-  { key: "email", label: "Email", width: 210, editable: true },
   { key: "address", label: "Address", width: 260, editable: true },
+  { key: "appointmentDate", label: "Appointment Date", width: 150, editable: true },
+  { key: "company", label: "Company", width: 190, editable: true },
+  { key: "roofAge", label: "Roof Age", width: 115, editable: true },
+  { key: "roofType", label: "Roof Type", width: 130, editable: true },
+  { key: "lastInspectionDate", label: "Last Inspection Date", width: 165, editable: true },
+  { key: "workflowProgress", label: "Workflow Progress", width: 380, editable: true },
+  { key: "inspectorNotes", label: "Inspector Notes", width: 310, editable: true },
+  { key: "email", label: "Email", width: 210, editable: true },
   { key: "city", label: "City", width: 145, editable: true },
   { key: "state", label: "State", width: 80, editable: true },
   { key: "zip", label: "ZIP", width: 95, editable: true },
-  { key: "appointmentDate", label: "Appointment Date", width: 150, editable: true },
   { key: "appointmentTime", label: "Appointment Time", width: 145, editable: true },
   { key: "leadReceived", label: "Lead Received", width: 190 },
-  { key: "company", label: "Company", width: 190, editable: true },
-  { key: "agent", label: "Agent", width: 155, editable: true },
   { key: "service", label: "Service", width: 160, editable: true },
-  { key: "roofAge", label: "Roof Age", width: 115, editable: true },
-  { key: "roofType", label: "Roof Type", width: 130, editable: true },
   { key: "insurance", label: "Insurance", width: 120, editable: true },
   { key: "insuranceCarrier", label: "Insurance Carrier", width: 165, editable: true },
   { key: "visibleDamage", label: "Visible Damage", width: 150, editable: true },
-  { key: "stormDate", label: "Storm / Hail Date", width: 155, editable: true },
-  { key: "qcStatus", label: "QC Status", width: 135, editable: true },
-  { key: "inspectorStatus", label: "Inspector Status", width: 145, editable: true },
-  { key: "clientStatus", label: "Client Status", width: 135, editable: true },
   { key: "source", label: "Source", width: 155, editable: true },
   { key: "notes", label: "Notes", width: 300, editable: true },
   { key: "actions", label: "Actions", width: 100, locked: true },
@@ -448,7 +450,7 @@ export function AdminLeadCRM() {
   function exportCsv() {
     const headers = [
       "Lead ID",
-      "Status",
+      "Overall Status",
       "Homeowner Name",
       "Phone",
       "Email",
@@ -466,10 +468,9 @@ export function AdminLeadCRM() {
       "Insurance",
       "Insurance Carrier",
       "Visible Damage",
-      "Storm / Hail Date",
-      "QC Status",
-      "Inspector Status",
-      "Client Status",
+      "Last Inspection Date",
+      "Workflow Progress",
+      "Inspector Notes",
       "Source",
       "Notes",
     ];
@@ -495,14 +496,9 @@ export function AdminLeadCRM() {
         form.insurance,
         form.insurance_name,
         form.visible_damage,
-        form.storm_date || form.hail_date || form.last_checked_on,
-        row.lead.qc_status,
-        row.appointment.inspection_status,
-        leadStatusExportValue(
-          row.appointment.company_action ||
-            row.appointment.client_status ||
-            row.appointment.canonical_status,
-        ),
+        form.last_checked_on || form.last_inspection_date || form.storm_date || form.hail_date,
+        workflowProgressExport(row),
+        row.appointment.inspector_notes,
         row.lead.source,
         row.lead.notes,
       ]
@@ -1000,7 +996,11 @@ function LeadRow({
           row={row}
           column={column}
           editingCell={editingCell}
-          saving={savingKey === `${row.lead.id}:${column.key}`}
+          saving={
+            column.key === "workflowProgress"
+              ? savingKey.startsWith(`${row.lead.id}:`)
+              : savingKey === `${row.lead.id}:${column.key}`
+          }
           agents={agents}
           companies={companies}
           onStartEdit={onStartEdit}
@@ -1102,6 +1102,18 @@ function LeadSpreadsheetCell({
     );
   }
 
+  if (column.key === "workflowProgress") {
+    return (
+      <td className={cellClasses}>
+        <WorkflowProgressCell
+          row={row}
+          saving={saving}
+          onSave={onSaveEdit}
+        />
+      </td>
+    );
+  }
+
   if (isEditing && editingCell) {
     const fieldClass =
       "h-9 w-full min-w-0 rounded-md border border-blue-400 bg-white px-2 text-xs font-semibold text-slate-900 outline-none ring-2 ring-blue-100";
@@ -1175,6 +1187,102 @@ function LeadSpreadsheetCell({
         {inlineCellDisplay(row, column.key)}
       </button>
     </td>
+  );
+}
+
+function WorkflowProgressCell({
+  row,
+  saving,
+  onSave,
+}: {
+  row: Obj;
+  saving: boolean;
+  onSave: (column: LeadColumnKey, value: string) => void;
+}) {
+  const appointment = row.appointment || {};
+  const clientStatus =
+    normalizeLeadDisposition(
+      appointment.client_status || appointment.canonical_status,
+    ) || "pending";
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <WorkflowStatusSelect
+        label="QC"
+        value={String(row.lead?.qc_status || "pending")}
+        options={statusOptions([
+          "pending",
+          "in_review",
+          "manager_approved",
+          "approved",
+          "denied",
+          "needs_correction",
+        ])}
+        saving={saving}
+        onChange={(value) => onSave("qcStatus", value)}
+      />
+      <WorkflowStatusSelect
+        label="Inspection"
+        value={String(appointment.inspection_status || "not_started")}
+        options={statusOptions([
+          "not_started",
+          "started",
+          "completed",
+          "not_completed",
+        ])}
+        saving={saving}
+        onChange={(value) => onSave("inspectorStatus", value)}
+      />
+      <WorkflowStatusSelect
+        label="Client"
+        value={clientStatus}
+        options={statusOptions([
+          "pending",
+          "good",
+          "signed_contract",
+          "no_show",
+          "bad",
+          "rescheduled",
+        ])}
+        saving={saving}
+        onChange={(value) => onSave("clientStatus", value)}
+      />
+      {saving && <Loader2 size={13} className="animate-spin text-blue-600" />}
+    </div>
+  );
+}
+
+function WorkflowStatusSelect({
+  label,
+  value: selected,
+  options,
+  saving,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  saving: boolean;
+  onChange: (value: string) => void;
+}) {
+  const withCurrent =
+    selected && !options.some((option) => option.value === selected)
+      ? [{ value: selected, label: leadStatusLabel(selected) }, ...options]
+      : options;
+  return (
+    <select
+      aria-label={`${label} status`}
+      title={`${label} status — click to update`}
+      value={selected}
+      disabled={saving}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-7 max-w-[122px] rounded-md border border-slate-200 bg-slate-50 px-1.5 text-[9px] font-black uppercase text-slate-700 outline-none hover:border-blue-300 hover:bg-blue-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+    >
+      {withCurrent.map((option) => (
+        <option key={option.value} value={option.value}>
+          {label}: {option.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -2251,13 +2359,15 @@ function appointmentColumn(column: LeadColumnKey): boolean {
     "status",
     "appointmentDate",
     "appointmentTime",
+    "workflowProgress",
+    "inspectorNotes",
     "inspectorStatus",
     "clientStatus",
   ].includes(column);
 }
 
 function inlineCellInputType(column: LeadColumnKey): string {
-  if (column === "appointmentDate" || column === "stormDate") return "date";
+  if (column === "appointmentDate") return "date";
   if (column === "appointmentTime") return "time";
   if (column === "email") return "email";
   return "text";
@@ -2271,7 +2381,6 @@ function inlineCellOptions(
   if (column === "status")
     return statusOptions([
       "pending",
-      "confirmed",
       "good",
       "signed_contract",
       "no_show",
@@ -2324,7 +2433,10 @@ function inlineCellValue(row: Obj, column: LeadColumnKey): string {
   const form = lead.form_data || {};
   const values: Partial<Record<LeadColumnKey, unknown>> = {
     leadId: lead.lead_code || shortId(lead.id),
-    status: primaryStatus(row),
+    status:
+      primaryStatus(row) === "qc_denied"
+        ? "qc_denied"
+        : normalizeLeadDisposition(primaryStatus(row)) || primaryStatus(row),
     homeownerName: lead.full_name,
     phone: lead.phone_number,
     email: lead.email,
@@ -2343,7 +2455,12 @@ function inlineCellValue(row: Obj, column: LeadColumnKey): string {
     insurance: form.insurance,
     insuranceCarrier: form.insurance_name,
     visibleDamage: form.visible_damage,
-    stormDate: form.storm_date || form.hail_date || form.last_checked_on,
+    lastInspectionDate:
+      form.last_checked_on ||
+      form.last_inspection_date ||
+      form.storm_date ||
+      form.hail_date,
+    inspectorNotes: appointment.inspector_notes,
     qcStatus: lead.qc_status,
     inspectorStatus: appointment.inspection_status,
     clientStatus: appointment.client_status || appointment.canonical_status,
@@ -2383,6 +2500,15 @@ function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
         {value(row.lead?.notes)}
       </span>
     );
+  if (column === "inspectorNotes")
+    return (
+      <span
+        className="block max-w-[290px] truncate"
+        title={row.appointment?.inspector_notes || ""}
+      >
+        {value(row.appointment?.inspector_notes)}
+      </span>
+    );
   return value(inlineCellValue(row, column));
 }
 
@@ -2412,13 +2538,14 @@ function inlineCellPatches(
     insurance: "insurance",
     insuranceCarrier: "insurance_name",
     visibleDamage: "visible_damage",
-    stormDate: "storm_date",
+    lastInspectionDate: "last_checked_on",
   };
   const appointmentFields: Partial<Record<LeadColumnKey, string>> = {
     appointmentDate: "appointment_date",
     appointmentTime: "start_time",
     inspectorStatus: "inspection_status",
     clientStatus: "client_status",
+    inspectorNotes: "inspector_notes",
   };
 
   if (column === "status") {
@@ -2511,6 +2638,18 @@ function primaryStatus(row: Obj): string {
     row.appointment?.status ||
     "pending"
   );
+}
+function workflowProgressExport(row: Obj): string {
+  const appointment = row.appointment || {};
+  const clientStatus =
+    normalizeLeadDisposition(
+      appointment.client_status || appointment.canonical_status,
+    ) || "pending";
+  return [
+    `QC: ${leadStatusExportValue(row.lead?.qc_status || "pending")}`,
+    `Inspection: ${leadStatusExportValue(appointment.inspection_status || "not_started")}`,
+    `Client: ${leadStatusExportValue(clientStatus)}`,
+  ].join(" | ");
 }
 function displayCompanyName(companyName: unknown): string {
   return value(companyName);
