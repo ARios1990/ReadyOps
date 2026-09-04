@@ -48,6 +48,7 @@ import {
 import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
 import { useAuth } from "./AuthContext";
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
+import { composeAddress } from "./inspectorNote";
 
 // RPC records stay flexible while the migration preserves legacy portal fields.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1463,8 +1464,22 @@ function CompanyGroup({
                     </td>
                     <td className="font-bold">{row.lead.full_name}</td>
                     <td className="min-w-[320px] max-w-[460px] whitespace-normal break-words leading-5">
-                      {row.lead.address || "—"}
-<AppointmentWeatherBadge date={row.appointment.appointment_date} city={row.lead.city} state={row.lead.state} zip={row.lead.zip_code} />
+                      <div>
+                        {composeAddress({
+                          address: row.lead.address,
+                          city: row.lead.city,
+                          state: row.lead.state,
+                          zipCode: row.lead.zip_code,
+                        }) || "—"}
+                      </div>
+                      <div className="mt-1.5">
+                        <AppointmentWeatherBadge
+                          date={row.appointment.appointment_date}
+                          city={row.lead.city}
+                          state={row.lead.state}
+                          zip={row.lead.zip_code}
+                        />
+                      </div>
                     </td>
                     <td>
                       {row.agent?.name || row.lead.agent_name || "Unassigned"}
