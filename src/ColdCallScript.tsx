@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, ClipboardCopy, ShieldAlert, XOctagon } from 'lucide-react';
 import { getLane, LEAD_TYPE_OPTIONS, normalizeLeadType, renderScriptLine, type LeadType, type ScriptBlock } from './leadTypes';
+import type { CompanyCallScript } from './companyCallScripts';
 
 /**
  * The live cold-call script an agent works from, matched to the lane.
@@ -16,16 +17,19 @@ export function ColdCallScript({
   context = {},
   editable = true,
   defaultOpen = true,
+  customScript = null,
 }: {
   leadType?: string | null;
   onLeadTypeChange?: (value: LeadType) => void;
   context?: Record<string, unknown>;
   editable?: boolean;
   defaultOpen?: boolean;
+  customScript?: CompanyCallScript | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const lane = getLane(leadType);
   const active = normalizeLeadType(leadType);
+  const activeScript = customScript || lane;
 
   const fill = (line: string) => renderScriptLine(line, context);
 
@@ -40,10 +44,10 @@ export function ColdCallScript({
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           Call Script
         </button>
-        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${lane.badgeTone}`}>
-          {lane.shortLabel}
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${activeScript.badgeTone}`}>
+          {activeScript.shortLabel}
         </span>
-        {editable && (
+        {editable && !customScript && (
           <select
             value={active}
             onChange={event => onLeadTypeChange?.(event.target.value as LeadType)}
@@ -59,22 +63,22 @@ export function ColdCallScript({
       {open && (
         <div className="space-y-4 p-4">
           <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            <span className="font-bold text-slate-800">{lane.label}.</span> {lane.tagline}
+            <span className="font-bold text-slate-800">{activeScript.label}.</span> {activeScript.tagline}
             <br />
-            <span className="text-slate-500">List: {lane.listSource}</span>
+            <span className="text-slate-500">List: {activeScript.listSource}</span>
           </p>
 
-          <Block block={lane.script.opener} fill={fill} copyable />
-          <Block block={lane.script.qualify} fill={fill} copyable />
-          <Block block={lane.script.objections} fill={fill} />
-          <Block block={lane.script.close} fill={fill} copyable />
+          <Block block={activeScript.script.opener} fill={fill} copyable />
+          <Block block={activeScript.script.qualify} fill={fill} copyable />
+          <Block block={activeScript.script.objections} fill={fill} />
+          <Block block={activeScript.script.close} fill={fill} copyable />
 
           <div className="rounded-xl border border-red-200 bg-red-50 p-3">
             <h4 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-red-800">
               <XOctagon size={13} /> Disqualifiers
             </h4>
             <ul className="mt-2 space-y-1">
-              {lane.disqualifiers.map(item => (
+              {activeScript.disqualifiers.map(item => (
                 <li key={item} className="text-xs leading-5 text-red-900">• {fill(item)}</li>
               ))}
             </ul>
@@ -85,7 +89,7 @@ export function ColdCallScript({
               <ShieldAlert size={13} /> Do not say
             </h4>
             <ul className="mt-2 space-y-1">
-              {lane.complianceNotes.map(item => (
+              {activeScript.complianceNotes.map(item => (
                 <li key={item} className="text-xs leading-5 text-amber-900">• {item}</li>
               ))}
             </ul>

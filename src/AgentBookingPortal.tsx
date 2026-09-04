@@ -13,6 +13,7 @@ import {
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
 import { ColdCallScript } from "./ColdCallScript";
+import { getCompanyCallScript } from "./companyCallScripts";
 import { normalizeLeadType, type LeadType } from "./leadTypes";
 import {
   addDays,
@@ -614,6 +615,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
   const company = portal.company.company;
   const settings = portal.company.settings;
+  const companyCallScript = getCompanyCallScript(company.slug);
   const weekLabel = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
   const leadTemplate =
     typeof confirmation?.form_data?.lead_template === "string"
@@ -954,6 +956,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                   neighborhood: formValues.city,
                   company_name: company.name,
                 }}
+                customScript={companyCallScript}
               />
             </div>
             <DynamicLeadForm

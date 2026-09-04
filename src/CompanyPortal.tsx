@@ -9,7 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  CreditCard,
   Download,
+  Eye,
   ExternalLink,
   FileSpreadsheet,
   ImageUp,
@@ -25,9 +27,11 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  UploadCloud,
   UserRoundCheck,
   Users,
   UserX,
+  WalletCards,
   Clock3,
   X,
 } from "lucide-react";
@@ -175,6 +179,26 @@ interface SettingsRecord {
   external_form_url: string | null;
   external_prefill_map: Record<string, string>;
   external_submission_map: Record<string, string>;
+  stripe_payment_url: string | null;
+  paypal_payment_url: string | null;
+  other_payment_label: string | null;
+  other_payment_url: string | null;
+}
+
+interface PaymentReceipt {
+  id: string;
+  package_id: string | null;
+  amount: number;
+  payment_method: string;
+  reference: string | null;
+  notes: string | null;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  status: "pending" | "verified" | "rejected";
+  uploaded_by: string;
+  created_at: string;
+  reviewed_at: string | null;
 }
 interface CompanyPortalData {
   company: {
@@ -236,7 +260,7 @@ interface CompanyDashboardSummary {
 }
 
 type Tab = "overview" | "leads" | "setup" | "reports";
-type SetupTab = "locations" | "schedule" | "requirements" | "forms" | "reps";
+type SetupTab = "locations" | "schedule" | "requirements" | "forms" | "payments" | "reps";
 const DAY_NAMES = [
   "Sunday",
   "Monday",
@@ -354,6 +378,14 @@ export function CompanyPortal({
   );
   const [formSchema, setFormSchema] = useState<PortalFormSection[]>([]);
   const [prefillJson, setPrefillJson] = useState("{}");
+  const [paymentReceipts, setPaymentReceipts] = useState<PaymentReceipt[]>([]);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptDraft, setReceiptDraft] = useState({
+    amount: "",
+    payment_method: "Stripe",
+    reference: "",
+    notes: "",
+  });
   const [newRep, setNewRep] = useState({
     name: "",
     phone: "",
@@ -405,7 +437,7 @@ export function CompanyPortal({
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const [portalResult, dashboardResult] = await Promise.all([
+    const [portalResult, dashboardResult, receiptsResult] = await Promise.all([
       supabase.rpc("get_company_management_portal", {
         p_company_id: companyId,
         p_access_token: token,
@@ -413,6 +445,10 @@ export function CompanyPortal({
         p_end_date: windowEnd,
       }),
       supabase.rpc("get_company_management_dashboard_summary", {
+        p_company_id: companyId,
+        p_access_token: token,
+      }),
+      supabase.rpc("get_company_payment_receipts", {
         p_company_id: companyId,
         p_access_token: token,
       }),
@@ -433,6 +469,11 @@ export function CompanyPortal({
         dashboardResult.error
           ? null
           : (dashboardResult.data as CompanyDashboardSummary),
+      );
+      setPaymentReceipts(
+        receiptsResult.error
+          ? []
+          : ((receiptsResult.data || []) as PaymentReceipt[]),
       );
     }
     setLoading(false);
@@ -528,6 +569,93 @@ export function CompanyPortal({
       },
       "Form settings saved.",
     );
+  }
+
+  async function savePaymentLinks() {
+    if (!settingsDraft) return;
+    const urls = [
+      settingsDraft.stripe_payment_url,
+      settingsDraft.paypal_payment_url,
+      settingsDraft.other_payment_url,
+    ];
+    if (urls.some((url) => url && !/^https:\/\//i.test(url.trim()))) {
+      setError("Payment links must start with https://");
+      return;
+    }
+    if (settingsDraft.other_payment_url && !settingsDraft.other_payment_label?.trim()) {
+      setError("Add a label for the other payment method.");
+      return;
+    }
+    await saveSettings(
+      {
+        stripe_payment_url: settingsDraft.stripe_payment_url || "",
+        paypal_payment_url: settingsDraft.paypal_payment_url || "",
+        other_payment_label: settingsDraft.other_payment_label || "",
+        other_payment_url: settingsDraft.other_payment_url || "",
+      },
+      "Payment links saved.",
+    );
+  }
+
+  async function uploadPaymentReceipt() {
+    const amount = Number(receiptDraft.amount);
+    if (!receiptFile) {
+      setError("Choose a PDF or image receipt to upload.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter a valid payment amount.");
+      return;
+    }
+    if (!["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(receiptFile.type)) {
+      setError("Upload a PDF, PNG, JPG, or WebP receipt.");
+      return;
+    }
+    if (receiptFile.size > 10 * 1024 * 1024) {
+      setError("The receipt must be 10 MB or smaller.");
+      return;
+    }
+
+    const body = new FormData();
+    body.append("company_id", companyId);
+    body.append("access_token", token);
+    body.append("amount", String(amount));
+    body.append("payment_method", receiptDraft.payment_method);
+    body.append("reference", receiptDraft.reference);
+    body.append("notes", receiptDraft.notes);
+    if (dashboard?.active_package?.id) body.append("package_id", dashboard.active_package.id);
+    body.append("file", receiptFile);
+
+    setBusy(true);
+    setError("");
+    const { data: result, error: uploadError } = await supabase.functions.invoke(
+      "upload-company-payment-receipt",
+      { body },
+    );
+    if (uploadError || result?.error) {
+      setError(result?.error || rpcError(uploadError));
+    } else {
+      setReceiptFile(null);
+      setReceiptDraft({ amount: "", payment_method: "Stripe", reference: "", notes: "" });
+      notify("Payment receipt uploaded for review.");
+      await load();
+    }
+    setBusy(false);
+  }
+
+  async function openPaymentReceipt(receiptId: string) {
+    setBusy(true);
+    setError("");
+    const { data: result, error: openError } = await supabase.functions.invoke(
+      "company-payment-receipt-url",
+      { body: { company_id: companyId, access_token: token, receipt_id: receiptId } },
+    );
+    if (openError || result?.error || !result?.url) {
+      setError(result?.error || rpcError(openError) || "Unable to open the receipt.");
+    } else {
+      window.open(String(result.url), "_blank", "noopener,noreferrer");
+    }
+    setBusy(false);
   }
 
   async function saveRule(day: number, draft: Partial<ScheduleRule>) {
@@ -1341,6 +1469,7 @@ export function CompanyPortal({
                 ["schedule", "Schedule", CalendarDays],
                 ["requirements", "Requirements", ShieldCheck],
                 ["forms", "Forms", Clipboard],
+                ["payments", "Payments", WalletCards],
                 ["reps", "Representatives", Users],
               ] as [SetupTab, string, typeof CalendarDays][]
             ).map(([key, label, Icon]) => (
@@ -1553,6 +1682,208 @@ export function CompanyPortal({
                 >
                   Regenerate Private Company Link
                 </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === "setup" && setupTab === "payments" && (
+          <section className="space-y-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
+                    Secure checkout
+                  </p>
+                  <h2 className="mt-1 font-bold">Payment Methods</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                    Use hosted checkout links from Stripe, PayPal, or another provider. ReadyOps never stores card or bank credentials.
+                  </p>
+                </div>
+                {ownerAccess && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePaymentLinks()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    <Save size={15} /> Save Payment Links
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {settingsDraft.stripe_payment_url && (
+                  <a
+                    href={settingsDraft.stripe_payment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#635bff] px-4 py-3 text-sm font-black text-white shadow-sm hover:opacity-90"
+                  >
+                    <CreditCard size={16} /> Pay with Stripe <ExternalLink size={13} />
+                  </a>
+                )}
+                {settingsDraft.paypal_payment_url && (
+                  <a
+                    href={settingsDraft.paypal_payment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0070ba] px-4 py-3 text-sm font-black text-white shadow-sm hover:opacity-90"
+                  >
+                    <WalletCards size={16} /> Pay with PayPal <ExternalLink size={13} />
+                  </a>
+                )}
+                {settingsDraft.other_payment_url && (
+                  <a
+                    href={settingsDraft.other_payment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-700"
+                  >
+                    <WalletCards size={16} /> {settingsDraft.other_payment_label || "Other Payment"} <ExternalLink size={13} />
+                  </a>
+                )}
+              </div>
+
+              {!settingsDraft.stripe_payment_url && !settingsDraft.paypal_payment_url && !settingsDraft.other_payment_url && (
+                <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                  No hosted payment links have been configured yet.
+                </div>
+              )}
+
+              {ownerAccess && (
+                <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
+                  <TextField
+                    label="Stripe Payment Link"
+                    value={settingsDraft.stripe_payment_url || ""}
+                    onChange={(value) => setSettingsDraft({ ...settingsDraft, stripe_payment_url: value })}
+                  />
+                  <TextField
+                    label="PayPal Payment Link"
+                    value={settingsDraft.paypal_payment_url || ""}
+                    onChange={(value) => setSettingsDraft({ ...settingsDraft, paypal_payment_url: value })}
+                  />
+                  <TextField
+                    label="Other Payment Method Label"
+                    value={settingsDraft.other_payment_label || ""}
+                    onChange={(value) => setSettingsDraft({ ...settingsDraft, other_payment_label: value })}
+                  />
+                  <TextField
+                    label="Other Hosted Payment Link"
+                    value={settingsDraft.other_payment_url || ""}
+                    onChange={(value) => setSettingsDraft({ ...settingsDraft, other_payment_url: value })}
+                  />
+                  <p className="sm:col-span-2 text-xs text-slate-500">
+                    Paste HTTPS links created in your payment provider dashboard. Do not paste secret keys, passwords, or API credentials.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <span className="rounded-xl bg-blue-50 p-2 text-blue-700"><UploadCloud size={20} /></span>
+                  <div>
+                    <h2 className="font-bold">Upload Payment Receipt</h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Submit proof of payment for ReadyOps review. PDF, PNG, JPG, or WebP; maximum 10 MB.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 space-y-4">
+                  <TextField
+                    label="Amount Paid"
+                    value={receiptDraft.amount}
+                    onChange={(amount) => setReceiptDraft((current) => ({ ...current, amount }))}
+                    type="number"
+                  />
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Payment Method</label>
+                    <select
+                      value={receiptDraft.payment_method}
+                      onChange={(event) => setReceiptDraft((current) => ({ ...current, payment_method: event.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400"
+                    >
+                      {["Stripe", "PayPal", "Credit / Debit Card", "ACH / Bank Transfer", "Zelle", "Check", "Cash", "Other"].map((method) => (
+                        <option key={method}>{method}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <TextField
+                    label="Confirmation / Reference"
+                    value={receiptDraft.reference}
+                    onChange={(reference) => setReceiptDraft((current) => ({ ...current, reference }))}
+                  />
+                  <TextArea
+                    label="Notes"
+                    value={receiptDraft.notes}
+                    onChange={(notes) => setReceiptDraft((current) => ({ ...current, notes }))}
+                  />
+                  <label className="block rounded-xl border border-dashed border-blue-300 bg-blue-50 p-4 text-center text-sm font-bold text-blue-700 hover:bg-blue-100">
+                    <UploadCloud size={20} className="mx-auto mb-2" />
+                    {receiptFile ? receiptFile.name : "Choose receipt file"}
+                    <input
+                      key={receiptFile ? "receipt-selected" : "receipt-empty"}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      disabled={busy}
+                      onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy || !receiptFile}
+                    onClick={() => void uploadPaymentReceipt()}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                    Upload Receipt
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="font-bold">Receipt History</h2>
+                <p className="mt-1 text-xs text-slate-500">Receipt files are private and open through five-minute secure links.</p>
+                <div className="mt-4 space-y-3">
+                  {paymentReceipts.length ? paymentReceipts.map((receipt) => (
+                    <article key={receipt.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-900">{receipt.file_name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {receipt.payment_method} • {formatPackageMoney(receipt.amount)} • {new Date(receipt.created_at).toLocaleString()}
+                          </p>
+                          {receipt.reference && <p className="mt-1 text-xs text-slate-600">Reference: {receipt.reference}</p>}
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+                          receipt.status === "verified"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : receipt.status === "rejected"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700"
+                        }`}>
+                          {receipt.status}
+                        </span>
+                      </div>
+                      {receipt.notes && <p className="mt-2 text-xs leading-5 text-slate-600">{receipt.notes}</p>}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void openPaymentReceipt(receipt.id)}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <Eye size={13} /> View Receipt
+                      </button>
+                    </article>
+                  )) : (
+                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                      No payment receipts uploaded yet.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </section>
@@ -4541,10 +4872,12 @@ function TextField({
   label,
   value,
   onChange,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: string;
 }) {
   return (
     <div>
@@ -4552,6 +4885,7 @@ function TextField({
         {label}
       </label>
       <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
