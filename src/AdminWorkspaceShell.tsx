@@ -50,7 +50,7 @@ const MANAGER_MAIN_ITEMS: readonly SidebarItem[] = [
 ] as const;
 
 const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
-  ["staff", "People & Teams", UsersRound, "/#readyops-staff"],
+  ["staff", "Agents & Teams", UsersRound, "/#readyops-staff"],
   ["active-users", "Active Users", Wifi, "/admin/active-users"],
   ["reports", "Reports", BarChart3, "/?view=reports"],
   ["invoices", "Invoices", WalletCards, "/?view=invoices"],
@@ -258,6 +258,23 @@ export function AdminWorkspaceShell({
           </div>
           {children}
         </main>
+        <nav className="readyops-admin-mobile-nav" aria-label="Admin mobile navigation">
+          {MAIN_ITEMS.map(([key, label, Icon, path]) => (
+            <button
+              key={key}
+              type="button"
+              className={active === key ? "active" : ""}
+              onClick={() => navigate(path)}
+            >
+              <Icon size={19} />
+              <span>{key === "companies" ? "Companies" : label}</span>
+            </button>
+          ))}
+          <button type="button" onClick={() => setMobileOpen(true)}>
+            <Menu size={19} />
+            <span>More</span>
+          </button>
+        </nav>
       </div>
     </div>
   );
