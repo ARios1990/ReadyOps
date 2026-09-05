@@ -264,6 +264,29 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
   );
   const approved = visible.filter((item) => item.qc_status === "approved");
   const denied = visible.filter((item) => item.qc_status === "denied");
+  const inspectorStatuses = approved.map((item) =>
+    String(item.client_status || item.appointment_status || "pending")
+      .trim()
+      .toLowerCase(),
+  );
+  const goodCount = inspectorStatuses.filter((status) =>
+    ["good", "good_inspected", "inspected"].includes(status),
+  ).length;
+  const signedCount = inspectorStatuses.filter((status) =>
+    ["signed_contract", "signed contract", "sold"].includes(status),
+  ).length;
+  const badCount = inspectorStatuses.filter((status) =>
+    ["bad", "cancelled", "canceled", "lost"].includes(status),
+  ).length;
+  const noShowCount = inspectorStatuses.filter((status) =>
+    ["no_show", "no show"].includes(status),
+  ).length;
+  const rescheduledCount = inspectorStatuses.filter((status) =>
+    ["rescheduled", "reschedule"].includes(status),
+  ).length;
+  const inspectorPendingCount = inspectorStatuses.filter((status) =>
+    ["pending", "new", "assigned", "received"].includes(status),
+  ).length;
 
   if (loading && !data)
     return <State title="Loading your appointments..." loading />;
@@ -352,15 +375,25 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
             its appointment date; the pay date is the following Saturday.
           </p>
         </section>
-        <section id="agent-pay" className="readyops-agent-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Metric
-            label="Needs Correction"
-            value={corrections.length}
-            tone="orange"
+        <section id="agent-pay" className="readyops-agent-outcome-groups grid gap-3 lg:grid-cols-3">
+          <OutcomeGroup
+            label="Successful"
+            value={goodCount + signedCount}
+            tone="green"
+            items={[["Good", goodCount], ["Signed Contract", signedCount]]}
           />
-          <Metric label="QC Pending" value={pending.length} tone="amber" />
-          <Metric label="QC Approved" value={approved.length} tone="green" />
-          <Metric label="QC Denied" value={denied.length} tone="red" />
+          <OutcomeGroup
+            label="Unsuccessful"
+            value={badCount + noShowCount + denied.length}
+            tone="red"
+            items={[["Bad", badCount], ["No Show", noShowCount], ["QC Denied", denied.length]]}
+          />
+          <OutcomeGroup
+            label="Open / Follow-Up"
+            value={rescheduledCount + inspectorPendingCount + pending.length + corrections.length}
+            tone="amber"
+            items={[["Rescheduled", rescheduledCount], ["Pending", inspectorPendingCount + pending.length], ["Needs Correction", corrections.length]]}
+          />
         </section>
         <LeadSection
           id="agent-leads"
@@ -793,41 +826,42 @@ function MobileField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Metric({
+function OutcomeGroup({
   label,
   value,
   tone,
+  items,
 }: {
   label: string;
   value: number;
-  tone: string;
+  tone: "green" | "red" | "amber";
+  items: Array<[string, number]>;
 }) {
   const classes =
     tone === "green"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
       : tone === "red"
-        ? "border-red-200 bg-red-50 text-red-800"
-        : tone === "orange"
-          ? "border-orange-200 bg-orange-50 text-orange-800"
-          : "readyops-kpi-neutral border-slate-200 bg-white text-slate-800";
-  const Icon =
-    tone === "green"
-      ? CheckCircle2
-      : tone === "red"
-        ? XCircle
-        : tone === "orange"
-          ? AlertTriangle
-          : Clock3;
+        ? "border-red-200 bg-red-50 text-red-900"
+        : "border-amber-200 bg-amber-50 text-amber-950";
+  const Icon = tone === "green" ? CheckCircle2 : tone === "red" ? XCircle : Clock3;
   return (
-    <div className={`readyops-agent-metric relative min-h-[102px] rounded-2xl border p-4 ${classes}`}>
-      <Icon
-        size={31}
-        strokeWidth={1.8}
-        className="absolute right-4 top-1/2 -translate-y-1/2"
-      />
-      <p className="kpi-title max-w-[75%] uppercase tracking-wide">{label}</p>
-      <p className="kpi-number mt-1">{value}</p>
-    </div>
+    <article className={`readyops-agent-outcome-card rounded-2xl border p-4 ${classes}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="kpi-title uppercase tracking-wide">{label}</p>
+          <p className="kpi-number mt-1">{value}</p>
+        </div>
+        <Icon size={31} strokeWidth={1.8} />
+      </div>
+      <div className="mt-3 grid gap-1.5 border-t border-current/10 pt-3">
+        {items.map(([itemLabel, itemValue]) => (
+          <div key={itemLabel} className="flex items-center justify-between text-xs">
+            <span>{itemLabel}</span>
+            <strong>{itemValue}</strong>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 function btn(active: boolean) {
