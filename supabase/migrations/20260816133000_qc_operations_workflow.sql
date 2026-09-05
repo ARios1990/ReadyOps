@@ -12,7 +12,7 @@
   This repository marker documents the deployed feature set. The authoritative SQL definitions are present in the production Supabase migration history and database schema.
 
   Features include:
-  - QC Pending / Approved / Denied lead lifecycle
+  - QC Pending / QC Approved / QC Denied lead lifecycle
   - company visibility gated by QC approval
   - QC/admin lead editing and reassignment
   - company packages/payment tracking

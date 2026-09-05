@@ -32,7 +32,7 @@ BEGIN
   FOR UPDATE;
 
   IF v_lead.qc_status = 'approved' OR v_appt.company_visible_at IS NOT NULL THEN
-    RAISE EXCEPTION 'Approved or already-delivered leads cannot be deleted from QC';
+    RAISE EXCEPTION 'QC Approved or already-delivered leads cannot be deleted from QC';
   END IF;
 
   IF EXISTS (

@@ -54,7 +54,7 @@ BEGIN
   FOR UPDATE OF a;
 
   IF v_old.id IS NULL THEN
-    RAISE EXCEPTION 'Approved appointment not found';
+    RAISE EXCEPTION 'QC Approved appointment not found';
   END IF;
 
   v_client_status := CASE v_action

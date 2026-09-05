@@ -347,7 +347,7 @@ export function AdminReports({
               className="mt-1 w-full rounded-lg border p-2"
             >
               <option value="all">All Statuses</option>
-              <option value="approved">Approved</option>
+              <option value="approved">QC Approved</option>
               <option value="denied">QC Denied</option>
               <option value="good">Good</option>
               <option value="bad">Bad</option>
@@ -367,7 +367,7 @@ export function AdminReports({
       )}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-12">
         <Kpi label="Total Leads" value={metrics.total} />
-        <Kpi label="Approved" value={metrics.approved} />
+        <Kpi label="QC Approved" value={metrics.approved} />
         <Kpi label="QC Denied" value={metrics.denied} />
         <Kpi label="Good" value={metrics.good} />
         <Kpi label="Bad" value={metrics.bad} />
@@ -447,7 +447,7 @@ function CompanyTable({ rows }: { rows: Obj[] }) {
       headers={[
         "Company",
         "Delivered",
-        "Approved",
+        "QC Approved",
         "QC Denied",
         "Good",
         "Bad",
@@ -478,7 +478,7 @@ function AgentTable({ rows }: { rows: Obj[] }) {
         "Agent",
         "Team",
         "Leads",
-        "Approved",
+        "QC Approved",
         "QC Denied",
         "Good",
         "Bad",

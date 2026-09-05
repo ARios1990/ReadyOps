@@ -61,7 +61,7 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
 ] as const;
 
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
-  ['staff', 'People & Teams', UsersRound],
+  ['staff', 'Agents & Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['invoices', 'Invoices', WalletCards],
@@ -386,7 +386,7 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
               <MetricCard label="ACTIVE COMPANIES" value={metrics.companies} note={companyPortalsOnline ? `${companyPortalsOnline} using portal now` : 'No portal activity now'} icon={Building2} tone="blue" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations?status=active'; }}/>
               <MetricCard label="QC PENDING" value={metrics.qc} note={metrics.qc ? 'All leads awaiting review' : 'No items pending'} icon={ShieldCheck} tone="orange" loading={loadingOps} onClick={() => { window.location.href = '/qc?status=needs_review'; }}/>
               <MetricCard label="QC DENIED" value={outcomes.denied} note={outcomes.denied ? 'Last 30 days' : 'None in last 30 days'} icon={ShieldX} tone="red" loading={loadingOps} onClick={() => openReport('denied')}/>
-              <MetricCard label="APPROVED LEADS" value={metrics.approved} note="Delivered leads, all time" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
+              <MetricCard label="QC APPROVED LEADS" value={metrics.approved} note="Delivered leads, all time" icon={CheckCircle2} tone="green" loading={loadingOps} onClick={() => { window.location.href = '/admin/operations'; }}/>
               <MetricCard label="GOOD" value={outcomes.good} note="Last 30 days" icon={ThumbsUp} tone="green" loading={loadingOps} onClick={() => openReport('good')}/>
               <MetricCard label="SIGNED DEALS" value={outcomes.signed} note="Last 30 days" icon={Handshake} tone="purple" loading={loadingOps} onClick={() => openReport('signed_contract')}/>
               <MetricCard label="BAD" value={outcomes.bad} note="Last 30 days" icon={ThumbsDown} tone="red" loading={loadingOps} onClick={() => openReport('bad')}/>
@@ -397,7 +397,7 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
             </section>
 
             <section id="readyops-staff" className="readyops-ref-card readyops-ref-staff-card">
-              <div className="readyops-ref-card-heading"><h3>People & Teams</h3></div>
+              <div className="readyops-ref-card-heading"><h3>Agents & Teams</h3></div>
               <div className="readyops-ref-tabs">
                 <button className={staffTab === 'agents' ? 'active' : ''} onClick={() => setStaffTab('agents')}>All Agents</button>
                 <button className={staffTab === 'managers' ? 'active' : ''} onClick={() => setStaffTab('managers')}>Managers</button>

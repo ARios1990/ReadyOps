@@ -149,13 +149,13 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
           <Metric label="Agents" value={data.agents.length} />
           <Metric label="QC Pending" value={data.agents.reduce((sum, a) => sum + Number(a.qc_pending || 0), 0)} />
           <Metric label="Awaiting Final QC" value={data.agents.reduce((sum, a) => sum + Number(a.awaiting_final_qc || 0), 0)} />
-          <Metric label="Approved" value={data.agents.reduce((sum, a) => sum + Number(a.approved || 0), 0)} />
+          <Metric label="QC Approved" value={data.agents.reduce((sum, a) => sum + Number(a.approved || 0), 0)} />
           <Metric label="Companies" value={data.companies.filter(c => c.account_status === 'Active').length} />
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Open an agent's private lead portal to review QC pending, approved and denied leads.</p></div>
+            <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Open an agent's private lead portal to review QC pending, QC approved and QC denied leads.</p></div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..." className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400" />
           </div>
           <HorizontalScrollFrame
@@ -163,7 +163,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
             ariaLabel="Manager agents horizontal scroll"
           >
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-[#071525] text-[10px] uppercase tracking-wide text-white"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">Client Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
+              <thead className="bg-[#071525] text-[10px] uppercase tracking-wide text-white"><tr><th className="px-4 py-3 text-left">Agent</th><th className="px-3 py-3 text-left">Team</th><th className="px-3 py-3 text-center">Total</th><th className="px-3 py-3 text-center">QC Pending</th><th className="px-3 py-3 text-center">Awaiting Final</th><th className="px-3 py-3 text-center">QC Approved</th><th className="px-3 py-3 text-center">Denied</th><th className="px-4 py-3 text-right">Agent Portal Link</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAgents.map(agent => {
                   const agentLink = agent.portal_slug && agent.access_token

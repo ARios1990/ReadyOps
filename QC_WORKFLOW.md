@@ -15,7 +15,7 @@
 
 `/agent/:agentSlug/:token`
 
-Includes QC Pending, Approved, and QC Denied sections plus payroll filters. Payroll week is Sunday through Saturday based on appointment date; pay date is the following Saturday.
+Includes QC Pending, QC Approved, and QC Denied sections plus payroll filters. Payroll week is Sunday through Saturday based on appointment date; pay date is the following Saturday.
 
 ## Company onboarding
 

@@ -256,7 +256,7 @@ BEGIN
   FOR UPDATE OF appointment;
 
   IF v_old.id IS NULL THEN
-    RAISE EXCEPTION 'Approved appointment is not assigned to this representative';
+    RAISE EXCEPTION 'QC Approved appointment is not assigned to this representative';
   END IF;
 
   IF p_action = 'confirmed' THEN

@@ -621,7 +621,7 @@ export function AdminLeadCRM() {
               ["pending", "Pending QC"],
               ["in_review", "In Review"],
               ["manager_approved", "Awaiting Final QC"],
-              ["approved", "Approved"],
+              ["approved", "QC Approved"],
               ["needs_correction", "Needs Correction"],
               ["denied", "Denied"],
             ].map(([value, label]) => ({ value, label }))}
