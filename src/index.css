@@ -632,6 +632,73 @@ html[data-theme='dark'] .readyops-ref-actions button { color:#c5d0dd; }
 @media (max-width: 860px) { .readyops-ref-metrics{grid-template-columns:repeat(2,1fr)} .readyops-ref-main{padding:20px 16px}.readyops-ref-page-header{align-items:stretch;flex-direction:column}.readyops-ref-page-actions{justify-content:flex-start}.readyops-ref-topbar{padding:0 16px}.readyops-ref-top-actions{gap:6px}.readyops-ref-live,.readyops-ref-admin{display:none} .readyops-ref-sidebar{z-index:40;transform:translateX(-100%);width:220px}.readyops-ref-workspace{margin-left:0}.readyops-ref-shell{--ref-sidebar:0}.readyops-ref-shell.is-mobile-sidebar-open .readyops-ref-sidebar{transform:translateX(0)}.readyops-ref-shell.is-mobile-sidebar-open .readyops-ref-sidebar-backdrop{display:block}.readyops-sidebar-edge-toggle{display:none} }
 @media (max-width: 600px) { .readyops-ref-metrics{grid-template-columns:1fr}.readyops-ref-search{width:100%}.readyops-ref-toolbar{align-items:stretch;flex-direction:column}.readyops-ref-toolbar .ml-auto{margin-left:0;width:100%}.readyops-ref-user>span:not(.readyops-ref-avatar){display:none}.readyops-ref-watermark{display:none} }
 
+.readyops-admin-mobile-nav,
+.readyops-agent-mobile-nav { display:none; }
+
+/* Premium responsive shell shared by the role portals. */
+.readyops-ref-main { max-width: 1720px; margin-inline: auto; }
+.readyops-ref-card,
+.readyops-ref-metric,
+.readyops-agent-section,
+.readyops-company-portal :is(section, article).bg-white,
+.readyops-representative-portal article {
+  border-radius: 18px;
+  box-shadow: 0 14px 38px rgba(15, 35, 60, .075);
+}
+.readyops-ref-primary,
+.readyops-ref-green,
+.readyops-ref-purple,
+.readyops-ref-manage { border-radius: 10px; box-shadow: 0 8px 20px rgba(7, 95, 247, .16); }
+
+.readyops-representative-portal {
+  background: radial-gradient(circle at 20% 0%, rgba(7,95,247,.06), transparent 28rem), #f7f9fc;
+  font-family: "Inter", Arial, sans-serif;
+}
+
+.readyops-agent-mobile-cards { padding: 12px; background: #f4f7fb; }
+.readyops-agent-mobile-card {
+  margin-bottom: 10px; padding: 14px; border: 1px solid #dce5ef; border-radius: 16px;
+  background: #fff; box-shadow: 0 8px 22px rgba(6,21,43,.06);
+}
+.readyops-agent-mobile-card:last-child { margin-bottom: 0; }
+
+@media (max-width: 860px) {
+  .readyops-ref-main { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .readyops-ref-topbar { height: 62px; }
+  .readyops-ref-page-header { margin-bottom: 14px; }
+  .readyops-ref-page-header h2 { font-size: 20px; }
+  .readyops-admin-mobile-nav {
+    position: fixed; z-index: 55; inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    display: grid; grid-template-columns: repeat(5, 1fr); min-height: 64px; padding: 7px;
+    border: 1px solid rgba(255,255,255,.13); border-radius: 19px;
+    background: rgba(6,21,43,.96); box-shadow: 0 18px 45px rgba(6,21,43,.28); backdrop-filter: blur(18px);
+  }
+  .readyops-admin-mobile-nav button,
+  .readyops-agent-mobile-nav a {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; border-radius: 12px; color: #b9c8d9; font-size: 9px; font-weight: 750;
+  }
+  .readyops-admin-mobile-nav button.active { color: #fff; background: #075ff7; }
+}
+
+@media (max-width: 639px) {
+  .readyops-agent-header img { max-width: 112px; }
+  .readyops-agent-metrics { gap: 8px; }
+  .readyops-agent-metric { min-height: 88px !important; padding: 12px !important; }
+  .readyops-agent-metric svg { width: 25px; height: 25px; right: 12px; }
+  .readyops-agent-section { border-radius: 16px !important; scroll-margin-top: 145px; }
+  .readyops-agent-section > div:first-child { padding: 12px; }
+  .readyops-agent-mobile-nav {
+    position: fixed; z-index: 45; inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    display: grid; grid-template-columns: repeat(4, 1fr); min-height: 64px; padding: 7px;
+    border: 1px solid rgba(255,255,255,.13); border-radius: 19px;
+    background: rgba(6,21,43,.97); box-shadow: 0 18px 45px rgba(6,21,43,.3); backdrop-filter: blur(18px);
+  }
+  .readyops-agent-mobile-nav a:first-child { color: #fff; background: #075ff7; }
+  .readyops-representative-portal article { padding: 14px; border-radius: 16px; }
+  .readyops-representative-portal article .grid.grid-cols-2 { grid-template-columns: 1fr 1fr; }
+}
+
 
 /* Cross-portal contrast and table-structure parity. */
 .readyops-brand-header .readyops-solid-action,
