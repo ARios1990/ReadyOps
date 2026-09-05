@@ -185,7 +185,7 @@ export function RepresentativePortal({ token }: { token: string }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="readyops-representative-portal min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
@@ -203,7 +203,7 @@ export function RepresentativePortal({ token }: { token: string }) {
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl space-y-4 px-4 py-5 sm:px-6">
+      <main id="rep-leads" className="mx-auto max-w-5xl space-y-4 px-4 pb-24 pt-5 sm:px-6 sm:pb-8">
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
