@@ -3524,6 +3524,13 @@ function CompanyAppointmentsDashboard({
               onClick={() => openLeads("no_show")}
             />
             <PerformanceCard
+              tone="red"
+              label="Bad"
+              value={performance.bad_leads}
+              icon={<AlertTriangle size={18} />}
+              onClick={() => openLeads("bad")}
+            />
+            <PerformanceCard
               tone="orange"
               label="Rescheduled"
               value={rescheduled}

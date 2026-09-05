@@ -11,8 +11,12 @@ import {
   EyeOff,
   ExternalLink,
   Loader2,
+  LayoutDashboard,
+  ListChecks,
+  PlusCircle,
   RefreshCw,
   Send,
+  WalletCards,
   X,
   XCircle,
 } from "lucide-react";
@@ -300,7 +304,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-[1500px] space-y-5 px-3 pb-8 pt-4 sm:px-6 sm:py-5">
+      <main id="agent-home" className="mx-auto max-w-[1500px] space-y-5 px-3 pb-24 pt-4 sm:px-6 sm:py-5">
         {message && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             <CheckCircle2 size={17} />
@@ -348,17 +352,18 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
             its appointment date; the pay date is the following Saturday.
           </p>
         </section>
-        <section className="readyops-agent-metrics grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section id="agent-pay" className="readyops-agent-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
             label="Needs Correction"
             value={corrections.length}
             tone="orange"
           />
           <Metric label="QC Pending" value={pending.length} tone="amber" />
-          <Metric label="Approved" value={approved.length} tone="green" />
+          <Metric label="QC Approved" value={approved.length} tone="green" />
           <Metric label="QC Denied" value={denied.length} tone="red" />
         </section>
         <LeadSection
+          id="agent-leads"
           title="Needs Correction"
           description="Open the original lead, make the changes requested by QC, and submit the same lead again."
           rows={corrections}
@@ -377,7 +382,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           onToggle={() => toggleSection("pending")}
         />
         <LeadSection
-          title="Booked / Approved Appointments"
+          title="QC Approved Appointments"
           description="QC approved. The company can now see and work these appointments."
           rows={approved}
           onOpenCorrection={openCorrection}
@@ -394,7 +399,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           open={sectionOpen.denied}
           onToggle={() => toggleSection("denied")}
         />
-        <section className="readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <section id="agent-book" className="readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
             <div>
               <h2 className="section-title">Other Appointments</h2>
@@ -434,6 +439,12 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
           )}
         </section>
       </main>
+      <nav className="readyops-agent-mobile-nav" aria-label="Agent mobile navigation">
+        <a href="#agent-home"><LayoutDashboard size={19} /><span>Home</span></a>
+        <a href="#agent-leads"><ListChecks size={19} /><span>Leads</span></a>
+        <a href="#agent-book"><PlusCircle size={19} /><span>Book</span></a>
+        <a href="#agent-pay"><WalletCards size={19} /><span>Pay</span></a>
+      </nav>
       {correctionLead && (
         <CorrectionModal
           row={correctionLead}
@@ -599,6 +610,7 @@ function SectionToggle({
 }
 
 function LeadSection({
+  id,
   title,
   description,
   rows,
@@ -607,6 +619,7 @@ function LeadSection({
   open,
   onToggle,
 }: {
+  id?: string;
   title: string;
   description: string;
   rows: LeadRow[];
@@ -624,7 +637,7 @@ function LeadSection({
           ? "border-orange-300"
           : "border-amber-300";
   return (
-    <section className={`readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
+    <section id={id} className={`readyops-agent-section overflow-hidden rounded-2xl border bg-white shadow-sm ${borderTone}`}>
       <div className="flex items-start justify-between gap-3 border-b border-[#17314d] bg-[#071525] px-4 py-3 text-white">
         <div>
           <h2 className="section-title">
@@ -645,9 +658,43 @@ function LeadSection({
           No appointments in this section.
         </div>
       ) : (
-        <HorizontalScrollFrame
-          ariaLabel={`${title} appointments horizontal scroll`}
-        >
+        <>
+          <div className="readyops-agent-mobile-cards md:hidden">
+            {rows.map((row) => {
+              const inspectorStatus = row.client_status || row.appointment_status || "pending";
+              return (
+                <article key={row.lead_id} className="readyops-agent-mobile-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-extrabold text-slate-950">{row.company_name}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-700">{row.name}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${leadStatusClasses(row.qc_status)}`}>
+                      {row.qc_status === "approved" ? "QC Approved" : leadStatusLabel(row.qc_status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600">
+                    <a className="font-semibold text-blue-700" href={`tel:${row.phone}`}>{row.phone}</a>
+                    <p>{row.address}</p>
+                    <p><strong>{formatDateLong(row.appointment_date)}</strong> · <span className="text-blue-700">{formatTime(row.start_time)}</span></p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <MobileField label="Inspector Status" value={leadStatusLabel(inspectorStatus)} />
+                    <MobileField label="Pay Date" value={row.pay_date || "—"} />
+                    <MobileField label="Inspector Notes" value={row.inspector_notes || "No update yet"} />
+                    <MobileField label="QC Notes" value={row.qc_reason || "No QC note"} />
+                  </div>
+                  {row.qc_status === "needs_correction" && (
+                    <button type="button" onClick={() => onOpenCorrection(row)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-3 text-xs font-bold text-white">
+                      <Edit3 size={14} /> Open & Correct
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden md:block">
+            <HorizontalScrollFrame ariaLabel={`${title} appointments horizontal scroll`}>
           <table className="readyops-agent-table w-full min-w-[1100px] text-sm">
             <thead className="table-header bg-[#0b223a] text-white">
               <tr className="text-left text-[10px] uppercase tracking-wide">
@@ -656,8 +703,10 @@ function LeadSection({
                 <th>Phone</th>
                 <th>Address</th>
                 <th>Appointment</th>
-                <th>Status</th>
-                <th>Inspector Notes / QC Reason</th>
+                <th>QC Status</th>
+                <th>Inspector Status</th>
+                <th>Inspector Notes</th>
+                <th>QC Notes</th>
                 <th>Payroll</th>
                 <th className="pr-3 text-right">Action</th>
               </tr>
@@ -688,25 +737,16 @@ function LeadSection({
                   </td>
                   <td>
                     <span
-                      className={`inline-flex rounded-md border px-2.5 py-1 text-[10px] font-black ${leadStatusClasses(row.qc_status === "approved" ? row.client_status || row.appointment_status || "pending" : row.qc_status)}`}
+                      className={`inline-flex rounded-md border px-2.5 py-1 text-[10px] font-black ${leadStatusClasses(row.qc_status)}`}
                     >
-                      {leadStatusLabel(
-                        row.qc_status === "approved"
-                          ? row.client_status ||
-                              row.appointment_status ||
-                              "pending"
-                          : row.qc_status,
-                      )}
+                      {row.qc_status === "approved" ? "QC Approved" : leadStatusLabel(row.qc_status)}
                     </span>
                   </td>
+                  <td><span className={`inline-flex rounded-md border px-2.5 py-1 text-[10px] font-black ${leadStatusClasses(row.client_status || row.appointment_status || "pending")}`}>{leadStatusLabel(row.client_status || row.appointment_status || "pending")}</span></td>
                   <td className="max-w-[260px] text-xs text-slate-600">
-                    {["denied", "needs_correction"].includes(row.qc_status)
-                      ? row.qc_reason ||
-                        (row.qc_status === "denied"
-                          ? "QC denied"
-                          : "Correction requested")
-                      : row.inspector_notes || "—"}
+                    {row.inspector_notes || "—"}
                   </td>
+                  <td className="max-w-[260px] text-xs text-slate-600">{row.qc_reason || "—"}</td>
                   <td className="text-xs">
                     <div>
                       {row.payroll_week_start} → {row.payroll_week_end}
@@ -736,9 +776,20 @@ function LeadSection({
               ))}
             </tbody>
           </table>
-        </HorizontalScrollFrame>
+            </HorizontalScrollFrame>
+          </div>
+        </>
       )}
     </section>
+  );
+}
+
+function MobileField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-2.5">
+      <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 break-words text-xs font-semibold text-slate-700">{value}</p>
+    </div>
   );
 }
 
