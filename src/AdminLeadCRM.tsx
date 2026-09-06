@@ -20,6 +20,7 @@ import {
   History,
   Home,
   LockKeyhole,
+  Unlock,
   Loader2,
   Pencil,
   RefreshCw,
@@ -101,11 +102,10 @@ type LeadColumnDefinition = {
   label: string;
   width: number;
   editable?: boolean;
-  locked?: boolean;
 };
 
 const LEAD_COLUMNS: LeadColumnDefinition[] = [
-  { key: "leadId", label: "Lead ID", width: 126, locked: true },
+  { key: "leadId", label: "Lead ID", width: 126 },
   { key: "agent", label: "Agent", width: 155, editable: true },
   { key: "status", label: "Overall Status", width: 145, editable: true },
   { key: "homeownerName", label: "Homeowner Name", width: 180, editable: true },
@@ -130,13 +130,14 @@ const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "visibleDamage", label: "Visible Damage", width: 150, editable: true },
   { key: "source", label: "Source", width: 155, editable: true },
   { key: "notes", label: "Notes", width: 300, editable: true },
-  { key: "actions", label: "Actions", width: 100, locked: true },
+  { key: "actions", label: "Actions", width: 100 },
 ];
 
 const LEAD_COLUMN_MAP = new Map(
   LEAD_COLUMNS.map((column) => [column.key, column]),
 );
 const DEFAULT_LEAD_COLUMN_ORDER = LEAD_COLUMNS.map((column) => column.key);
+const DEFAULT_LOCKED_COLUMNS: LeadColumnKey[] = ["leadId"];
 const COLUMN_PREFERENCES_STORAGE_KEY = "readyops-admin-lead-columns-v1";
 
 type EditingCell = {
@@ -176,8 +177,11 @@ export function AdminLeadCRM() {
   const [hiddenColumns, setHiddenColumns] = useState<Set<LeadColumnKey>>(
     () => new Set(loadColumnPreferences().hidden),
   );
+  const [lockedColumns, setLockedColumns] = useState<Set<LeadColumnKey>>(
+    () => new Set(loadColumnPreferences().locked),
+  );
   const [columnPanel, setColumnPanel] = useState<
-    "visibility" | "order" | null
+    "visibility" | "order" | "lock" | null
   >(null);
   const [draggedColumn, setDraggedColumn] = useState<LeadColumnKey | null>(
     null,
@@ -240,9 +244,13 @@ export function AdminLeadCRM() {
   useEffect(() => {
     window.localStorage.setItem(
       COLUMN_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({ order: columnOrder, hidden: [...hiddenColumns] }),
+      JSON.stringify({
+        order: columnOrder,
+        hidden: [...hiddenColumns],
+        locked: [...lockedColumns],
+      }),
     );
-  }, [columnOrder, hiddenColumns]);
+  }, [columnOrder, hiddenColumns, lockedColumns]);
   useEffect(() => {
     const channel = supabase
       .channel("readyops-admin-crm-live")
@@ -288,6 +296,17 @@ export function AdminLeadCRM() {
         .filter((column): column is LeadColumnDefinition => Boolean(column)),
     [columnOrder, hiddenColumns],
   );
+  const lockedColumnOffsets = useMemo(() => {
+    const offsets = new Map<LeadColumnKey, number>();
+    let left = 0;
+    visibleColumns.forEach((column) => {
+      if (column.key !== "actions" && lockedColumns.has(column.key)) {
+        offsets.set(column.key, left);
+        left += column.width;
+      }
+    });
+    return offsets;
+  }, [visibleColumns, lockedColumns]);
 
   async function openDetail(leadId: string, edit = false) {
     setSelectedId(leadId);
@@ -409,12 +428,38 @@ export function AdminLeadCRM() {
 
   function toggleColumn(column: LeadColumnKey) {
     if (column === "leadId" || column === "actions") return;
+    const willHide = !hiddenColumns.has(column);
     setHiddenColumns((current) => {
       const next = new Set(current);
-      if (next.has(column)) next.delete(column);
-      else next.add(column);
+      if (willHide) next.add(column);
+      else next.delete(column);
       return next;
     });
+    if (willHide) {
+      setLockedColumns((current) => {
+        const next = new Set(current);
+        next.delete(column);
+        return next;
+      });
+    }
+  }
+
+  function toggleColumnLock(column: LeadColumnKey) {
+    if (column === "actions") return;
+    const willLock = !lockedColumns.has(column);
+    setLockedColumns((current) => {
+      const next = new Set(current);
+      if (willLock) next.add(column);
+      else next.delete(column);
+      return next;
+    });
+    if (willLock) {
+      setHiddenColumns((current) => {
+        const next = new Set(current);
+        next.delete(column);
+        return next;
+      });
+    }
   }
 
   function moveColumn(sourceColumn: LeadColumnKey, targetColumn: LeadColumnKey) {
@@ -439,6 +484,7 @@ export function AdminLeadCRM() {
   function resetColumns() {
     setColumnOrder([...DEFAULT_LEAD_COLUMN_ORDER]);
     setHiddenColumns(new Set());
+    setLockedColumns(new Set(DEFAULT_LOCKED_COLUMNS));
     setDraggedColumn(null);
   }
 
@@ -741,12 +787,27 @@ export function AdminLeadCRM() {
               >
                 <Columns3 size={14} /> Reorder Columns
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setColumnPanel((current) =>
+                    current === "lock" ? null : "lock",
+                  )
+                }
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition ${
+                  columnPanel === "lock"
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                <LockKeyhole size={14} /> Lock / Unlock Columns
+              </button>
               {columnPanel && (
                 <div className="absolute right-0 top-11 z-50 w-[330px] overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-2xl">
                   <div className="border-b bg-slate-50 px-4 py-3">
                     <p className="font-black text-slate-900">Customize Columns</p>
                     <p className="mt-0.5 text-[10px] font-medium text-slate-500">
-                      Drag to reorder. Use the eye to show or hide a column.
+                      Drag to reorder. Show, hide, lock, or unlock each column.
                     </p>
                   </div>
                   <div className="max-h-[420px] overflow-y-auto p-2">
@@ -757,6 +818,7 @@ export function AdminLeadCRM() {
                         if (!column) return null;
                         const leadIdColumn = key === "leadId";
                         const hidden = hiddenColumns.has(key);
+                        const locked = lockedColumns.has(key);
                         return (
                           <div
                             key={key}
@@ -797,6 +859,25 @@ export function AdminLeadCRM() {
                                 </small>
                               )}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleColumnLock(key)}
+                              aria-label={`${locked ? "Unlock" : "Lock"} ${column.label}`}
+                              title={
+                                locked
+                                  ? `Unlock ${column.label}`
+                                  : `Keep ${column.label} visible while scrolling`
+                              }
+                              className={`rounded-md p-1.5 hover:bg-blue-100 ${
+                                locked ? "text-blue-700" : "text-slate-400"
+                              }`}
+                            >
+                              {locked ? (
+                                <LockKeyhole size={14} />
+                              ) : (
+                                <Unlock size={14} />
+                              )}
+                            </button>
                             <button
                               type="button"
                               disabled={leadIdColumn}
@@ -875,32 +956,36 @@ export function AdminLeadCRM() {
             >
               <thead className="readyops-lead-spreadsheet-columns sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  {visibleColumns.map((column) => (
-                    <th
-                      key={column.key}
-                      style={{
-                        width: column.width,
-                        minWidth: column.width,
-                        maxWidth: column.width,
-                      }}
-                      className={`whitespace-nowrap border-b px-3 py-3 ${
-                        column.key === "leadId"
-                          ? "sticky left-0 z-40 border-r bg-slate-50 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)]"
-                          : column.key === "actions"
-                            ? "sticky right-0 z-40 border-l bg-slate-50"
-                            : ""
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        {column.label}
-                        {column.key === "leadId" ? (
-                          <LockKeyhole size={11} className="opacity-60" />
-                        ) : column.editable ? (
-                          <Pencil size={10} className="opacity-45" />
-                        ) : null}
-                      </span>
-                    </th>
-                  ))}
+                  {visibleColumns.map((column) => {
+                    const lockedLeft = lockedColumnOffsets.get(column.key);
+                    return (
+                      <th
+                        key={column.key}
+                        style={{
+                          width: column.width,
+                          minWidth: column.width,
+                          maxWidth: column.width,
+                          left: lockedLeft,
+                        }}
+                        className={`whitespace-nowrap border-b px-3 py-3 ${
+                          lockedLeft !== undefined
+                            ? "sticky z-40 border-r bg-slate-50 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)]"
+                            : column.key === "actions"
+                              ? "sticky right-0 z-40 border-l bg-slate-50"
+                              : ""
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {column.label}
+                          {lockedLeft !== undefined ? (
+                            <LockKeyhole size={11} className="opacity-60" />
+                          ) : column.editable ? (
+                            <Pencil size={10} className="opacity-45" />
+                          ) : null}
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -909,6 +994,7 @@ export function AdminLeadCRM() {
                     key={row.lead.id}
                     row={row}
                     columns={visibleColumns}
+                    lockedColumnOffsets={lockedColumnOffsets}
                     editingCell={editingCell}
                     savingKey={inlineSaving}
                     agents={references.agents}
@@ -964,6 +1050,7 @@ export function AdminLeadCRM() {
 function LeadRow({
   row,
   columns,
+  lockedColumnOffsets,
   editingCell,
   savingKey,
   agents,
@@ -977,6 +1064,7 @@ function LeadRow({
 }: {
   row: Obj;
   columns: LeadColumnDefinition[];
+  lockedColumnOffsets: Map<LeadColumnKey, number>;
   editingCell: EditingCell | null;
   savingKey: string;
   agents: Obj[];
@@ -995,6 +1083,7 @@ function LeadRow({
           key={column.key}
           row={row}
           column={column}
+          lockedLeft={lockedColumnOffsets.get(column.key)}
           editingCell={editingCell}
           saving={
             column.key === "workflowProgress"
@@ -1018,6 +1107,7 @@ function LeadRow({
 function LeadSpreadsheetCell({
   row,
   column,
+  lockedLeft,
   editingCell,
   saving,
   agents,
@@ -1031,6 +1121,7 @@ function LeadSpreadsheetCell({
 }: {
   row: Obj;
   column: LeadColumnDefinition;
+  lockedLeft?: number;
   editingCell: EditingCell | null;
   saving: boolean;
   agents: Obj[];
@@ -1065,9 +1156,13 @@ function LeadSpreadsheetCell({
           ...baseOptions,
         ]
       : baseOptions;
+  const locked = lockedLeft !== undefined;
+  const stickyStyle = locked ? { left: lockedLeft } : undefined;
   const cellClasses = `${
-    column.key === "leadId"
-      ? "sticky left-0 z-20 border-r bg-white font-black text-blue-700 shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)] group-hover:bg-blue-50"
+    column.key === "leadId" ? "font-black text-blue-700" : ""
+  } ${
+    locked
+      ? "sticky z-20 border-r bg-white shadow-[5px_0_8px_-6px_rgba(15,23,42,0.55)] group-hover:bg-blue-50"
       : column.key === "actions"
         ? "sticky right-0 z-10 border-l bg-white group-hover:bg-blue-50"
         : ""
@@ -1075,7 +1170,7 @@ function LeadSpreadsheetCell({
 
   if (column.key === "leadId") {
     return (
-      <td className={cellClasses}>
+      <td className={cellClasses} style={stickyStyle}>
         <button
           type="button"
           onClick={onOpen}
@@ -1090,7 +1185,7 @@ function LeadSpreadsheetCell({
 
   if (column.key === "actions") {
     return (
-      <td className={cellClasses}>
+      <td className={cellClasses} style={stickyStyle}>
         <button
           type="button"
           onClick={onEdit}
@@ -1104,7 +1199,7 @@ function LeadSpreadsheetCell({
 
   if (column.key === "workflowProgress") {
     return (
-      <td className={cellClasses}>
+      <td className={cellClasses} style={stickyStyle}>
         <WorkflowProgressCell
           row={row}
           saving={saving}
@@ -1118,7 +1213,7 @@ function LeadSpreadsheetCell({
     const fieldClass =
       "h-9 w-full min-w-0 rounded-md border border-blue-400 bg-white px-2 text-xs font-semibold text-slate-900 outline-none ring-2 ring-blue-100";
     return (
-      <td className={cellClasses}>
+      <td className={cellClasses} style={stickyStyle}>
         <div className="relative min-w-0">
           {options ? (
             <select
@@ -1173,7 +1268,11 @@ function LeadSpreadsheetCell({
   }
 
   return (
-    <td className={cellClasses} title={editable ? "Click to edit" : undefined}>
+    <td
+      className={cellClasses}
+      style={stickyStyle}
+      title={editable ? "Click to edit" : undefined}
+    >
       <button
         type="button"
         disabled={!editable || saving}
@@ -2311,16 +2410,18 @@ function HeroValue({
 function loadColumnPreferences(): {
   order: LeadColumnKey[];
   hidden: LeadColumnKey[];
+  locked: LeadColumnKey[];
 } {
   const fallback = {
     order: [...DEFAULT_LEAD_COLUMN_ORDER],
     hidden: [] as LeadColumnKey[],
+    locked: [...DEFAULT_LOCKED_COLUMNS],
   };
   if (typeof window === "undefined") return fallback;
   try {
     const parsed = JSON.parse(
       window.localStorage.getItem(COLUMN_PREFERENCES_STORAGE_KEY) || "{}",
-    ) as { order?: unknown; hidden?: unknown };
+    ) as { order?: unknown; hidden?: unknown; locked?: unknown };
     const known = new Set(DEFAULT_LEAD_COLUMN_ORDER);
     const storedOrder = Array.isArray(parsed.order)
       ? parsed.order.filter(
@@ -2345,9 +2446,19 @@ function loadColumnPreferences(): {
             key !== "actions",
         )
       : [];
+    const locked = Array.isArray(parsed.locked)
+      ? parsed.locked.filter(
+          (key): key is LeadColumnKey =>
+            typeof key === "string" &&
+            known.has(key as LeadColumnKey) &&
+            key !== "actions" &&
+            !hidden.includes(key as LeadColumnKey),
+        )
+      : [...DEFAULT_LOCKED_COLUMNS];
     return {
       order: ["leadId", ...uniqueOrder, ...missing, "actions"],
       hidden: [...new Set(hidden)],
+      locked: [...new Set(locked)],
     };
   } catch {
     return fallback;
