@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Building2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -112,7 +113,6 @@ const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "phone", label: "Phone", width: 135, editable: true },
   { key: "address", label: "Address", width: 260, editable: true },
   { key: "appointmentDate", label: "Appointment Date", width: 150, editable: true },
-  { key: "company", label: "Company", width: 190, editable: true },
   { key: "roofAge", label: "Roof Age", width: 115, editable: true },
   { key: "roofType", label: "Roof Type", width: 130, editable: true },
   { key: "lastInspectionDate", label: "Last Inspection Date", width: 165, editable: true },
@@ -130,7 +130,7 @@ const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "visibleDamage", label: "Visible Damage", width: 150, editable: true },
   { key: "source", label: "Source", width: 155, editable: true },
   { key: "notes", label: "Notes", width: 300, editable: true },
-  { key: "actions", label: "Actions", width: 100 },
+  { key: "actions", label: "Company / Actions", width: 250 },
 ];
 
 const LEAD_COLUMN_MAP = new Map(
@@ -1184,15 +1184,47 @@ function LeadSpreadsheetCell({
   }
 
   if (column.key === "actions") {
+    const companyId = String(row.company?.id || row.lead?.company_id || "");
+    const companyName = displayCompanyName(row.company?.name);
     return (
       <td className={cellClasses} style={stickyStyle}>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
-        >
-          <Pencil size={12} /> Edit
-        </button>
+        <div className="min-w-0 space-y-2">
+          <div
+            className="flex min-w-0 items-center gap-1.5 font-black text-slate-800"
+            title={companyName}
+          >
+            <Building2 size={13} className="shrink-0 text-blue-500" />
+            <span className="truncate">{companyName}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {companyId ? (
+              <a
+                href={`/admin/operations?company=${encodeURIComponent(companyId)}`}
+                className="inline-flex h-8 items-center justify-center rounded-md border border-emerald-500/40 bg-emerald-50 px-3 text-[11px] font-black text-emerald-700 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              >
+                Company
+              </a>
+            ) : (
+              <span className="inline-flex h-8 cursor-not-allowed items-center justify-center rounded-md border bg-slate-100 px-3 text-[11px] font-black text-slate-400">
+                Company
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-blue-600 px-3 text-[11px] font-black text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={onOpen}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-slate-800 px-3 text-[11px] font-black text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            >
+              View
+            </button>
+          </div>
+        </div>
       </td>
     );
   }
