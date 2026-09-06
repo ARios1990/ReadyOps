@@ -108,7 +108,7 @@ type LeadColumnDefinition = {
 const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "leadId", label: "Lead ID", width: 126 },
   { key: "agent", label: "Agent", width: 155, editable: true },
-  { key: "status", label: "Overall Status", width: 145, editable: true },
+  { key: "status", label: "Overall Status", width: 175, editable: true },
   { key: "homeownerName", label: "Homeowner Name", width: 180, editable: true },
   { key: "phone", label: "Phone", width: 135, editable: true },
   { key: "address", label: "Address", width: 260, editable: true },
@@ -2614,7 +2614,25 @@ function inlineCellValue(row: Obj, column: LeadColumnKey): string {
 }
 
 function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
-  if (column === "status") return <Status value={primaryStatus(row)} />;
+  if (column === "status") {
+    const inspectorNote = String(
+      row.appointment?.inspector_notes || "",
+    ).trim();
+    return (
+      <div className="flex min-w-0 flex-col items-start gap-1.5">
+        <Status value={primaryStatus(row)} />
+        {inspectorNote && (
+          <span
+            className="line-clamp-2 w-full whitespace-normal text-[10px] font-medium leading-4 text-slate-500"
+            title={`Inspector note: ${inspectorNote}`}
+          >
+            <span className="font-black text-slate-600">Inspector note: </span>
+            {inspectorNote}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (column === "qcStatus") return <Status value={row.lead?.qc_status} />;
   if (column === "inspectorStatus")
     return <Status value={row.appointment?.inspection_status} />;
