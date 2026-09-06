@@ -72,6 +72,33 @@ export function formatTime(value: string): string {
   return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
 
+export function formatRoofAge(value: unknown): string {
+  const text = normalizeRoofAgeInput(value);
+  if (!text) return '—';
+  if (/^\d+(?:\.\d+)?$/.test(text)) {
+    const years = Number(text);
+    return `${years} ${years === 1 ? 'Year' : 'Years'}`;
+  }
+  if (/^\d+\+$/.test(text)) return `${text} Years`;
+  if (/^\d+\s*-\s*\d+$/.test(text)) {
+    return `${text.replace(/\s*-\s*/, '-')} Years`;
+  }
+  return text;
+}
+
+export function isValidRoofAge(value: unknown): boolean {
+  const text = normalizeRoofAgeInput(value);
+  return text === '' || /^\d+(?:\+|-\d+)?$/.test(text);
+}
+
+export function normalizeRoofAgeInput(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s*years?\s*$/i, '')
+    .trim()
+    .replace(/\s*-\s*/, '-');
+}
+
 export function getPortalSessionId(): string {
   const key = 'masters-ready-portal-session';
   const existing = window.localStorage.getItem(key);
@@ -195,7 +222,7 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
     'Last Checked On: ' + leadTemplateValue(values, 'last_checked_on'),
     'Home Type: ' + leadTemplateValue(values, 'home_type'),
     'Roof Type: ' + leadTemplateValue(values, 'roof_type'),
-    'Roof Age: ' + leadTemplateValue(values, 'roof_age'),
+    'Roof Age: ' + formatRoofAge(leadTemplateValue(values, 'roof_age')),
     'Stories: ' + leadTemplateValue(values, 'stories'),
     'Insurance: ' + leadTemplateValue(values, 'insurance'),
     'Insurance Name: ' + leadTemplateValue(values, 'insurance_name'),

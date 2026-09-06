@@ -17,7 +17,12 @@ import {
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { LeadStatusBadge } from "./LeadStatusControls";
-import { formatDateLong, formatTime, rpcError } from "./portalUtils";
+import {
+  formatDateLong,
+  formatRoofAge,
+  formatTime,
+  rpcError,
+} from "./portalUtils";
 import { supabase } from "./supabase";
 
 type PaidLead = {
@@ -438,7 +443,9 @@ export function OwnerPaidClientLeads() {
                           Home: {display(form.home_type)}
                         </span>
                         <span className="block">Roof: {display(form.roof_type)}</span>
-                        <span className="block">Age: {display(form.roof_age)}</span>
+                        <span className="block">
+                          Age: {formatRoofAge(form.roof_age)}
+                        </span>
                       </td>
                       <td>
                         <span className="block capitalize text-slate-500">

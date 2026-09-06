@@ -1,4 +1,4 @@
-import { formatDateLong, formatTime } from './portalUtils';
+import { formatDateLong, formatRoofAge, formatTime } from './portalUtils';
 import { getLane } from './leadTypes';
 
 /** Subset of the QC assessment the inspector note reads. */
@@ -119,7 +119,9 @@ export function buildInspectorNote(
 
   const roofBits = [
     details?.roof_type || formValue(form, 'roof_type'),
-    formValue(form, 'roof_age'),
+    formValue(form, 'roof_age')
+      ? formatRoofAge(formValue(form, 'roof_age'))
+      : '',
   ].filter(Boolean);
   const lastChecked = details?.last_inspection_date || formValue(form, 'last_checked_on');
   if (lastChecked) roofBits.push(`last checked: ${lastChecked}`);

@@ -42,7 +42,9 @@ import {
   buildExternalFormUrl,
   formatDateLong,
   formatTime,
+  isValidRoofAge,
   localDate,
+  normalizeRoofAgeInput,
   rpcError,
 } from "./portalUtils";
 import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
@@ -444,6 +446,11 @@ export function QCQueue() {
     if (!selected) return;
     setBusy(true);
     setError("");
+    if (!isValidRoofAge(values.roof_age)) {
+      setError("Roof Age must be entered as 10, 10+, or a range such as 7-10.");
+      setBusy(false);
+      return;
+    }
     const patch: Obj = {};
     [
       "full_name",
@@ -467,6 +474,7 @@ export function QCQueue() {
       values.share_recording_with_company,
     );
     patch.form_data = { ...selected.lead.form_data, ...values };
+    patch.form_data.roof_age = normalizeRoofAgeInput(values.roof_age);
     [
       "recording_url",
       "recording",

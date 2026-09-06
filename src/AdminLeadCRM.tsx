@@ -34,7 +34,14 @@ import {
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
-import { formatDateLong, formatTime, rpcError } from "./portalUtils";
+import {
+  formatDateLong,
+  formatRoofAge,
+  formatTime,
+  isValidRoofAge,
+  normalizeRoofAgeInput,
+  rpcError,
+} from "./portalUtils";
 import {
   leadStatusClasses,
   leadStatusExportValue,
@@ -362,6 +369,10 @@ export function AdminLeadCRM() {
       );
     const currentValue = inlineCellValue(row, column);
     const normalizedNext = nextValue.trim();
+    if (column === "roofAge" && !isValidRoofAge(normalizedNext)) {
+      setError("Roof Age must be entered as 10, 10+, or a range such as 7-10.");
+      return;
+    }
     if (normalizedNext === currentValue.trim()) {
       clearSavedCell();
       return;
@@ -537,7 +548,7 @@ export function AdminLeadCRM() {
         displayCompanyName(row.company.name),
         row.agent.name,
         row.lead.service_needed,
-        form.roof_age,
+        formatRoofAge(form.roof_age),
         form.roof_type,
         form.insurance,
         form.insurance_name,
@@ -1271,6 +1282,17 @@ function LeadSpreadsheetCell({
             <input
               autoFocus
               type={inlineCellInputType(column.key)}
+              pattern={
+                column.key === "roofAge" ? "\\d+(?:\\+|-\\d+)?" : undefined
+              }
+              placeholder={
+                column.key === "roofAge" ? "10, 10+, or 7-10" : undefined
+              }
+              title={
+                column.key === "roofAge"
+                  ? "Enter years as 10, 10+, or 7-10"
+                  : undefined
+              }
               value={editingCell.value}
               disabled={saving}
               onChange={(event) => onChangeEdit(event.target.value)}
@@ -1457,6 +1479,13 @@ function LeadDetailModal({
     setSaving(true);
     setEditError("");
     const form = draft.form_data || {};
+    if (!isValidRoofAge(form.roof_age)) {
+      setEditError(
+        "Roof Age must be entered as 10, 10+, or a range such as 7-10.",
+      );
+      setSaving(false);
+      return;
+    }
     const leadPatch = {
       full_name: draft.full_name,
       phone_number: draft.phone_number,
@@ -1647,7 +1676,7 @@ function LeadDetailModal({
                   <RecordGrid
                     entries={[
                       ["Service / Lead Type", lead.service_needed],
-                      ["Roof Age", form.roof_age],
+                      ["Roof Age", formatRoofAge(form.roof_age)],
                       ["Roof Type", form.roof_type],
                       ["Stories", form.stories],
                       ["Home Type", form.home_type],
@@ -2116,6 +2145,8 @@ function LeadEditForm({
           <EditField
             key={key}
             label={label}
+            pattern={key === "roof_age" ? "\\d+(?:\\+|-\\d+)?" : undefined}
+            placeholder={key === "roof_age" ? "10, 10+, or 7-10" : undefined}
             value={form[key]}
             onChange={(value) => setForm(key, value)}
           />
@@ -2177,6 +2208,8 @@ function EditField({
   type = "text",
   required = false,
   wide = false,
+  pattern,
+  placeholder,
 }: {
   label: string;
   value: unknown;
@@ -2184,6 +2217,8 @@ function EditField({
   type?: string;
   required?: boolean;
   wide?: boolean;
+  pattern?: string;
+  placeholder?: string;
 }) {
   return (
     <label
@@ -2194,6 +2229,9 @@ function EditField({
       <input
         required={required}
         type={type}
+        pattern={pattern}
+        placeholder={placeholder}
+        title={pattern ? "Enter years as 10, 10+, or 7-10" : undefined}
         value={String(fieldValue ?? "")}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-xs font-semibold normal-case text-slate-800"
@@ -2314,7 +2352,10 @@ function buildEditDraft(detail: Obj): Obj {
     qc_notes: lead.qc_notes || "",
     recording_url: lead.recording_url || "",
     share_recording_with_company: Boolean(lead.share_recording_with_company),
-    form_data: { ...(lead.form_data || {}) },
+    form_data: {
+      ...(lead.form_data || {}),
+      roof_age: normalizeRoofAgeInput(lead.form_data?.roof_age),
+    },
     appointment_date: appointment.appointment_date || "",
     start_time: String(appointment.start_time || "").slice(0, 5),
     appointment_status: appointment.status || "confirmed",
@@ -2589,7 +2630,7 @@ function inlineCellValue(row: Obj, column: LeadColumnKey): string {
     company: row.company?.id || lead.company_id,
     agent: row.agent?.id || lead.agent_id,
     service: lead.service_needed,
-    roofAge: form.roof_age,
+    roofAge: normalizeRoofAgeInput(form.roof_age),
     roofType: form.roof_type,
     insurance: form.insurance,
     insuranceCarrier: form.insurance_name,
@@ -2640,6 +2681,8 @@ function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
         }
       />
     );
+  if (column === "roofAge")
+    return formatRoofAge(row.lead?.form_data?.roof_age);
   if (column === "appointmentDate")
     return dateValue(row.appointment?.appointment_date);
   if (column === "appointmentTime")
@@ -2708,7 +2751,7 @@ function inlineCellPatches(
   if (column === "status") {
     if (nextValue === "qc_denied") leadPatch.qc_status = "denied";
     else {
-      appointmentPatch.client_status = nextValue;
+      Object.assign(appointmentPatch, overallStatusAppointmentPatch(nextValue));
       if (row.lead?.qc_status === "denied") leadPatch.qc_status = "pending";
     }
   } else if (column === "company") {
@@ -2725,6 +2768,17 @@ function inlineCellPatches(
   } else return null;
 
   return { leadPatch, appointmentPatch };
+}
+
+function overallStatusAppointmentPatch(status: string): Obj {
+  const normalizedStatus = normalizeLeadDisposition(status) || "pending";
+  return {
+    client_status:
+      normalizedStatus === "rescheduled" ? "reschedule" : normalizedStatus,
+    canonical_status:
+      normalizedStatus === "good" ? "good_inspected" : normalizedStatus,
+    company_action: normalizedStatus,
+  };
 }
 
 function Filter({

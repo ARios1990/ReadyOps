@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
-import { formatTime } from './portalUtils';
+import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
 
 type LeadLike = {
   full_name?: string | null;
@@ -152,8 +152,10 @@ function Row({
             <input
               aria-label={label.replace(/:$/, '')}
               type={inputType}
+              pattern={field === 'roof_age' ? '\\d+(?:\\+|-\\d+)?' : undefined}
+              title={field === 'roof_age' ? 'Enter years as 10, 10+, or 7-10' : undefined}
+              placeholder={field === 'roof_age' ? '10, 10+, or 7-10' : EMPTY}
               value={editValue ?? value}
-              placeholder={EMPTY}
               onChange={(event) => onChange?.(field!, event.target.value)}
               className={controlClass}
             />
@@ -271,7 +273,7 @@ export function ClientLeadTemplate({
     `Language: ${copyValue(leadValue(copyLead, 'language', 'language'))}`,
     `Services Need: ${copyValue(copyService)}`,
     '**Property Details**',
-    `Roof Age: ${copyValue(formValue(copyLead, 'roof_age'))}`,
+    `Roof Age: ${copyValue(formatRoofAge(formValue(copyLead, 'roof_age')))}`,
     `Home Type: ${copyValue(formValue(copyLead, 'home_type'))}`,
     `Roof Type: ${copyValue(formValue(copyLead, 'roof_type'))}`,
     `Stories: ${copyValue(formValue(copyLead, 'stories'))}`,
@@ -322,7 +324,7 @@ export function ClientLeadTemplate({
           </Section>
 
           <Section title="Property Details" columns>
-            <Row label="Roof Age:" field="roof_age" value={formValue(lead, 'roof_age')} editValue={editValue('roof_age', formValue(lead, 'roof_age'))} onChange={onChange} />
+            <Row label="Roof Age:" field="roof_age" value={formatRoofAge(formValue(lead, 'roof_age'))} editValue={normalizeRoofAgeInput(editValue('roof_age', formValue(lead, 'roof_age')))} onChange={onChange} />
             <Row label="Home Type:" field="home_type" value={formValue(lead, 'home_type')} editValue={editValue('home_type', formValue(lead, 'home_type'))} onChange={onChange} />
             <Row label="Roof Type:" field="roof_type" value={formValue(lead, 'roof_type')} editValue={editValue('roof_type', formValue(lead, 'roof_type'))} onChange={onChange} />
             <Row label="Stories:" field="stories" value={formValue(lead, 'stories')} editValue={editValue('stories', formValue(lead, 'stories'))} onChange={onChange} />

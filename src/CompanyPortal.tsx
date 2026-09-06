@@ -44,6 +44,7 @@ import {
   calendarWeekStart,
   copyText,
   formatDateLong,
+  formatRoofAge,
   formatTime,
   localDate,
   rpcError,
@@ -3042,7 +3043,7 @@ function CompanyLeadsSpreadsheet({
                   .filter(Boolean)
                   .join(", ");
                 const propertyDetails = [
-                  form.roof_age && `Roof age: ${String(form.roof_age)}`,
+                  form.roof_age && `Roof age: ${formatRoofAge(form.roof_age)}`,
                   form.roof_type && `Roof: ${String(form.roof_type)}`,
                   (form.insurance_name || form.insurance) &&
                     `Insurance: ${String(form.insurance_name || form.insurance)}`,
@@ -3274,7 +3275,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                           {appointment.lead.service_needed || "—"}
                         </td>
                         <td className="min-w-[68px] border-b border-r border-slate-200 px-2.5 py-3">
-                          {String(form.roof_age || "—")}
+                          {formatRoofAge(form.roof_age)}
                         </td>
                         <td className="min-w-[72px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.roof_type || "—")}
@@ -3988,7 +3989,7 @@ function CompanyAppointmentRow({
     appointment.status;
   const form = appointment.lead.form_data || {};
   const qualification = [
-    form.roof_age && `Roof ${form.roof_age}`,
+    form.roof_age && `Roof ${formatRoofAge(form.roof_age)}`,
     form.roof_type,
     form.insurance_name || form.insurance,
     form.visible_damage && `Damage: ${form.visible_damage}`,

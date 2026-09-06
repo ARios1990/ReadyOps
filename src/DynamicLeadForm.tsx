@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { shouldShowField, getPortalSessionId } from './portalUtils';
+import { shouldShowField, getPortalSessionId, normalizeRoofAgeInput } from './portalUtils';
 import { supabase } from './supabase';
 
 export interface PortalFormField {
@@ -61,21 +61,22 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
 function Field({ field, value, disabled, recordingUploadSlug, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; onChange: (key: string, value: unknown) => void }) {
   const common = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50';
   const label = <label className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}{field.required ? ' *' : ''}</label>;
-  const isWide = field.type === 'textarea' || field.type === 'address' || field.type === 'multiselect' || field.type === 'recording';
+  const fieldType = field.key === 'roof_age' ? 'text' : field.type;
+  const isWide = fieldType === 'textarea' || fieldType === 'address' || fieldType === 'multiselect' || fieldType === 'recording';
 
-  if (field.type === 'recording') {
+  if (fieldType === 'recording') {
     return <RecordingField field={field} value={value} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />;
   }
 
-  if (field.type === 'textarea') {
+  if (fieldType === 'textarea') {
     return <div className={isWide ? 'sm:col-span-2' : ''}>{label}<textarea required={field.required} disabled={disabled} className={`${common} min-h-24`} value={String(value ?? '')} onChange={e => onChange(field.key, e.target.value)} /></div>;
   }
 
-  if (field.type === 'select') {
+  if (fieldType === 'select') {
     return <div>{label}<select required={field.required} disabled={disabled} className={common} value={String(value ?? '')} onChange={e => onChange(field.key, e.target.value)}><option value="">Select...</option>{(field.options || []).map(option => <option key={option} value={option}>{option}</option>)}</select></div>;
   }
 
-  if (field.type === 'multiselect') {
+  if (fieldType === 'multiselect') {
     const selected = Array.isArray(value) ? value.map(String) : [];
     return (
       <div className="sm:col-span-2">
@@ -92,18 +93,18 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
     );
   }
 
-  const inputType = field.type === 'phone' ? 'tel'
-    : field.type === 'email' ? 'email'
-      : field.type === 'url' ? 'url'
-        : field.type === 'number' || field.type === 'currency' ? 'number'
-          : field.type === 'date' ? 'date'
-            : field.type === 'time' ? 'time'
+  const inputType = fieldType === 'phone' ? 'tel'
+    : fieldType === 'email' ? 'email'
+      : fieldType === 'url' ? 'url'
+        : fieldType === 'number' || fieldType === 'currency' ? 'number'
+          : fieldType === 'date' ? 'date'
+            : fieldType === 'time' ? 'time'
               : 'text';
 
   return (
     <div className={isWide ? 'sm:col-span-2' : ''}>
       {label}
-      <input required={field.required} disabled={disabled} type={inputType} step={field.type === 'currency' ? '0.01' : undefined} className={common} value={String(value ?? '')} onChange={e => onChange(field.key, e.target.value)} />
+      <input required={field.required} disabled={disabled} type={inputType} step={fieldType === 'currency' ? '0.01' : undefined} pattern={field.key === 'roof_age' ? '\\d+(?:\\+|-\\d+)?' : undefined} title={field.key === 'roof_age' ? 'Enter years as 10, 10+, or 7-10' : undefined} placeholder={field.key === 'roof_age' ? 'e.g. 10, 10+, or 7-10' : undefined} className={common} value={field.key === 'roof_age' ? normalizeRoofAgeInput(value) : String(value ?? '')} onChange={e => onChange(field.key, e.target.value)} />
     </div>
   );
 }
