@@ -1604,11 +1604,7 @@ function LeadDetailModal({
                 />
                 <HeroValue
                   label="Property"
-                  value={
-                    [lead.address, lead.city, lead.state, lead.zip_code]
-                      .filter(Boolean)
-                      .join(", ") || "—"
-                  }
+                  value={formatPropertyAddress(lead)}
                 />
                 <HeroValue
                   label="Appointment"
@@ -2814,6 +2810,22 @@ function workflowProgressExport(row: Obj): string {
 }
 function displayCompanyName(companyName: unknown): string {
   return value(companyName);
+}
+function formatPropertyAddress(lead: Obj): string {
+  const address = String(lead.address || "").trim().replace(/[\s,]+$/, "");
+  const normalizedAddress = normalizeAddressText(address);
+  const missingLocationParts = [lead.city, lead.state, lead.zip_code]
+    .map((part) => String(part || "").trim())
+    .filter(
+      (part) =>
+        part &&
+        !normalizedAddress.includes(` ${normalizeAddressText(part).trim()} `),
+    );
+
+  return [address, ...missingLocationParts].filter(Boolean).join(", ") || "—";
+}
+function normalizeAddressText(input: string): string {
+  return ` ${input.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
 }
 function shortId(id: unknown): string {
   return (
