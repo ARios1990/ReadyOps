@@ -9,6 +9,8 @@
  *   - Scheduled upcoming = same predicate, appointment_date >= current_date
  *   - Package delivered  = count of the above restricted to that package
  *   - Package pending    = greatest(lead_target - delivered, 0)
+ *   - Status counts      = one mutually exclusive disposition for every
+ *                          delivered lead, including Pending Updates
  *
  * These helpers wrap the RPC output so every consumer on the admin page reads
  * the same field with the same coercion. Do NOT recompute these on the client
@@ -20,6 +22,16 @@
 type CompanyOverview = Record<string, any>;
 
 export type CompanyPackagePaymentState = "paid" | "partial" | "unpaid" | "none";
+
+export type CompanyStatusCounts = {
+  qcPending: number;
+  qcDenied: number;
+  good: number;
+  signed: number;
+  bad: number;
+  noShow: number;
+  pendingUpdates: number;
+};
 
 const PAID_STATES = new Set(["complete", "paid", "completed"]);
 const PENDING_STATES = new Set([
@@ -45,6 +57,18 @@ export function totalLeads(company: CompanyOverview): number {
 
 export function activeOpenLeads(company: CompanyOverview): number {
   return toFiniteInt(company?.scheduled_upcoming);
+}
+
+export function statusCounts(company: CompanyOverview): CompanyStatusCounts {
+  return {
+    qcPending: toFiniteInt(company?.qc_pending),
+    qcDenied: toFiniteInt(company?.qc_denied),
+    good: toFiniteInt(company?.good_leads),
+    signed: toFiniteInt(company?.signed_contracts),
+    bad: toFiniteInt(company?.bad_leads),
+    noShow: toFiniteInt(company?.no_shows),
+    pendingUpdates: toFiniteInt(company?.pending_updates),
+  };
 }
 
 export function hasActivePackage(company: CompanyOverview): boolean {

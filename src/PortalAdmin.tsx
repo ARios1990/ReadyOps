@@ -26,7 +26,6 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
-import { isLeadOutcome } from "./leadOutcome";
 import {
   copyText,
   formatDateLong,
@@ -43,12 +42,14 @@ import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { useAuth } from "./AuthContext";
 import {
   activeOpenLeads,
+  type CompanyStatusCounts,
   hasActivePackage,
   isPendingPackage as pkgIsPending,
   packageDelivered,
   packagePaymentState,
   packageRemaining,
   packageTarget,
+  statusCounts as canonicalStatusCounts,
   totalLeads as canonicalTotalLeads,
 } from "./companyMetrics";
 
@@ -93,30 +94,11 @@ type CompanyOverviewDraft = {
   requirements_note: string;
   notes: string;
 };
-type CompanyOutcome = {
-  total: number;
-  qcPending: number;
-  qcDenied: number;
-  good: number;
-  signed: number;
-  bad: number;
-  noShow: number;
-};
 const EMPTY_PACKAGE: PackageDraft = {
   lead_target: "",
   amount_per_lead: "",
   start_date: localDate(new Date()),
 };
-const EMPTY_OUTCOME: CompanyOutcome = {
-  total: 0,
-  qcPending: 0,
-  qcDenied: 0,
-  good: 0,
-  signed: 0,
-  bad: 0,
-  noShow: 0,
-};
-
 function currentWeekRange(): DateRange {
   const today = new Date();
   const monday = new Date(today);
@@ -171,7 +153,7 @@ export function PortalAdmin() {
   const [teamFilter, setTeamFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>(currentWeekRange);
-  const [outcomeRows, setOutcomeRows] = useState<Obj[]>([]);
+  const [rangeAppointmentCount, setRangeAppointmentCount] = useState(0);
   const [stateFilter, setStateFilter] = useState("");
   const [leadActivityFilter, setLeadActivityFilter] =
     useState<LeadActivityFilter>("all");
@@ -201,7 +183,7 @@ export function PortalAdmin() {
       scopeRes,
       representativeRes,
       settingsRes,
-      outcomeRes,
+      appointmentCountRes,
     ] = await Promise.all([
       supabase.rpc("get_company_operations_overview"),
       supabase
@@ -229,9 +211,7 @@ export function PortalAdmin() {
         ),
       supabase
         .from("portal_appointments")
-        .select(
-          "company_id,lead_id,appointment_date,canonical_status,client_status,sales_outcome,attendance_status",
-        )
+        .select("id", { count: "exact", head: true })
         .gte("appointment_date", rangeStart)
         .lte("appointment_date", rangeEnd),
     ]);
@@ -244,32 +224,9 @@ export function PortalAdmin() {
       scopeRes.error ||
       representativeRes.error ||
       settingsRes.error ||
-      outcomeRes.error;
+      appointmentCountRes.error;
     if (firstError) setError(rpcError(firstError));
     else {
-      const appointments = (outcomeRes.data || []) as Obj[];
-      const leadIds = [
-        ...new Set(
-          appointments
-            .map((item) => String(item.lead_id || ""))
-            .filter(Boolean),
-        ),
-      ];
-      let qcByLead = new Map<string, string>();
-      if (leadIds.length) {
-        const { data: leadStatuses, error: leadStatusError } = await supabase
-          .from("portal_leads")
-          .select("id,qc_status")
-          .in("id", leadIds);
-        if (leadStatusError) setError(rpcError(leadStatusError));
-        else
-          qcByLead = new Map(
-            (leadStatuses || []).map((item) => [
-              String(item.id),
-              String(item.qc_status || ""),
-            ]),
-          );
-      }
       const contactByCompany = new Map(
         (companyContactRes.data || []).map((item) => [String(item.id), item]),
       );
@@ -285,12 +242,7 @@ export function PortalAdmin() {
       setPackageScopes((scopeRes.data || []) as Obj[]);
       setRepresentatives((representativeRes.data || []) as Obj[]);
       setSettings((settingsRes.data || []) as Obj[]);
-      setOutcomeRows(
-        appointments.map((item) => ({
-          ...item,
-          qc_status: qcByLead.get(String(item.lead_id)) || "",
-        })),
-      );
+      setRangeAppointmentCount(appointmentCountRes.count || 0);
     }
     setLoading(false);
   }
@@ -395,39 +347,12 @@ export function PortalAdmin() {
     ],
   );
 
-  const outcomesByCompany = useMemo(() => {
-    const result: Record<string, CompanyOutcome> = {};
-    const seenLeadIds = new Map<string, Set<string>>();
-    outcomeRows.forEach((row) => {
-      const companyId = String(row.company_id || "");
-      const leadId = String(row.lead_id || "");
-      if (!companyId || !leadId) return;
-      const companySeen = seenLeadIds.get(companyId) || new Set<string>();
-      if (companySeen.has(leadId)) return;
-      companySeen.add(leadId);
-      seenLeadIds.set(companyId, companySeen);
-
-      const outcome = result[companyId] || { ...EMPTY_OUTCOME };
-      const qcStatus = String(row.qc_status || "").toLowerCase();
-      outcome.total += 1;
-      if (["pending", "in_review", "needs_correction"].includes(qcStatus))
-        outcome.qcPending += 1;
-      if (qcStatus === "denied") outcome.qcDenied += 1;
-      if (isLeadOutcome(row, "good")) outcome.good += 1;
-      if (isLeadOutcome(row, "signed_contract")) outcome.signed += 1;
-      if (isLeadOutcome(row, "bad")) outcome.bad += 1;
-      if (isLeadOutcome(row, "no_show")) outcome.noShow += 1;
-      result[companyId] = outcome;
-    });
-    return result;
-  }, [outcomeRows]);
-
   const totals = useMemo(
     () => ({
       companies: visible.length,
       qc: visible.reduce(
         (count, company) =>
-          count + (outcomesByCompany[company.company_id]?.qcPending || 0),
+          count + canonicalStatusCounts(company).qcPending,
         0,
       ),
       remaining: visible.reduce(
@@ -438,7 +363,7 @@ export function PortalAdmin() {
         (company) => pkgIsPending(company),
       ).length,
     }),
-    [outcomesByCompany, visible],
+    [visible],
   );
 
   const stateOptions = useMemo(
@@ -1074,8 +999,8 @@ export function PortalAdmin() {
                 </button>
               )}
               <p className="text-xs font-semibold text-slate-500">
-                {visible.length} companies • {outcomeRows.length} appointments
-                in selected range
+                {visible.length} companies • {rangeAppointmentCount} appointments
+                in selected range • lead totals are all time
               </p>
             </div>
           </section>
@@ -1123,7 +1048,7 @@ export function PortalAdmin() {
               className="[&_.readyops-hscroll-body]:max-h-[68vh] [&_.readyops-hscroll-body]:overflow-auto [&_.readyops-hscroll-body]:scroll-smooth"
               ariaLabel="Companies summary horizontal scroll"
             >
-              <table className="w-full min-w-[1780px] text-sm">
+              <table className="w-full min-w-[1900px] text-sm">
                 <thead className="readyops-data-table-head sticky top-0 z-40">
                   <tr className="text-left">
                     <th className="sticky left-0 top-0 z-50 min-w-[360px] bg-slate-950 p-3 shadow-[5px_0_10px_-6px_rgba(15,23,42,0.9)]">
@@ -1136,6 +1061,7 @@ export function PortalAdmin() {
                     <th>Signed Contract</th>
                     <th>Bad</th>
                     <th>No Show</th>
+                    <th>Pending Updates</th>
                     <th>Locations</th>
                     <th>Package</th>
                     <th>Remaining</th>
@@ -1147,7 +1073,7 @@ export function PortalAdmin() {
                   {visible.length === 0 && (
                     <tr>
                       <td
-                        colSpan={13}
+                        colSpan={14}
                         className="p-8 text-center text-sm text-slate-500"
                       >
                         No companies match the current filters.
@@ -1179,9 +1105,7 @@ export function PortalAdmin() {
                       <CompanyRow
                         key={company.company_id}
                         company={company}
-                        outcome={
-                          outcomesByCompany[company.company_id] || EMPTY_OUTCOME
-                        }
+                        outcome={canonicalStatusCounts(company)}
                         totalLeads={canonicalTotalLeads(company)}
                         locations={companyLocations}
                         expanded={expanded === company.company_id}
@@ -1335,7 +1259,7 @@ export function PortalAdmin() {
 
 type CompanyRowProps = {
   company: Obj;
-  outcome: CompanyOutcome;
+  outcome: CompanyStatusCounts;
   totalLeads: number;
   locations: CompanyLocation[];
   expanded: boolean;
@@ -1378,13 +1302,14 @@ function CountPill({
   tone,
 }: {
   value: number;
-  tone: "amber" | "red" | "green" | "purple";
+  tone: "amber" | "red" | "green" | "purple" | "blue";
 }) {
   const tones = {
     amber: "bg-amber-100 text-amber-700",
     red: "bg-red-100 text-red-700",
     green: "bg-emerald-100 text-emerald-700",
     purple: "bg-violet-100 text-violet-700",
+    blue: "bg-blue-100 text-blue-700",
   };
   return (
     <span
@@ -1588,6 +1513,9 @@ function CompanyRow(props: CompanyRowProps) {
         <td className="text-center">
           <CountPill value={outcome.noShow} tone="amber" />
         </td>
+        <td className="text-center">
+          <CountPill value={outcome.pendingUpdates} tone="blue" />
+        </td>
         <td className="text-center">{activeLocations.length}</td>
         <td>
           {company.package
@@ -1701,7 +1629,7 @@ function CompanyRow(props: CompanyRowProps) {
       </tr>
       {expanded && (
         <tr className="border-t bg-slate-50">
-          <td colSpan={13} className="p-4">
+          <td colSpan={14} className="p-4">
             <div className="space-y-4">
               <CompanyAvailabilityGrid
                 company={company}
