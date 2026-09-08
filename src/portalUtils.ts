@@ -72,6 +72,37 @@ export function formatTime(value: string): string {
   return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
 
+export function formatLeadAddress(lead: {
+  address?: unknown;
+  city?: unknown;
+  state?: unknown;
+  zip_code?: unknown;
+}): string {
+  const address = String(lead.address ?? '')
+    .trim()
+    .replace(/[\s,]+$/, '')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/,\s*([a-z]{2})\s*,\s*(\d{5}(?:-\d{4})?)\b/gi, ', $1 $2');
+  const normalizedAddress = ` ${normalizeAddressText(address)} `;
+  const city = String(lead.city ?? '').trim();
+  const state = String(lead.state ?? '').trim().toUpperCase();
+  const zip = String(lead.zip_code ?? '').trim();
+  const isPresent = (part: string) =>
+    !part || normalizedAddress.includes(` ${normalizeAddressText(part)} `);
+  const suffix = [
+    isPresent(city) ? '' : city,
+    [isPresent(state) ? '' : state, isPresent(zip) ? '' : zip]
+      .filter(Boolean)
+      .join(' '),
+  ].filter(Boolean);
+
+  return [address, ...suffix].filter(Boolean).join(', ');
+}
+
+function normalizeAddressText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 export function formatRoofAge(value: unknown): string {
   const text = normalizeRoofAgeInput(value);
   if (!text) return '—';

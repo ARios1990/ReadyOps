@@ -11,6 +11,7 @@ import { supabase } from "./supabase";
 import {
   addDays,
   formatDateLong,
+  formatLeadAddress,
   formatTime,
   localDate,
   rpcError,
@@ -235,8 +236,7 @@ export function RepresentativePortal({ token }: { token: string }) {
                     {appt.lead.full_name}
                   </h2>
                   <p className="text-sm text-slate-600">
-                    {appt.lead.address}
-                    {appt.lead.city ? `, ${appt.lead.city}` : ""}
+                    {formatLeadAddress(appt.lead)}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                     <LeadStatusBadge
@@ -261,7 +261,7 @@ export function RepresentativePortal({ token }: { token: string }) {
                       <Phone size={13} /> Call
                     </a>
                     <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appt.lead.address)}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatLeadAddress(appt.lead))}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold"
@@ -326,14 +326,7 @@ export function RepresentativePortal({ token }: { token: string }) {
               <Detail label="Phone" value={selected.lead.phone_number} />
               <Detail
                 label="Address"
-                value={[
-                  selected.lead.address,
-                  selected.lead.city,
-                  selected.lead.state,
-                  selected.lead.zip_code,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
+                value={formatLeadAddress(selected.lead)}
               />
               <Detail label="Email" value={selected.lead.email} />
               <Detail label="Language" value={selected.lead.language} />

@@ -19,6 +19,7 @@ import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { LeadStatusBadge } from "./LeadStatusControls";
 import {
   formatDateLong,
+  formatLeadAddress,
   formatRoofAge,
   formatTime,
   rpcError,
@@ -545,7 +546,7 @@ function Metric({
 }
 
 function fullAddress(row: PaidLead): string {
-  return [row.address, row.city, row.state, row.zip_code].filter(Boolean).join(", ");
+  return formatLeadAddress(row);
 }
 
 function display(value: unknown): string {

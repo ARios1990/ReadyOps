@@ -44,6 +44,7 @@ import {
   calendarWeekStart,
   copyText,
   formatDateLong,
+  formatLeadAddress,
   formatRoofAge,
   formatTime,
   localDate,
@@ -3034,14 +3035,7 @@ function CompanyLeadsSpreadsheet({
                   appointment.canonical_status ||
                   appointment.client_status ||
                   appointment.status;
-                const address = [
-                  appointment.lead.address,
-                  appointment.lead.city,
-                  appointment.lead.state,
-                  appointment.lead.zip_code,
-                ]
-                  .filter(Boolean)
-                  .join(", ");
+                const address = formatLeadAddress(appointment.lead);
                 const propertyDetails = [
                   form.roof_age && `Roof age: ${formatRoofAge(form.roof_age)}`,
                   form.roof_type && `Roof: ${String(form.roof_type)}`,
@@ -3208,14 +3202,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                       appointment.canonical_status ||
                       appointment.client_status ||
                       appointment.status;
-                    const fullAddress = [
-                      appointment.lead.address,
-                      appointment.lead.city,
-                      appointment.lead.state,
-                      appointment.lead.zip_code,
-                    ]
-                      .filter(Boolean)
-                      .join(", ");
+                    const fullAddress = formatLeadAddress(appointment.lead);
                     return (
                       <tr
                         key={appointment.id}
@@ -4006,10 +3993,8 @@ function CompanyAppointmentRow({
           </p>
           <h3 className="mt-1 font-black">{appointment.lead.full_name}</h3>
           <p className="text-xs text-slate-600">
-            {appointment.lead.phone_number} • {appointment.lead.address}
-            {appointment.lead.city ? `, ${appointment.lead.city}` : ""}
-            {appointment.lead.state ? `, ${appointment.lead.state}` : ""}{" "}
-            {appointment.lead.zip_code || ""}
+            {appointment.lead.phone_number} •{" "}
+            {formatLeadAddress(appointment.lead)}
           </p>
           <p className="mt-1 text-[10px] text-slate-500">
             {qualification ||
