@@ -17,6 +17,7 @@ const CLIENT_DISPOSITIONS: Exclude<LeadDisposition, "pending">[] = [
 
 const COMPANY_PORTAL_DISPOSITIONS: LeadDisposition[] = [
   "pending",
+  "good",
   "no_show",
   "bad",
   "signed_contract",
@@ -57,7 +58,7 @@ export function ClientStatusActions({
   onConfirm,
   onDisposition,
   className = "",
-  pendingInsteadOfInspected = false,
+  includePending = false,
   compact = false,
 }: {
   currentStatus: unknown;
@@ -66,11 +67,11 @@ export function ClientStatusActions({
   onConfirm: () => void;
   onDisposition: (status: LeadDisposition) => void;
   className?: string;
-  pendingInsteadOfInspected?: boolean;
+  includePending?: boolean;
   compact?: boolean;
 }) {
   const current = normalizeLeadDisposition(currentStatus);
-  const dispositions = pendingInsteadOfInspected
+  const dispositions = includePending
     ? COMPANY_PORTAL_DISPOSITIONS
     : CLIENT_DISPOSITIONS;
   const sizeClasses = compact
@@ -89,7 +90,7 @@ export function ClientStatusActions({
       {dispositions.map((status) => {
         const config = LEAD_STATUS_CONFIG[status];
         const tone =
-          status === "pending" && pendingInsteadOfInspected
+          status === "pending" && includePending
             ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
             : config.className;
         return (

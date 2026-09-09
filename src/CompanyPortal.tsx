@@ -4089,7 +4089,7 @@ function CompanyAppointmentRow({
           currentStatus={appointment.company_action || canonical}
           received={Boolean(appointment.client_received)}
           disabled={busy}
-          pendingInsteadOfInspected
+          includePending
           compact
           onConfirm={() => void confirmLeadReceipt(appointment)}
           onDisposition={(status) =>
@@ -4754,7 +4754,7 @@ function LeadModal({
                 currentStatus={currentStatus}
                 received={Boolean(appointment.client_received)}
                 disabled={busy}
-                pendingInsteadOfInspected
+                includePending
                 compact
                 onConfirm={() => void confirmLeadReceipt(appointment)}
                 onDisposition={(status) =>
