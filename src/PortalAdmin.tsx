@@ -268,6 +268,22 @@ export function PortalAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companies]);
 
+  const statusCounts = useMemo(
+    () => ({
+      active: companies.filter(
+        (company) => company.account_status === "Active",
+      ).length,
+      paused: companies.filter(
+        (company) => company.account_status === "Pause",
+      ).length,
+      hidden: companies.filter(
+        (company) => company.account_status === "Hidden",
+      ).length,
+      all: companies.length,
+    }),
+    [companies],
+  );
+
   const visible = useMemo(
     () =>
       companies.filter((company) => {
@@ -605,7 +621,7 @@ export function PortalAdmin() {
     if (updateError) {
       setError(
         updateError.code === "23505"
-          ? `The slug “${publicSlug}” is already assigned to another company.`
+          ? `The slug â€œ${publicSlug}â€ is already assigned to another company.`
           : updateError.message,
       );
     } else {
@@ -846,7 +862,7 @@ export function PortalAdmin() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search companies…"
+                  placeholder="Search companiesâ€¦"
                   className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs"
                 />
               </label>
@@ -963,7 +979,7 @@ export function PortalAdmin() {
                   }}
                   className="min-w-0 flex-1 border-0 px-1 text-[11px] font-semibold"
                 />
-                <span className="px-1 text-slate-400">→</span>
+                <span className="px-1 text-slate-400">â†’</span>
                 <input
                   aria-label="Through date"
                   type="date"
@@ -999,8 +1015,8 @@ export function PortalAdmin() {
                 </button>
               )}
               <p className="text-xs font-semibold text-slate-500">
-                {visible.length} companies • {rangeAppointmentCount} appointments
-                in selected range • lead totals are all time
+                {visible.length} companies â€¢ {rangeAppointmentCount} appointments
+                in selected range â€¢ lead totals are all time
               </p>
             </div>
           </section>
@@ -1033,13 +1049,23 @@ export function PortalAdmin() {
                     onClick={() => setFilter(value)}
                     aria-pressed={filter === value}
                     className={
-                      "rounded-lg px-3 py-2 text-xs font-bold transition " +
+                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition " +
                       (filter === value
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-slate-600 hover:bg-white hover:text-slate-900")
                     }
                   >
-                    {label}
+                    <span>{label}</span>
+                    <span
+                      className={
+                        "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] " +
+                        (filter === value
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-700")
+                      }
+                    >
+                      {statusCounts[value]}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1201,7 +1227,7 @@ export function PortalAdmin() {
                 Booking slug for {slugEditor.companyName}
               </h2>
               <p className="mt-2 text-sm text-slate-500">
-                Use this exact value for the company’s{" "}
+                Use this exact value for the companyâ€™s{" "}
                 <strong>ReadyOpsSlug</strong> campaign variable. Changing an
                 existing slug changes its booking URL.
               </p>
@@ -1247,7 +1273,7 @@ export function PortalAdmin() {
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
               >
                 {slugSaving && <Loader2 size={15} className="animate-spin" />}
-                {slugSaving ? "Saving…" : "Save Slug"}
+                {slugSaving ? "Savingâ€¦" : "Save Slug"}
               </button>
             </div>
           </section>
@@ -1366,6 +1392,24 @@ function CompanyRow(props: CompanyRowProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const assignedTeams = store.getCompanyTeams(company.company_id);
+  const companyStatus = String(company.account_status || "Active");
+  const statusPillClass =
+    companyStatus === "Active"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : companyStatus === "Pause"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : companyStatus === "Prospect"
+          ? "border-blue-200 bg-blue-50 text-blue-700"
+          : companyStatus === "No Longer Working"
+            ? "border-red-200 bg-red-50 text-red-700"
+            : "border-slate-200 bg-slate-100 text-slate-600";
+  const [editingTeams, setEditingTeams] = useState(false);
+  const [teamDraft, setTeamDraft] = useState<string[]>(() =>
+    assignedTeams.map((team) => team.id),
+  );
+  const [teamSaving, setTeamSaving] = useState(false);
+  const [teamError, setTeamError] = useState("");
   const [draft, setDraft] = useState<CompanyOverviewDraft>(() => ({
     name: String(company.company_name || ""),
     state: String(company.state || ""),
@@ -1477,6 +1521,24 @@ function CompanyRow(props: CompanyRowProps) {
     setEditing(false);
     await onCompanyUpdated();
   }
+
+  async function handleSaveTeams() {
+    setTeamSaving(true);
+    setTeamError("");
+    try {
+      await store.setCompanyTeams(company.company_id, teamDraft);
+      setEditingTeams(false);
+    } catch (teamSaveError) {
+      setTeamError(
+        teamSaveError instanceof Error
+          ? teamSaveError.message
+          : "Failed to update assigned teams.",
+      );
+    } finally {
+      setTeamSaving(false);
+    }
+  }
+
   return (
     <>
       <tr
@@ -1486,10 +1548,33 @@ function CompanyRow(props: CompanyRowProps) {
         <td className="sticky left-0 z-20 min-w-[360px] bg-white p-3 shadow-[5px_0_10px_-7px_rgba(15,23,42,0.75)] group-hover:bg-blue-50">
           <div className="flex items-center gap-2">
             {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            <div>
+            <div className="min-w-0">
               <div className="font-bold">{company.company_name}</div>
-              <div className="text-[11px] text-slate-400">
-                {company.state || ""} • {company.account_status}
+              {company.state && (
+                <div className="text-[11px] text-slate-400">
+                  {company.state}
+                </div>
+              )}
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusPillClass}`}
+                >
+                  {companyStatus}
+                </span>
+                {assignedTeams.map((team) => (
+                  <span
+                    key={team.id}
+                    title={team.name}
+                    className="inline-flex rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700"
+                  >
+                    {team.abbreviation || team.name}
+                  </span>
+                ))}
+                {assignedTeams.length === 0 && (
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    No teams
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1523,7 +1608,7 @@ function CompanyRow(props: CompanyRowProps) {
             : "No active package"}
         </td>
         <td className="text-center font-bold">
-          {company.package ? packageRemaining(company) : "—"}
+          {company.package ? packageRemaining(company) : "â€”"}
         </td>
         <td>
           {company.package ? (
@@ -1544,7 +1629,7 @@ function CompanyRow(props: CompanyRowProps) {
               </div>
             </div>
           ) : (
-            "—"
+            "â€”"
           )}
         </td>
         <td onClick={(event) => event.stopPropagation()}>
@@ -1610,6 +1695,17 @@ function CompanyRow(props: CompanyRowProps) {
               <EyeOff size={12} /> Hide
             </button>
             <button
+              onClick={() => {
+                setTeamDraft(assignedTeams.map((team) => team.id));
+                setTeamError("");
+                setEditingTeams(true);
+              }}
+              title="Edit assigned teams"
+              className="inline-flex items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-1.5 text-[10px] font-bold text-violet-700"
+            >
+              <UsersRound size={12} /> Teams
+            </button>
+            <button
               onClick={onDelete}
               title="Delete company"
               className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold text-red-700"
@@ -1617,6 +1713,70 @@ function CompanyRow(props: CompanyRowProps) {
               <Trash2 size={12} /> Delete
             </button>
           </div>
+          {editingTeams && (
+            <div className="mt-2 min-w-56 rounded-lg border border-violet-200 bg-white p-2 shadow-sm">
+              <div className="flex flex-wrap gap-1">
+                {store.teams.map((team) => {
+                  const selected = teamDraft.includes(team.id);
+                  return (
+                    <button
+                      key={team.id}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={teamSaving}
+                      onClick={() =>
+                        setTeamDraft((current) =>
+                          current.includes(team.id)
+                            ? current.filter((id) => id !== team.id)
+                            : [...current, team.id],
+                        )
+                      }
+                      className={
+                        "rounded-full border px-2 py-1 text-[10px] font-bold transition disabled:opacity-50 " +
+                        (selected
+                          ? "border-violet-300 bg-violet-100 text-violet-800"
+                          : "border-slate-200 bg-slate-50 text-slate-500 hover:border-violet-200")
+                      }
+                    >
+                      {team.abbreviation || team.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {teamError && (
+                <div className="mt-2 text-[10px] font-semibold text-red-600">
+                  {teamError}
+                </div>
+              )}
+              <div className="mt-2 flex justify-end gap-1">
+                <button
+                  type="button"
+                  disabled={teamSaving}
+                  onClick={() => {
+                    setTeamDraft(assignedTeams.map((team) => team.id));
+                    setTeamError("");
+                    setEditingTeams(false);
+                  }}
+                  className="rounded border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={teamSaving}
+                  onClick={() => void handleSaveTeams()}
+                  className="inline-flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-[10px] font-bold text-white disabled:opacity-50"
+                >
+                  {teamSaving ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <Save size={11} />
+                  )}
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
           {publicSlug && (
             <div
               className="mt-1 max-w-48 truncate font-mono text-[9px] text-slate-400"
@@ -1644,8 +1804,8 @@ function CompanyRow(props: CompanyRowProps) {
                     <h3 className="font-bold">Overview</h3>
                     {!editing && (
                       <div className="mt-1 space-y-1 text-xs text-slate-500">
-                        <p>{company.contact_name || "No contact"} •{" "}{company.phone || "No phone"} •{" "}{company.email || company.owner_email || "No email"}</p>
-                        <p><strong>Billing:</strong> {company.billing_email || company.owner_email || "No billing email"} • {company.billing_address || "No billing address"}</p>
+                        <p>{company.contact_name || "No contact"} â€¢{" "}{company.phone || "No phone"} â€¢{" "}{company.email || company.owner_email || "No email"}</p>
+                        <p><strong>Billing:</strong> {company.billing_email || company.owner_email || "No billing email"} â€¢ {company.billing_address || "No billing address"}</p>
                         <p><strong>Service area:</strong> {company.metro_tag || company.state || "Not set"}</p>
                         {Array.isArray(company.secondary_emails) && company.secondary_emails.length > 0 && (
                           <p><strong>Secondary:</strong> {company.secondary_emails.join(", ")}</p>
@@ -1675,7 +1835,7 @@ function CompanyRow(props: CompanyRowProps) {
                         ) : (
                           <Save size={13} />
                         )}
-                        {saving ? "Saving…" : "Save Changes"}
+                        {saving ? "Savingâ€¦" : "Save Changes"}
                       </button>
                     </div>
                   ) : (
@@ -1694,7 +1854,7 @@ function CompanyRow(props: CompanyRowProps) {
                         className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold text-slate-500"
                         title="Open full company manager (locations, packages, reps)"
                       >
-                        Advanced…
+                        Advancedâ€¦
                       </button>
                     </div>
                   )}
@@ -1822,7 +1982,7 @@ function CompanyRow(props: CompanyRowProps) {
                           value={draft.metro_tag}
                           onChange={(event) => setDraft({ ...draft, metro_tag: event.target.value })}
                           className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
-                          placeholder="DFW, Houston, Tampa…"
+                          placeholder="DFW, Houston, Tampaâ€¦"
                         />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600">
@@ -1859,7 +2019,7 @@ function CompanyRow(props: CompanyRowProps) {
                             })
                           }
                           className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
-                          placeholder="Lead qualification requirements shared with the sales team…"
+                          placeholder="Lead qualification requirements shared with the sales teamâ€¦"
                         />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
@@ -1870,7 +2030,7 @@ function CompanyRow(props: CompanyRowProps) {
                             setDraft({ ...draft, notes: event.target.value })
                           }
                           className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
-                          placeholder="Notes visible only to admins…"
+                          placeholder="Notes visible only to adminsâ€¦"
                         />
                       </label>
                     </div>
@@ -1913,8 +2073,8 @@ function CompanyRow(props: CompanyRowProps) {
                         >
                           <span>{item.location_label}</span>
                           <strong>
-                            {String(item.start_time || "09:00").slice(0, 5)}–
-                            {String(item.end_time || "18:00").slice(0, 5)} •{" "}
+                            {String(item.start_time || "09:00").slice(0, 5)}â€“
+                            {String(item.end_time || "18:00").slice(0, 5)} â€¢{" "}
                             {item.max_per_day ?? 5}/day
                           </strong>
                         </div>
@@ -1937,7 +2097,7 @@ function CompanyRow(props: CompanyRowProps) {
                           key={rep.id}
                           className="rounded-lg bg-slate-50 p-2"
                         >
-                          <strong>{rep.name}</strong> •{" "}
+                          <strong>{rep.name}</strong> â€¢{" "}
                           {locations.find((item) => item.id === rep.location_id)
                             ?.location_label || "All locations"}
                           <div className="text-slate-400">
@@ -1990,7 +2150,7 @@ function CompanyRow(props: CompanyRowProps) {
                           <td>
                             {row.lead.full_name}
                             <div className="text-[10px] text-slate-400">
-                              {row.lead.phone_number} • {row.lead.address}
+                              {row.lead.phone_number} â€¢ {row.lead.address}
                             </div>
                           </td>
                           <td>{row.agent?.name || row.lead.agent_name}</td>
@@ -2043,7 +2203,7 @@ function CompanyAvailabilityGrid({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
           <h3 className="font-bold">
-            Appointment Availability — {formatDateLong(appointmentDate)}
+            Appointment Availability â€” {formatDateLong(appointmentDate)}
           </h3>
           <p className="text-xs text-slate-500">
             Live company blocks and occupied appointments by location and team.
@@ -2236,7 +2396,7 @@ function LocationSection({
                     </td>
                     <td>
                       {[item.city, item.state].filter(Boolean).join(", ") ||
-                        "—"}
+                        "â€”"}
                     </td>
                     <td>{assigned.join(", ") || "Unassigned"}</td>
                     <td>
@@ -2244,14 +2404,14 @@ function LocationSection({
                         ?.map((day) => day.slice(0, 3))
                         .join(", ") || "Default"}
                       <div className="text-[10px] text-slate-400">
-                        {String(item.start_time || "09:00").slice(0, 5)}–
+                        {String(item.start_time || "09:00").slice(0, 5)}â€“
                         {String(item.end_time || "18:00").slice(0, 5)}
                       </div>
                     </td>
                     <td>
                       {item.max_per_day ?? 5}
                       <div className="text-[10px] text-slate-400">
-                        {item.max_per_hour ?? 1}/hour •{" "}
+                        {item.max_per_hour ?? 1}/hour â€¢{" "}
                         {item.slot_interval_minutes ?? 60} min
                       </div>
                     </td>
@@ -2409,8 +2569,8 @@ function PackageSection({
           <h3 className="mt-1 text-lg font-black">Lead Package</h3>
           <p className="text-xs text-slate-500">
             {current
-              ? `${current.package_name || "Lead Package"} • Package #${current.package_number || "—"}`
-              : "Create the company’s first lead package."}
+              ? `${current.package_name || "Lead Package"} â€¢ Package #${current.package_number || "â€”"}`
+              : "Create the companyâ€™s first lead package."}
           </p>
         </div>
         {current && (
@@ -2635,7 +2795,7 @@ function Metric({
       <div className="mt-2 flex items-end justify-between">
         <span className="text-3xl font-black">{value}</span>
         <span className="text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
-          View →
+          View â†’
         </span>
       </div>
     </button>
