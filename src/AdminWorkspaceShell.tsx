@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   BarChart3,
   Building2,
+  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -29,6 +30,7 @@ type AdminSection =
   | "staff"
   | "active-users"
   | "reports"
+  | "weekly-ops"
   | "invoices"
   | "payroll"
   | "paid-client-leads";
@@ -53,6 +55,7 @@ const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
   ["staff", "Agents & Teams", UsersRound, "/#readyops-staff"],
   ["active-users", "Active Users", Wifi, "/admin/active-users"],
   ["reports", "Reports", BarChart3, "/?view=reports"],
+  ["weekly-ops", "Weekly Operations", Calendar, "/?view=weekly-ops"],
   ["invoices", "Invoices", WalletCards, "/?view=invoices"],
   ["payroll", "Payroll", CircleDollarSign, "/?view=payroll"],
 ] as const;

@@ -3,7 +3,7 @@ import {
   Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleDollarSign,
   ClipboardCopy, ExternalLink, FileText, Filter, Home, Link2, Menu, Package, Pencil, Plus, RefreshCw, Search, Settings,
   ShieldCheck, ShieldX, Trash2, UsersRound, WalletCards, BarChart3, Wifi, Handshake, ThumbsDown, ThumbsUp, UserX,
-  LockKeyhole,
+  LockKeyhole, Calendar,
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
@@ -13,13 +13,14 @@ import { useScheduleStore } from './useScheduleStore';
 import { AdminReports } from './AdminReports';
 import { AdminInvoices } from './AdminInvoices';
 import { AdminPayroll } from './AdminPayroll';
+import { WeeklyOperations } from './WeeklyOperations';
 import { AdminSchedulingManager } from './AdminSchedulingManager';
 import { defaultReportDateRange, isLeadOutcome } from './leadOutcome';
 import { isPendingPackage as pkgIsPending } from './companyMetrics';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
-type View = 'overview' | 'reports' | 'invoices' | 'payroll';
+type View = 'overview' | 'reports' | 'invoices' | 'payroll' | 'weekly-ops';
 type IconComponent = typeof Home;
 
 type CompanyOps = {
@@ -64,6 +65,7 @@ const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
+  ['weekly-ops', 'Weekly Operations', Calendar],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
 ] as const;
@@ -76,7 +78,7 @@ function getInitialSidebarCollapsed(): boolean {
 function getInitialView(): View {
   if (typeof window === 'undefined') return 'overview';
   const requested = new URLSearchParams(window.location.search).get('view');
-  return requested === 'reports' || requested === 'invoices' || requested === 'payroll'
+  return requested === 'reports' || requested === 'invoices' || requested === 'payroll' || requested === 'weekly-ops'
     ? requested
     : 'overview';
 }
@@ -236,6 +238,7 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
     else if (key === 'reports') { setReportStatus('all'); setView('reports'); }
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
+    else if (key === 'weekly-ops') setView('weekly-ops');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'leads') window.location.href = '/admin/crm';
     else if (key === 'paid-client-leads') window.location.href = '/admin/paid-client-leads';
@@ -431,6 +434,8 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
             <AdminReports initialStatusFilter={reportStatus} />
           ) : view === 'invoices' ? (
             <AdminInvoices />
+          ) : view === 'weekly-ops' ? (
+            <WeeklyOperations />
           ) : (
             <AdminPayroll />
           )}
