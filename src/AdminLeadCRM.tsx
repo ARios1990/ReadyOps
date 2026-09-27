@@ -2510,6 +2510,29 @@ function loadColumnPreferences(): {
       (key) =>
         key !== "leadId" && key !== "actions" && !uniqueOrder.includes(key),
     );
+    // Columns added after the initial release should slot into their intended
+    // position instead of always appearing at the very end of a returning
+    // user's saved order. `appointmentDateTime` and `serviceType` are the two
+    // newest keys — they belong immediately after `address`, in that order.
+    const NEW_AFTER_ADDRESS: LeadColumnKey[] = [
+      "appointmentDateTime",
+      "serviceType",
+    ];
+    const insertAfterAddress = NEW_AFTER_ADDRESS.filter((key) =>
+      missing.includes(key),
+    );
+    const remainingMissing = missing.filter(
+      (key) => !insertAfterAddress.includes(key),
+    );
+    const mergedOrder = [...uniqueOrder];
+    if (insertAfterAddress.length) {
+      const anchorIdx = mergedOrder.indexOf("address");
+      if (anchorIdx >= 0) {
+        mergedOrder.splice(anchorIdx + 1, 0, ...insertAfterAddress);
+      } else {
+        remainingMissing.unshift(...insertAfterAddress);
+      }
+    }
     const hidden = Array.isArray(parsed.hidden)
       ? parsed.hidden.filter(
           (key): key is LeadColumnKey =>
@@ -2529,7 +2552,7 @@ function loadColumnPreferences(): {
         )
       : [...DEFAULT_LOCKED_COLUMNS];
     return {
-      order: ["leadId", ...uniqueOrder, ...missing, "actions"],
+      order: ["leadId", ...mergedOrder, ...remainingMissing, "actions"],
       hidden: [...new Set(hidden)],
       locked: [...new Set(locked)],
     };
