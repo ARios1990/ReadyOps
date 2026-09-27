@@ -51,11 +51,15 @@ Deno.serve(async (req: Request) => {
 
     const path = `${reservation.company_id}/agent/${reservation.id}/${Date.now()}-${filename}`;
     const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
-    if (error || !data?.token) return json({ error: error?.message || "Unable to authorize recording upload" }, 500);
+    if (error || !data?.token) {
+      console.error("createSignedUploadUrl failed", error);
+      return json({ error: "Unable to authorize recording upload" }, 500);
+    }
 
     return json({ bucket: BUCKET, path, token: data.token, recording_url: `${STORAGE_PREFIX}${path}` });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    console.error("agent-recording-upload-token failed", error);
+    return json({ error: "Unexpected error" }, 500);
   }
 });
 

@@ -1,12 +1,28 @@
 export type JsonMap = Record<string, unknown>;
 
+const GENERIC_ERROR = 'Something went wrong. Please try again.';
+
+/**
+ * Converts an unknown error value into a message that is safe to show a user.
+ *
+ * Only messages the application raised deliberately (PostgreSQL error code
+ * `P0001`, produced by `RAISE EXCEPTION` inside our own functions) are passed
+ * through. Anything else — constraint violations, policy denials, driver and
+ * network errors — is replaced with a generic sentence so that schema,
+ * constraint and policy details are never disclosed to the browser.
+ *
+ * @param error - The value thrown or returned by a Supabase call.
+ * @returns A user-facing message with no internal detail.
+ */
 export function rpcError(error: unknown): string {
-  if (!error) return 'Something went wrong.';
-  if (typeof error === 'string') return error;
-  if (typeof error === 'object' && error && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'Something went wrong.');
+  if (!error) return GENERIC_ERROR;
+  if (typeof error === 'object') {
+    const candidate = error as { code?: unknown; message?: unknown };
+    if (candidate.code === 'P0001' && typeof candidate.message === 'string' && candidate.message.trim()) {
+      return candidate.message.trim();
+    }
   }
-  return 'Something went wrong.';
+  return GENERIC_ERROR;
 }
 
 export function localDate(date: Date): string {

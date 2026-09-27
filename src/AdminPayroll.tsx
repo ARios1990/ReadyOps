@@ -94,18 +94,19 @@ export function AdminPayroll() {
   async function load(preferred?: string) {
     setLoading(true);
     setError("");
-    const [p, a, t] = await Promise.all([
+    const [p, a, t, payFields] = await Promise.all([
       supabase
         .from("payroll_periods")
         .select("*")
         .order("week_start", { ascending: false }),
+      // Pay columns are not granted to the client on public.agents; they come
+      // back from the admin-scoped RPC below instead.
       supabase
         .from("agents")
-        .select(
-          "id,name,team_id,active,pay_structure,weekly_base,hourly_rate,payroll_lead_rate,payroll_signed_contract_rate",
-        )
+        .select("id,name,team_id,active")
         .order("name"),
       supabase.from("teams").select("id,name,abbreviation"),
+      supabase.rpc("readyops_agent_privileged_fields"),
     ]);
 
     if (p.error || a.error || t.error) {
@@ -116,7 +117,17 @@ export function AdminPayroll() {
 
     const nextPeriods = (p.data || []) as Obj[];
     setPeriods(nextPeriods);
-    setAgents((a.data || []) as Obj[]);
+    const payByAgent = new Map<string, Obj>(
+      (((payFields.data as Obj[] | null) || [])).map(row => [String(row.id), row]),
+    );
+    setAgents(
+      ((a.data || []) as Obj[]).map(agent => {
+        const extra = payByAgent.get(String(agent.id));
+        if (!extra) return agent;
+        const { id: _ignored, access_token: _token, ...pay } = extra;
+        return { ...agent, ...pay };
+      }),
+    );
     setTeams((t.data || []) as Obj[]);
 
     const chosen = preferred || periodId || nextPeriods[0]?.id || "";

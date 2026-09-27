@@ -184,6 +184,7 @@ export function PortalAdmin() {
       representativeRes,
       settingsRes,
       appointmentCountRes,
+      agentFieldsRes,
     ] = await Promise.all([
       supabase.rpc("get_company_operations_overview"),
       supabase
@@ -191,7 +192,7 @@ export function PortalAdmin() {
         .select("id,owner_email,billing_email,secondary_emails,billing_address,website,requirements_note,notes,metro_tag"),
       supabase
         .from("agents")
-        .select("id,name,email,portal_slug,access_token,active")
+        .select("id,name,email,portal_slug,active")
         .order("name"),
       supabase
         .from("company_locations")
@@ -214,6 +215,9 @@ export function PortalAdmin() {
         .select("id", { count: "exact", head: true })
         .gte("appointment_date", rangeStart)
         .lte("appointment_date", rangeEnd),
+      // Portal tokens are not granted to the client on public.agents; only
+      // admins and managers get them back from this RPC.
+      supabase.rpc("readyops_agent_privileged_fields"),
     ]);
     const firstError =
       companyRes.error ||
@@ -236,7 +240,15 @@ export function PortalAdmin() {
           ...(contactByCompany.get(String(item.company_id)) || {}),
         })),
       );
-      setAgents((agentRes.data || []) as Obj[]);
+      const agentTokens = new Map<string, Obj>(
+        (((agentFieldsRes.data as Obj[] | null) || [])).map(row => [String(row.id), row]),
+      );
+      setAgents(
+        ((agentRes.data || []) as Obj[]).map(agent => {
+          const extra = agentTokens.get(String(agent.id));
+          return extra?.access_token ? { ...agent, access_token: extra.access_token } : agent;
+        }),
+      );
       setLocations((locationRes.data || []) as CompanyLocation[]);
       setLocationAgents((assignmentRes.data || []) as Obj[]);
       setPackageScopes((scopeRes.data || []) as Obj[]);

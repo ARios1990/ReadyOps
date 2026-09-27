@@ -66,11 +66,10 @@ Deno.serve(async (req: Request) => {
         cacheControl: "3600",
         upsert: false,
       });
-    if (uploadError)
-      return json(
-        { error: uploadError.message || "Unable to upload the logo" },
-        500,
-      );
+    if (uploadError) {
+      console.error("logo upload failed", uploadError);
+      return json({ error: "Unable to upload the logo" }, 500);
+    }
 
     const { data: publicUrl } = admin.storage.from(BUCKET).getPublicUrl(path);
     const logoPath = publicUrl.publicUrl;
@@ -78,21 +77,15 @@ Deno.serve(async (req: Request) => {
       .from("roster_companies")
       .update({ logo_path: logoPath })
       .eq("id", companyId);
-    if (updateError)
-      return json(
-        { error: updateError.message || "Unable to save the company logo" },
-        500,
-      );
+    if (updateError) {
+      console.error("logo path update failed", updateError);
+      return json({ error: "Unable to save the company logo" }, 500);
+    }
 
     return json({ logo_path: logoPath });
   } catch (error) {
-    return json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unexpected upload error",
-      },
-      500,
-    );
+    console.error("upload-company-logo failed", error);
+    return json({ error: "Unexpected upload error" }, 500);
   }
 });
 

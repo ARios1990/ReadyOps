@@ -508,7 +508,7 @@ ${transcript}`;
     });
   } catch (error) {
     console.error("transcribe-and-qualify failed", error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Unexpected error" }, 500);
   }
 });
 

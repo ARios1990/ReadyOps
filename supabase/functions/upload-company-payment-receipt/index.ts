@@ -80,7 +80,10 @@ Deno.serve(async (req: Request) => {
       cacheControl: "3600",
       upsert: false,
     });
-    if (uploadError) return json({ error: uploadError.message || "Unable to upload the receipt" }, 500);
+    if (uploadError) {
+      console.error("receipt upload failed", uploadError);
+      return json({ error: "Unable to upload the receipt" }, 500);
+    }
 
     const { data: receipt, error: insertError } = await admin
       .from("company_payment_receipts")
@@ -102,12 +105,14 @@ Deno.serve(async (req: Request) => {
     if (insertError || !receipt) {
       await admin.storage.from(BUCKET).remove([uploadedPath]);
       uploadedPath = "";
-      return json({ error: insertError?.message || "Unable to save the receipt record" }, 500);
+      console.error("receipt insert failed", insertError);
+      return json({ error: "Unable to save the receipt record" }, 500);
     }
 
     return json({ receipt });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unexpected receipt upload error" }, 500);
+    console.error("upload-company-payment-receipt failed", error);
+    return json({ error: "Unexpected receipt upload error" }, 500);
   }
 });
 

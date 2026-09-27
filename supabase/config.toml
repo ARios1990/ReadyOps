@@ -1,0 +1,32 @@
+[functions.create-user]
+verify_jwt = true
+
+[functions.readymode-sync]
+verify_jwt = false
+
+[functions.send-company-notifications]
+verify_jwt = true
+
+[functions.provision-readyops-logins]
+verify_jwt = true
+
+[functions.shared-recording-url]
+verify_jwt = false
+
+[functions.agent-recording-upload-token]
+verify_jwt = false
+
+[functions.transcribe-and-qualify]
+verify_jwt = true
+
+[functions.openai-readyops-health]
+verify_jwt = true
+
+[functions.upload-company-logo]
+verify_jwt = false
+
+[functions.upload-company-payment-receipt]
+verify_jwt = false
+
+[functions.company-payment-receipt-url]
+verify_jwt = false

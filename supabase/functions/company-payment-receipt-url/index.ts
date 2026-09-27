@@ -45,10 +45,14 @@ Deno.serve(async (req: Request) => {
     if (!receipt?.storage_path) return json({ error: "Receipt not found" }, 404);
 
     const { data, error } = await admin.storage.from(BUCKET).createSignedUrl(receipt.storage_path, 300);
-    if (error || !data?.signedUrl) return json({ error: error?.message || "Unable to open the receipt" }, 500);
+    if (error || !data?.signedUrl) {
+      console.error("createSignedUrl failed", error);
+      return json({ error: "Unable to open the receipt" }, 500);
+    }
     return json({ url: data.signedUrl });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unexpected receipt access error" }, 500);
+    console.error("company-payment-receipt-url failed", error);
+    return json({ error: "Unexpected receipt access error" }, 500);
   }
 });
 

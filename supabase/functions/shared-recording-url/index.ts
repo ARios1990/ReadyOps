@@ -49,11 +49,15 @@ Deno.serve(async (req: Request) => {
     if (!path || path.includes("..")) return json({ error: "Invalid recording path" }, 400);
 
     const { data, error: signedError } = await admin.storage.from("qc-recordings").createSignedUrl(path, 60 * 15);
-    if (signedError || !data?.signedUrl) return json({ error: signedError?.message || "Unable to sign recording URL" }, 500);
+    if (signedError || !data?.signedUrl) {
+      console.error("createSignedUrl failed", signedError);
+      return json({ error: "Unable to sign recording URL" }, 500);
+    }
 
     return json({ signed_url: data.signedUrl, expires_in: 900 });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    console.error("shared-recording-url failed", error);
+    return json({ error: "Unexpected error" }, 500);
   }
 });
 

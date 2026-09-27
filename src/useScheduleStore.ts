@@ -13,6 +13,28 @@ type PortalReservation = {
   expires_at: string;
 };
 
+/**
+ * Agent fields the browser is not granted on `public.agents` — the private lead
+ * portal token and the payroll rates. Returned only to admins (all agents) and
+ * managers (their own team, token only) by `readyops_agent_privileged_fields`.
+ */
+export type AgentPrivilegedFields = {
+  id: string;
+  access_token?: string | null;
+  pay_structure?: string | null;
+  weekly_base?: number | null;
+  hourly_rate?: number | null;
+  payroll_lead_rate?: number | null;
+  payroll_signed_contract_rate?: number | null;
+};
+
+/** Drops null/undefined entries so a merge never blanks an existing value. */
+function stripNulls<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== null && entry !== undefined),
+  ) as Partial<T>;
+}
+
 interface ScheduleStoreResult {
   teams: Team[];
   agents: Agent[];
@@ -55,9 +77,12 @@ export function useScheduleStore(): ScheduleStoreResult {
     const weekStart = startOfWeek();
     const weekEnd = addDays(weekStart, 6);
     const nowIso = new Date().toISOString();
-    const [teamsRes, agentsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, reservationsRes, ctRes, laRes, exceptionsRes] = await Promise.all([
+    const [teamsRes, agentsRes, agentFieldsRes, companiesRes, locationsRes, bookingsRes, appointmentsRes, reservationsRes, ctRes, laRes, exceptionsRes] = await Promise.all([
       supabase.from('teams').select('*'),
-      supabase.from('agents').select('*'),
+      // Portal access tokens and pay rates are not granted to the client on this
+      // table; privileged callers read them through the RPC below instead.
+      supabase.from('agents').select('id,name,team_id,email,portal_slug,active'),
+      supabase.rpc('readyops_agent_privileged_fields'),
       supabase.from('roster_companies').select('*').order('name'),
       supabase.from('company_locations').select('*').order('sort_order'),
       supabase.from('company_bookings').select('*'),
@@ -79,7 +104,17 @@ export function useScheduleStore(): ScheduleStoreResult {
     ]);
 
     if (teamsRes.data) setTeams(teamsRes.data);
-    if (agentsRes.data) setAgents(agentsRes.data);
+    if (agentsRes.data) {
+      const privileged = new Map<string, AgentPrivilegedFields>(
+        ((agentFieldsRes.data as AgentPrivilegedFields[] | null) || []).map(row => [row.id, row]),
+      );
+      setAgents(
+        (agentsRes.data as Agent[]).map(agent => {
+          const extra = privileged.get(agent.id);
+          return extra ? { ...agent, ...stripNulls(extra) } : agent;
+        }),
+      );
+    }
     if (companiesRes.data) setCompanies(companiesRes.data);
     if (locationsRes.data) setLocations(locationsRes.data);
     if (bookingsRes.data) setBookings(bookingsRes.data);
