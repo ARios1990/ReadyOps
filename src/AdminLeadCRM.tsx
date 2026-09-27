@@ -86,6 +86,8 @@ type LeadColumnKey =
   | "zip"
   | "appointmentDate"
   | "appointmentTime"
+  | "appointmentDateTime"
+  | "serviceType"
   | "leadReceived"
   | "company"
   | "agent"
@@ -119,6 +121,8 @@ const LEAD_COLUMNS: LeadColumnDefinition[] = [
   { key: "homeownerName", label: "Homeowner Name", width: 180, editable: true },
   { key: "phone", label: "Phone", width: 135, editable: true },
   { key: "address", label: "Address", width: 260, editable: true },
+  { key: "appointmentDateTime", label: "Appt. Date & Time", width: 200 },
+  { key: "serviceType", label: "Service Type", width: 180 },
   { key: "appointmentDate", label: "Appointment Date", width: 150, editable: true },
   { key: "roofAge", label: "Roof Age", width: 115, editable: true },
   { key: "roofType", label: "Roof Type", width: 130, editable: true },
@@ -2626,6 +2630,8 @@ function inlineCellValue(row: Obj, column: LeadColumnKey): string {
     zip: lead.zip_code,
     appointmentDate: appointment.appointment_date,
     appointmentTime: String(appointment.start_time || "").slice(0, 5),
+    appointmentDateTime: formatAppointmentDateTime(appointment),
+    serviceType: resolveServiceType(lead),
     leadReceived: lead.created_at,
     company: row.company?.id || lead.company_id,
     agent: row.agent?.id || lead.agent_id,
@@ -2687,6 +2693,14 @@ function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
     return dateValue(row.appointment?.appointment_date);
   if (column === "appointmentTime")
     return timeValue(row.appointment?.start_time);
+  if (column === "appointmentDateTime") {
+    const combined = formatAppointmentDateTime(row.appointment || {});
+    return combined || "—";
+  }
+  if (column === "serviceType") {
+    const resolved = resolveServiceType(row.lead || {});
+    return resolved || "—";
+  }
   if (column === "leadReceived")
     return row.lead?.created_at
       ? new Date(row.lead.created_at).toLocaleString()
@@ -2899,6 +2913,27 @@ function dateValue(input: unknown): string {
 }
 function timeValue(input: unknown): string {
   return input ? formatTime(String(input)) : "—";
+}
+function formatAppointmentDateTime(appointment: Obj): string {
+  const date = appointment?.appointment_date
+    ? formatDateLong(String(appointment.appointment_date))
+    : "";
+  const time = appointment?.start_time
+    ? formatTime(String(appointment.start_time))
+    : "";
+  if (date && time) return `${date} · ${time}`;
+  return date || time || "";
+}
+function resolveServiceType(lead: Obj): string {
+  const form = lead?.form_data || {};
+  const candidate =
+    lead?.appointment_type ||
+    form.appointment_type ||
+    form.service_type ||
+    lead?.service_needed ||
+    form.services_need ||
+    "";
+  return String(candidate || "").trim();
 }
 function money(input: unknown): string {
   const amount = Number(String(input ?? "").replace(/[$,\s]/g, ""));
