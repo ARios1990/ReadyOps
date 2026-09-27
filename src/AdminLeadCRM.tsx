@@ -150,6 +150,8 @@ const LEAD_COLUMN_MAP = new Map(
 const DEFAULT_LEAD_COLUMN_ORDER = LEAD_COLUMNS.map((column) => column.key);
 const DEFAULT_LOCKED_COLUMNS: LeadColumnKey[] = ["leadId"];
 const COLUMN_PREFERENCES_STORAGE_KEY = "readyops-admin-lead-columns-v1";
+const COLUMN_ORDER_APPT_SVC_AFTER_ADDRESS_MIGRATION_KEY =
+  "readyops-admin-lead-columns-migration-appt-svc-after-address-v1";
 
 type EditingCell = {
   leadId: string;
@@ -2492,9 +2494,36 @@ function loadColumnPreferences(): {
   };
   if (typeof window === "undefined") return fallback;
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(COLUMN_PREFERENCES_STORAGE_KEY) || "{}",
-    ) as { order?: unknown; hidden?: unknown; locked?: unknown };
+    const raw = window.localStorage.getItem(COLUMN_PREFERENCES_STORAGE_KEY);
+    // The one-time reposition (appointmentDateTime + serviceType after
+    // address) must run exactly once per browser profile so users can freely
+    // reorder these columns afterwards. The flag is stored under a separate
+    // localStorage key so bumping/replacing the preference payload never
+    // resurrects the migration.
+    const migrationAlreadyRan =
+      window.localStorage.getItem(
+        COLUMN_ORDER_APPT_SVC_AFTER_ADDRESS_MIGRATION_KEY,
+      ) === "1";
+    if (!raw) {
+      // Nothing persisted yet — the default order already places both keys
+      // after address, so record the migration as completed and return.
+      if (!migrationAlreadyRan) {
+        try {
+          window.localStorage.setItem(
+            COLUMN_ORDER_APPT_SVC_AFTER_ADDRESS_MIGRATION_KEY,
+            "1",
+          );
+        } catch {
+          // Persistence failure is non-fatal.
+        }
+      }
+      return fallback;
+    }
+    const parsed = JSON.parse(raw) as {
+      order?: unknown;
+      hidden?: unknown;
+      locked?: unknown;
+    };
     const known = new Set(DEFAULT_LEAD_COLUMN_ORDER);
     const storedOrder = Array.isArray(parsed.order)
       ? parsed.order.filter(
@@ -2506,33 +2535,39 @@ function loadColumnPreferences(): {
         )
       : [];
     const uniqueOrder = [...new Set(storedOrder)];
-    const missing = DEFAULT_LEAD_COLUMN_ORDER.filter(
-      (key) =>
-        key !== "leadId" && key !== "actions" && !uniqueOrder.includes(key),
-    );
-    // Columns added after the initial release should slot into their intended
-    // position instead of always appearing at the very end of a returning
-    // user's saved order. `appointmentDateTime` and `serviceType` are the two
-    // newest keys — they belong immediately after `address`, in that order.
     const NEW_AFTER_ADDRESS: LeadColumnKey[] = [
       "appointmentDateTime",
       "serviceType",
     ];
-    const insertAfterAddress = NEW_AFTER_ADDRESS.filter((key) =>
-      missing.includes(key),
-    );
-    const remainingMissing = missing.filter(
-      (key) => !insertAfterAddress.includes(key),
-    );
-    const mergedOrder = [...uniqueOrder];
-    if (insertAfterAddress.length) {
-      const anchorIdx = mergedOrder.indexOf("address");
+    // When the migration flag is absent, strip appointmentDateTime and
+    // serviceType from wherever the persisted order placed them and
+    // reinsert them immediately after address. Every other saved key keeps
+    // its relative position. When the flag is already set, honor the saved
+    // order verbatim so Reorder Columns changes persist.
+    let mergedOrder: LeadColumnKey[];
+    if (!migrationAlreadyRan) {
+      const withoutNew = uniqueOrder.filter(
+        (key) => !NEW_AFTER_ADDRESS.includes(key),
+      );
+      const anchorIdx = withoutNew.indexOf("address");
       if (anchorIdx >= 0) {
-        mergedOrder.splice(anchorIdx + 1, 0, ...insertAfterAddress);
+        mergedOrder = [
+          ...withoutNew.slice(0, anchorIdx + 1),
+          ...NEW_AFTER_ADDRESS,
+          ...withoutNew.slice(anchorIdx + 1),
+        ];
       } else {
-        remainingMissing.unshift(...insertAfterAddress);
+        mergedOrder = [...NEW_AFTER_ADDRESS, ...withoutNew];
       }
+    } else {
+      mergedOrder = uniqueOrder;
     }
+    const remainingMissing = DEFAULT_LEAD_COLUMN_ORDER.filter(
+      (key) =>
+        key !== "leadId" &&
+        key !== "actions" &&
+        !mergedOrder.includes(key),
+    );
     const hidden = Array.isArray(parsed.hidden)
       ? parsed.hidden.filter(
           (key): key is LeadColumnKey =>
@@ -2551,10 +2586,44 @@ function loadColumnPreferences(): {
             !hidden.includes(key as LeadColumnKey),
         )
       : [...DEFAULT_LOCKED_COLUMNS];
+    const finalOrder: LeadColumnKey[] = [
+      "leadId",
+      ...mergedOrder,
+      ...remainingMissing,
+      "actions",
+    ];
+    const deduped: LeadColumnKey[] = [];
+    const seen = new Set<LeadColumnKey>();
+    for (const key of finalOrder) {
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(key);
+      }
+    }
+    const dedupedHidden = [...new Set(hidden)];
+    const dedupedLocked = [...new Set(locked)];
+    if (!migrationAlreadyRan) {
+      try {
+        window.localStorage.setItem(
+          COLUMN_PREFERENCES_STORAGE_KEY,
+          JSON.stringify({
+            order: deduped,
+            hidden: dedupedHidden,
+            locked: dedupedLocked,
+          }),
+        );
+        window.localStorage.setItem(
+          COLUMN_ORDER_APPT_SVC_AFTER_ADDRESS_MIGRATION_KEY,
+          "1",
+        );
+      } catch {
+        // Persistence failure is non-fatal; the in-memory order is still correct.
+      }
+    }
     return {
-      order: ["leadId", ...mergedOrder, ...remainingMissing, "actions"],
-      hidden: [...new Set(hidden)],
-      locked: [...new Set(locked)],
+      order: deduped,
+      hidden: dedupedHidden,
+      locked: dedupedLocked,
     };
   } catch {
     return fallback;
