@@ -117,17 +117,31 @@ export function AdminPayroll() {
 
     const nextPeriods = (p.data || []) as Obj[];
     setPeriods(nextPeriods);
+    const privilegedAgents = (payFields.data as Obj[] | null) || [];
     const payByAgent = new Map<string, Obj>(
-      (((payFields.data as Obj[] | null) || [])).map(row => [String(row.id), row]),
+      privilegedAgents.map((row) => [String(row.id).toLowerCase(), row]),
     );
-    setAgents(
-      ((a.data || []) as Obj[]).map(agent => {
-        const extra = payByAgent.get(String(agent.id));
-        if (!extra) return agent;
-        const { id: _ignored, access_token: _token, ...pay } = extra;
-        return { ...agent, ...pay };
-      }),
-    );
+    const safeAgents = (a.data || []) as Obj[];
+    const agentsById = new Map<string, Obj>();
+    safeAgents.forEach((agent) => {
+      const id = String(agent.id).toLowerCase();
+      const extra = payByAgent.get(id);
+      const safeExtra = { ...(extra || {}) };
+      delete safeExtra.id;
+      delete safeExtra.access_token;
+      agentsById.set(id, { ...safeExtra, ...agent });
+    });
+    // The role-checked RPC also returns safe identity fields. Use it as a
+    // fallback if the direct agents query is unavailable or filtered by RLS.
+    privilegedAgents.forEach((agent) => {
+      const id = String(agent.id).toLowerCase();
+      if (!agentsById.has(id)) {
+        const safeAgent = { ...agent };
+        delete safeAgent.access_token;
+        agentsById.set(id, safeAgent);
+      }
+    });
+    setAgents([...agentsById.values()]);
     setTeams((t.data || []) as Obj[]);
 
     const chosen = preferred || periodId || nextPeriods[0]?.id || "";
@@ -184,7 +198,7 @@ export function AdminPayroll() {
 
   const period = periods.find((item) => item.id === periodId);
   const agentById = useMemo(
-    () => new Map(agents.map((agent) => [agent.id, agent])),
+    () => new Map(agents.map((agent) => [String(agent.id).toLowerCase(), agent])),
     [agents],
   );
   const teamById = useMemo(
@@ -541,7 +555,7 @@ export function AdminPayroll() {
               <tbody>
                 {visibleEntries.map((entry) => {
                   const row = drafts[entry.id] || entry;
-                  const agent = agentById.get(entry.agent_id);
+                  const agent = agentById.get(String(entry.agent_id).toLowerCase());
                   const team = teamById.get(entry.team_id);
                   const structure = (row.pay_structure ||
                     "commission_only") as PayStructure;
@@ -553,7 +567,7 @@ export function AdminPayroll() {
                   return (
                     <tr key={entry.id} className="border-t align-top">
                       <td className="p-3 font-bold">
-                        {agent?.name || "Unknown Agent"}
+                        {agent?.name || `Agent ${String(entry.agent_id || "").slice(0, 8) || "unassigned"}`}
                       </td>
                       <td>{team?.abbreviation || team?.name || "—"}</td>
                       <td>
