@@ -835,7 +835,7 @@ function EmptyUploadState({ onPick }: { onPick: () => void }) {
       </div>
       <h3 className="mt-3 text-base font-black">Upload a workforce report to begin</h3>
       <p className="mx-auto mt-1 max-w-lg text-sm opacity-70">
-        Drop a weekly export from your dialer or workforce system. All metrics on this page are computed from the file you upload — nothing is fabricated. CSV, TSV, and plain text are parsed in the browser; XLSX, XLS, and PDF are not supported here and should be exported to CSV before upload. Data lives in this browser session only.
+        Drop a weekly export from your dialer or workforce system. All metrics on this page are computed from the file you upload — nothing is fabricated. CSV, TSV, plain text, XLSX/XLS, and text-based PDFs are all parsed in this browser and never leave your device. Data lives in this browser session only.
       </p>
       <button className="readyops-ref-primary mt-4 inline-flex" onClick={onPick}>
         <Upload size={14} /> Choose file

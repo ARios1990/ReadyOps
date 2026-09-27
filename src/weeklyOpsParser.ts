@@ -1,7 +1,7 @@
 // Client-side parser for weekly workforce report uploads.
-// Supports CSV, TSV, plain text (delimited); XLSX/XLS/PDF are rejected with a
-// clear message so the user can convert and retry. Nothing is sent to the
-// network — all parsing runs in the browser.
+// Supports CSV, TSV, plain text, XLSX/XLS (via xlsx), and text-based PDFs
+// (via pdfjs-dist). All parsing runs in the browser — file bytes are never
+// sent over the network.
 
 export type ParsedRow = {
   agent_name: string | null;
@@ -51,13 +51,11 @@ const KEY_ALIASES: Record<string, RegExp[]> = {
   status: [/^status$/i, /^state$/i, /^attendance$/i],
 };
 
-/** Read the file as text, safely trapping any binary/format issues. */
-export async function readAsText(file: File): Promise<string> {
+async function readAsText(file: File): Promise<string> {
   return await file.text();
 }
 
-/** Detect the delimiter of a text sample. */
-export function detectDelimiter(sample: string): string {
+function detectDelimiter(sample: string): string {
   const line = sample.split(/\r?\n/).find((row) => row.trim().length > 0) || "";
   const candidates: [string, number][] = [
     [",", (line.match(/,/g) || []).length],
@@ -69,8 +67,7 @@ export function detectDelimiter(sample: string): string {
   return candidates[0][1] > 0 ? candidates[0][0] : ",";
 }
 
-/** RFC-4180-ish CSV/TSV/DSV parser: handles quoted fields, escaped quotes, CRLF. */
-export function parseDelimited(text: string, delimiter: string): string[][] {
+function parseDelimited(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let field = "";
   let row: string[] = [];
@@ -80,34 +77,20 @@ export function parseDelimited(text: string, delimiter: string): string[][] {
     const c = src[i];
     if (inQuotes) {
       if (c === '"') {
-        if (src[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === delimiter) {
-      row.push(field);
-      field = "";
-    } else if (c === "\n" || c === "\r") {
+        if (src[i + 1] === '"') { field += '"'; i += 1; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === delimiter) { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
       if (c === "\r" && src[i + 1] === "\n") i += 1;
       row.push(field);
       rows.push(row);
       row = [];
       field = "";
-    } else {
-      field += c;
-    }
+    } else field += c;
   }
-  if (field.length || row.length) {
-    row.push(field);
-    rows.push(row);
-  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows.filter((r) => r.some((cell) => cell.trim().length > 0));
 }
 
@@ -134,7 +117,6 @@ function toNumber(value: string): number | null {
 }
 
 function parseDuration(value: string): number | null {
-  // Accept "H:MM" or "HH:MM:SS" clock-style durations and return decimal hours.
   const m = value.trim().match(/^(\d{1,3}):([0-5]?\d)(?::([0-5]?\d))?$/);
   if (!m) return null;
   const hours = Number(m[1]);
@@ -184,53 +166,12 @@ function toIsoTimestamp(value: string): string | null {
   return null;
 }
 
-/** Main entry point. Rejects binary formats with clear guidance. */
-export async function parseWorkforceReport(file: File): Promise<ParseResult> {
-  const name = file.name.toLowerCase();
-  const isBinary =
-    name.endsWith(".xlsx") ||
-    name.endsWith(".xls") ||
-    name.endsWith(".xlsb") ||
-    name.endsWith(".pdf") ||
-    file.type === "application/pdf" ||
-    file.type.startsWith("application/vnd.");
-  if (isBinary) {
-    return {
-      rows: [],
-      detectedColumns: [],
-      unmappedColumns: [],
-      columnMap: {},
-      warnings: [],
-      errors: [
-        `The ${name.split(".").pop()?.toUpperCase() || "binary"} format cannot be parsed reliably in the browser without a specialized library that is not installed here.`,
-      ],
-      formatSupported: false,
-      guidance:
-        "Please export or Save-As to CSV or a tab-delimited TXT file (in Excel: File → Save As → CSV UTF-8 or Text). Column headers on the first row work best. Then upload again.",
-    };
-  }
-  const text = await readAsText(file);
-  if (!text.trim()) {
-    return {
-      rows: [],
-      detectedColumns: [],
-      unmappedColumns: [],
-      columnMap: {},
-      warnings: [],
-      errors: ["The file appears to be empty."],
-      formatSupported: true,
-    };
-  }
-  const delimiter = detectDelimiter(text);
-  const grid = parseDelimited(text, delimiter);
+/** Turn a parsed 2-D grid (header row on row 0) into a ParseResult. */
+function gridToResult(grid: string[][]): ParseResult {
   if (grid.length === 0) {
     return {
-      rows: [],
-      detectedColumns: [],
-      unmappedColumns: [],
-      columnMap: {},
-      warnings: [],
-      errors: ["No rows were detected in the file after parsing."],
+      rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+      warnings: [], errors: ["No rows were detected in the file after parsing."],
       formatSupported: true,
     };
   }
@@ -248,12 +189,14 @@ export async function parseWorkforceReport(file: File): Promise<ParseResult> {
   for (let r = 0; r < dataRows.length; r += 1) {
     const cells = dataRows[r];
     const raw: Record<string, string> = {};
-    header.forEach((h, i) => {
-      raw[h] = cells[i] ?? "";
-    });
+    header.forEach((h, i) => { raw[h] = cells[i] ?? ""; });
     const pick = (key: string): string => {
       const src = header.find((h) => columnMap[h] === key);
       return src ? (raw[src] ?? "") : "";
+    };
+    const roundInt = (v: string | null | number | undefined): number | null => {
+      const n = typeof v === "string" ? toNumber(v) : v == null ? null : Number(v);
+      return n == null || !Number.isFinite(n) ? null : Math.round(n);
     };
     const row: ParsedRow = {
       agent_name: pick("agent_name").trim() || null,
@@ -265,18 +208,9 @@ export async function parseWorkforceReport(file: File): Promise<ParseResult> {
       productive_hours: toNumber(pick("productive_hours")),
       idle_hours: toNumber(pick("idle_hours")),
       break_hours: toNumber(pick("break_hours")),
-      calls: (() => {
-        const n = toNumber(pick("calls"));
-        return n == null ? null : Math.round(n);
-      })(),
-      appointments: (() => {
-        const n = toNumber(pick("appointments"));
-        return n == null ? null : Math.round(n);
-      })(),
-      results: (() => {
-        const n = toNumber(pick("results"));
-        return n == null ? null : Math.round(n);
-      })(),
+      calls: roundInt(pick("calls")),
+      appointments: roundInt(pick("appointments")),
+      results: roundInt(pick("results")),
       login_at: toIsoTimestamp(pick("login_at")),
       logout_at: toIsoTimestamp(pick("logout_at")),
       status: pick("status").trim() || null,
@@ -289,17 +223,168 @@ export async function parseWorkforceReport(file: File): Promise<ParseResult> {
     rows.push(row);
   }
   if (!Object.values(columnMap).includes("agent_name")) {
-    warnings.push(
-      "No agent-name column recognized — imported rows will not be attributed to individual agents.",
-    );
+    warnings.push("No agent-name column recognized — imported rows will not be attributed to individual agents.");
   }
   return {
-    rows,
-    detectedColumns: header,
-    unmappedColumns: unmapped,
-    columnMap,
-    warnings,
-    errors: [],
-    formatSupported: true,
+    rows, detectedColumns: header, unmappedColumns: unmapped, columnMap,
+    warnings, errors: [], formatSupported: true,
   };
+}
+
+async function parseCsvLike(file: File): Promise<ParseResult> {
+  const text = await readAsText(file);
+  if (!text.trim()) {
+    return {
+      rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+      warnings: [], errors: ["The file appears to be empty."], formatSupported: true,
+    };
+  }
+  const delimiter = detectDelimiter(text);
+  const grid = parseDelimited(text, delimiter);
+  return gridToResult(grid);
+}
+
+async function parseXlsx(file: File): Promise<ParseResult> {
+  try {
+    const XLSX = await import("xlsx");
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    const firstSheetName = wb.SheetNames[0];
+    if (!firstSheetName) {
+      return {
+        rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+        warnings: [], errors: ["Workbook contains no sheets."], formatSupported: true,
+      };
+    }
+    const sheet = wb.Sheets[firstSheetName];
+    const aoa = XLSX.utils.sheet_to_json<string[]>(sheet, {
+      header: 1, defval: "", raw: false, blankrows: false,
+    }) as unknown[][];
+    const grid: string[][] = aoa
+      .map((row) => row.map((cell) => (cell == null ? "" : String(cell))))
+      .filter((row) => row.some((c) => c.trim().length > 0));
+    const result = gridToResult(grid);
+    const extraSheets = wb.SheetNames.slice(1);
+    if (extraSheets.length > 0) {
+      result.warnings.unshift(
+        `Only the first sheet ("${firstSheetName}") was imported. Other sheets ignored: ${extraSheets.join(", ")}.`,
+      );
+    }
+    return result;
+  } catch (e) {
+    return {
+      rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+      warnings: [],
+      errors: [`Failed to read the Excel file: ${e instanceof Error ? e.message : String(e)}`],
+      formatSupported: true,
+      guidance: "The file may be password-protected or use an unusual format. Try Save-As → CSV or a newer .xlsx and re-upload.",
+    };
+  }
+}
+
+type PdfTextItem = { str: string; transform: number[]; hasEOL?: boolean };
+
+async function parsePdf(file: File): Promise<ParseResult> {
+  try {
+    const pdfjs: typeof import("pdfjs-dist") = await import("pdfjs-dist");
+    const workerUrl = (await import("pdfjs-dist/build/pdf.worker.mjs?url")).default;
+    (pdfjs.GlobalWorkerOptions as { workerSrc: string }).workerSrc = workerUrl;
+    const buf = await file.arrayBuffer();
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf) });
+    const pdf = await loadingTask.promise;
+    const allLines: { y: number; items: { x: number; str: string }[] }[] = [];
+    let totalChars = 0;
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      const items = content.items as PdfTextItem[];
+      const linesForPage = new Map<number, { x: number; str: string }[]>();
+      for (const it of items) {
+        if (!it.str) continue;
+        totalChars += it.str.length;
+        const x = it.transform[4];
+        const y = Math.round(it.transform[5]);
+        if (!linesForPage.has(y)) linesForPage.set(y, []);
+        linesForPage.get(y)!.push({ x, str: it.str });
+      }
+      const sortedYs = [...linesForPage.keys()].sort((a, b) => b - a);
+      for (const y of sortedYs) {
+        const line = linesForPage.get(y)!;
+        line.sort((a, b) => a.x - b.x);
+        allLines.push({ y, items: line });
+      }
+    }
+    if (totalChars === 0) {
+      return {
+        rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+        warnings: [],
+        errors: ["This PDF contains no extractable text — it looks like a scanned or image-only document."],
+        formatSupported: true,
+        guidance: "Please export the source report as CSV or XLSX, or run OCR on the PDF to produce a text-searchable version, and upload again.",
+      };
+    }
+    // Convert grouped lines to tabular rows by splitting on wide x-gaps.
+    const rowsAsCells: string[][] = allLines.map(({ items }) => {
+      const cells: string[] = [];
+      let cur = "";
+      let prevEnd: number | null = null;
+      for (const it of items) {
+        if (prevEnd != null && it.x - prevEnd > 8) {
+          cells.push(cur.trim());
+          cur = it.str;
+        } else {
+          cur = cur ? `${cur} ${it.str}` : it.str;
+        }
+        prevEnd = it.x + it.str.length * 4;
+      }
+      if (cur) cells.push(cur.trim());
+      return cells;
+    }).filter((r) => r.some((c) => c.length > 0));
+    if (rowsAsCells.length < 2) {
+      return {
+        rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+        warnings: [],
+        errors: ["Could not detect a tabular layout in the PDF."],
+        formatSupported: true,
+        guidance: "This heuristic works best on PDFs that render a table with aligned columns. Re-export as CSV or XLSX for reliable results.",
+      };
+    }
+    const headerRow = rowsAsCells.find((r) => r.some((c) => matchKey(c) != null));
+    const grid = headerRow
+      ? [headerRow, ...rowsAsCells.slice(rowsAsCells.indexOf(headerRow) + 1).filter((r) => r.length >= Math.max(2, headerRow.length - 1))]
+      : rowsAsCells;
+    const result = gridToResult(grid);
+    if (!headerRow) {
+      result.warnings.unshift(
+        "PDF header row could not be confidently identified — column mapping used the first non-empty line. If results look wrong, please re-upload the CSV or XLSX version.",
+      );
+    }
+    if (Object.keys(result.columnMap).length === 0) {
+      result.warnings.push(
+        "None of the PDF columns matched known workforce headers. Consider uploading a CSV/XLSX export instead.",
+      );
+    }
+    return result;
+  } catch (e) {
+    return {
+      rows: [], detectedColumns: [], unmappedColumns: [], columnMap: {},
+      warnings: [],
+      errors: [`Failed to read the PDF: ${e instanceof Error ? e.message : String(e)}`],
+      formatSupported: true,
+      guidance: "If the PDF is encrypted or image-only, export the source report as CSV or XLSX and upload that instead.",
+    };
+  }
+}
+
+export async function parseWorkforceReport(file: File): Promise<ParseResult> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".xlsb") ||
+      file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      file.type === "application/vnd.ms-excel") {
+    return await parseXlsx(file);
+  }
+  if (name.endsWith(".pdf") || file.type === "application/pdf") {
+    return await parsePdf(file);
+  }
+  return await parseCsvLike(file);
 }
