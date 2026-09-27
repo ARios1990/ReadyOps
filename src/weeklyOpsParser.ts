@@ -3,6 +3,12 @@
 // (via pdfjs-dist). All parsing runs in the browser — file bytes are never
 // sent over the network.
 
+import * as XLSX from "xlsx";
+import * as pdfjs from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+(pdfjs.GlobalWorkerOptions as { workerSrc: string }).workerSrc = pdfWorkerUrl;
+
 export type ParsedRow = {
   agent_name: string | null;
   team_name: string | null;
@@ -246,7 +252,6 @@ async function parseCsvLike(file: File): Promise<ParseResult> {
 
 async function parseXlsx(file: File): Promise<ParseResult> {
   try {
-    const XLSX = await import("xlsx");
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
     const firstSheetName = wb.SheetNames[0];
@@ -286,9 +291,6 @@ type PdfTextItem = { str: string; transform: number[]; hasEOL?: boolean };
 
 async function parsePdf(file: File): Promise<ParseResult> {
   try {
-    const pdfjs: typeof import("pdfjs-dist") = await import("pdfjs-dist");
-    const workerUrl = (await import("pdfjs-dist/build/pdf.worker.mjs?url")).default;
-    (pdfjs.GlobalWorkerOptions as { workerSrc: string }).workerSrc = workerUrl;
     const buf = await file.arrayBuffer();
     const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf) });
     const pdf = await loadingTask.promise;
