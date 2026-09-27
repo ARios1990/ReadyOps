@@ -4,10 +4,8 @@ import {
   BarChart3,
   Calendar,
   CheckCircle2,
-  ChevronDown,
   Clock,
   Download,
-  Filter,
   Info,
   Loader2,
   Phone,
@@ -19,7 +17,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { supabase } from "./supabase";
 import { parseWorkforceReport, type ParsedRow, type ParseResult } from "./weeklyOpsParser";
 
 type ScheduleConfig = {
@@ -54,9 +51,10 @@ const DEFAULT_CONFIG: ScheduleConfig = {
   attendance_shortfall_hours: 1,
 };
 
+const CONFIG_STORAGE_KEY = "readyops-weekly-ops-config";
+
 type UploadRecord = {
   id: string;
-  week_start: string;
   filename: string;
   file_type: string;
   detected_columns: string[];
@@ -66,7 +64,7 @@ type UploadRecord = {
   created_at: string;
 };
 
-type Row = ParsedRow & { id: string; week_start: string };
+type Row = ParsedRow & { id: string; upload_id: string; week_start: string };
 
 const ALL_DAY_ABBREV = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -83,8 +81,7 @@ function formatWeekLabel(iso: string): string {
   const start = new Date(y, m - 1, d);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const fmt = (dt: Date) =>
-    dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const fmt = (dt: Date) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `${fmt(start)} – ${fmt(end)}, ${end.getFullYear()}`;
 }
 
@@ -110,14 +107,27 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function loadConfigFromStorage(): ScheduleConfig {
+  try {
+    const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (!raw) return DEFAULT_CONFIG;
+    const parsed = JSON.parse(raw) as Partial<ScheduleConfig>;
+    return { ...DEFAULT_CONFIG, ...parsed };
+  } catch {
+    return DEFAULT_CONFIG;
+  }
+}
+
+function newId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function WeeklyOperations() {
   const [weekStart, setWeekStart] = useState<string>(() => isoMonday(new Date()));
-  const [availableWeeks, setAvailableWeeks] = useState<string[]>([]);
-  const [config, setConfig] = useState<ScheduleConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<ScheduleConfig>(loadConfigFromStorage);
   const [configOpen, setConfigOpen] = useState(false);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [lastResult, setLastResult] = useState<ParseResult | null>(null);
@@ -128,182 +138,85 @@ export function WeeklyOperations() {
   const [performanceFilter, setPerformanceFilter] = useState("all");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const loadConfig = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from("weekly_ops_schedule_config")
-      .select("*")
-      .maybeSingle();
-    if (err && err.code !== "PGRST116") {
-      setError(err.message);
-      return;
-    }
-    if (data) {
-      setConfig({
-        paid_hours_per_week: Number(data.paid_hours_per_week),
-        scheduled_hours_per_day: Number(data.scheduled_hours_per_day),
-        work_days: Array.isArray(data.work_days) ? data.work_days : DEFAULT_CONFIG.work_days,
-        hourly_rate: Number(data.hourly_rate),
-        lunch_minutes_unpaid: Number(data.lunch_minutes_unpaid),
-        break_count: Number(data.break_count),
-        break_minutes_paid_each: Number(data.break_minutes_paid_each),
-        planned_start_time: data.planned_start_time ?? null,
-        planned_end_time: data.planned_end_time ?? null,
-        low_productivity_threshold: Number(data.low_productivity_threshold),
-        low_calls_threshold: Number(data.low_calls_threshold),
-        high_idle_hours_threshold: Number(data.high_idle_hours_threshold),
-        attendance_shortfall_hours: Number(data.attendance_shortfall_hours),
-      });
-    }
-  }, []);
-
-  const loadWeekData = useCallback(
-    async (targetWeek: string) => {
-      setLoading(true);
-      setError("");
-      const [uploadsRes, rowsRes, allWeeksRes] = await Promise.all([
-        supabase
-          .from("weekly_ops_uploads")
-          .select("*")
-          .eq("week_start", targetWeek)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("weekly_ops_rows")
-          .select("*")
-          .eq("week_start", targetWeek)
-          .limit(5000),
-        supabase
-          .from("weekly_ops_uploads")
-          .select("week_start")
-          .order("week_start", { ascending: false })
-          .limit(200),
-      ]);
-      if (uploadsRes.error) setError(uploadsRes.error.message);
-      else setUploads((uploadsRes.data || []) as UploadRecord[]);
-      if (rowsRes.error) setError(rowsRes.error.message);
-      else setRows((rowsRes.data || []) as Row[]);
-      if (!allWeeksRes.error && allWeeksRes.data) {
-        const weeks = [...new Set(allWeeksRes.data.map((r) => r.week_start))];
-        if (!weeks.includes(targetWeek)) weeks.unshift(targetWeek);
-        setAvailableWeeks(weeks);
-      }
-      setLoading(false);
-    },
-    [],
-  );
-
   useEffect(() => {
-    void loadConfig();
-  }, [loadConfig]);
-  useEffect(() => {
-    void loadWeekData(weekStart);
-  }, [loadWeekData, weekStart]);
-
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    setError("");
     try {
-      const result = await parseWorkforceReport(file);
-      setLastResult(result);
-      if (!result.formatSupported || result.errors.length > 0) {
-        setUploading(false);
-        return;
-      }
-      const { data: sessionData } = await supabase.auth.getUser();
-      const ownerId = sessionData.user?.id;
-      if (!ownerId) {
-        setError("You are signed out. Please sign in again.");
-        setUploading(false);
-        return;
-      }
-      const uploadInsert = await supabase
-        .from("weekly_ops_uploads")
-        .insert({
-          owner_id: ownerId,
-          week_start: weekStart,
+      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [config]);
+
+  const weekRows = useMemo(() => rows.filter((r) => r.week_start === weekStart), [rows, weekStart]);
+  const weekUploads = useMemo(() => {
+    const uploadIds = new Set(rows.filter((r) => r.week_start === weekStart).map((r) => r.upload_id));
+    return uploads.filter((u) => uploadIds.has(u.id));
+  }, [rows, uploads, weekStart]);
+  const availableWeeks = useMemo(() => {
+    const set = new Set<string>([weekStart]);
+    rows.forEach((r) => set.add(r.week_start));
+    return [...set].sort().reverse();
+  }, [rows, weekStart]);
+
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      setUploading(true);
+      setError("");
+      try {
+        const result = await parseWorkforceReport(file);
+        setLastResult(result);
+        if (!result.formatSupported || result.errors.length > 0) return;
+        const uploadId = newId();
+        const record: UploadRecord = {
+          id: uploadId,
           filename: file.name,
           file_type: file.type || file.name.split(".").pop() || "unknown",
           detected_columns: result.detectedColumns,
           unmapped_columns: result.unmappedColumns,
           warnings: result.warnings,
           row_count: result.rows.length,
-        })
-        .select("id")
-        .single();
-      if (uploadInsert.error) {
-        setError(uploadInsert.error.message);
-        setUploading(false);
-        return;
-      }
-      const uploadId = uploadInsert.data.id as string;
-      const batches: ParsedRow[][] = [];
-      for (let i = 0; i < result.rows.length; i += 200) batches.push(result.rows.slice(i, i + 200));
-      for (const batch of batches) {
-        const payload = batch.map((r) => ({
-          owner_id: ownerId,
+          created_at: new Date().toISOString(),
+        };
+        const insertedRows: Row[] = result.rows.map((r) => ({
+          ...r,
+          id: newId(),
           upload_id: uploadId,
           week_start: weekStart,
-          agent_name: r.agent_name,
-          team_name: r.team_name,
-          entry_date: r.entry_date,
           day_of_week: r.day_of_week || dayAbbrev(r.entry_date),
-          scheduled_hours: r.scheduled_hours,
-          actual_hours: r.actual_hours,
-          productive_hours: r.productive_hours,
-          idle_hours: r.idle_hours,
-          break_hours: r.break_hours,
-          calls: r.calls,
-          appointments: r.appointments,
-          results: r.results,
-          login_at: r.login_at,
-          logout_at: r.logout_at,
-          status: r.status,
-          raw: r.raw,
         }));
-        const insertRes = await supabase.from("weekly_ops_rows").insert(payload);
-        if (insertRes.error) {
-          setError(insertRes.error.message);
-          setUploading(false);
-          return;
-        }
+        setUploads((prev) => [record, ...prev]);
+        setRows((prev) => [...prev, ...insertedRows]);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Upload failed.");
+      } finally {
+        setUploading(false);
       }
-      await loadWeekData(weekStart);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
-    } finally {
-      setUploading(false);
-    }
-  }
+    },
+    [weekStart],
+  );
 
-  async function deleteUpload(id: string) {
-    if (!window.confirm("Remove this upload and its rows from this week?")) return;
-    setError("");
-    const del = await supabase.from("weekly_ops_uploads").delete().eq("id", id);
-    if (del.error) {
-      setError(del.error.message);
-      return;
-    }
-    await loadWeekData(weekStart);
-  }
+  const deleteUpload = useCallback((id: string) => {
+    if (!window.confirm("Remove this upload and its rows from this session?")) return;
+    setUploads((prev) => prev.filter((u) => u.id !== id));
+    setRows((prev) => prev.filter((r) => r.upload_id !== id));
+  }, []);
 
-  async function saveConfig(next: ScheduleConfig) {
+  const clearWeek = useCallback(() => {
+    if (!window.confirm("Clear all uploads and rows for the selected week?")) return;
+    const affectedUploadIds = new Set(rows.filter((r) => r.week_start === weekStart).map((r) => r.upload_id));
+    setRows((prev) => prev.filter((r) => r.week_start !== weekStart));
+    setUploads((prev) => prev.filter((u) => !affectedUploadIds.has(u.id)));
+  }, [rows, weekStart]);
+
+  const saveConfig = useCallback((next: ScheduleConfig) => {
     setConfig(next);
-    const { data: sessionData } = await supabase.auth.getUser();
-    const ownerId = sessionData.user?.id;
-    if (!ownerId) return;
-    const upsert = await supabase.from("weekly_ops_schedule_config").upsert({
-      owner_id: ownerId,
-      ...next,
-      updated_at: new Date().toISOString(),
-    });
-    if (upsert.error) setError(upsert.error.message);
-  }
+    setConfigOpen(false);
+  }, []);
 
-  // ---- Derived data ----
   const rowsFiltered = useMemo(() => {
-    return rows.filter((r) => {
+    return weekRows.filter((r) => {
       if (agentFilter && !(r.agent_name || "").toLowerCase().includes(agentFilter.toLowerCase())) return false;
       if (teamFilter !== "all" && (r.team_name || "—") !== teamFilter) return false;
       const dow = r.day_of_week || dayAbbrev(r.entry_date);
@@ -311,19 +224,19 @@ export function WeeklyOperations() {
       if (statusFilter !== "all" && (r.status || "").toLowerCase() !== statusFilter.toLowerCase()) return false;
       return true;
     });
-  }, [rows, agentFilter, teamFilter, dayFilter, statusFilter]);
+  }, [weekRows, agentFilter, teamFilter, dayFilter, statusFilter]);
 
   const teams = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r) => set.add(r.team_name || "—"));
+    weekRows.forEach((r) => set.add(r.team_name || "—"));
     return [...set].sort();
-  }, [rows]);
+  }, [weekRows]);
 
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r) => r.status && set.add(r.status));
+    weekRows.forEach((r) => r.status && set.add(r.status));
     return [...set].sort();
-  }, [rows]);
+  }, [weekRows]);
 
   type AgentAgg = {
     name: string;
@@ -432,7 +345,6 @@ export function WeeklyOperations() {
 
   const kpis = useMemo(() => {
     const scheduledAgents = perAgent.length;
-    const today = todayIso();
     const workingToday = perAgent.filter((a) =>
       a.entriesToday.some((r) => (r.actual_hours || 0) > 0 || r.login_at),
     ).length;
@@ -442,16 +354,7 @@ export function WeeklyOperations() {
     const totalProductive = perAgent.reduce((s, a) => s + a.productive, 0);
     const totalCalls = perAgent.reduce((s, a) => s + a.calls, 0);
     const attendance = totalScheduled > 0 ? totalActual / totalScheduled : null;
-    return {
-      scheduledAgents,
-      workingToday,
-      notWorking,
-      totalScheduled,
-      totalActual,
-      totalProductive,
-      totalCalls,
-      attendance,
-    };
+    return { scheduledAgents, workingToday, notWorking, totalScheduled, totalActual, totalProductive, totalCalls, attendance };
   }, [perAgent]);
 
   const alerts = useMemo(() => {
@@ -479,10 +382,10 @@ export function WeeklyOperations() {
       if (ratio != null && ratio < config.low_productivity_threshold)
         items.push({ severity: "low", label: `Low productivity (${pct(ratio)})`, agent: a.name });
     }
-    if (rows.length === 0 && uploads.length === 0)
+    if (weekRows.length === 0 && weekUploads.length === 0)
       items.push({ severity: "low", label: `No report data uploaded for this week yet.` });
     return items;
-  }, [perAgent, config, rows.length, uploads.length]);
+  }, [perAgent, config, weekRows.length, weekUploads.length]);
 
   const maxDayValue = Math.max(1, ...perDay.map((d) => Math.max(d.scheduled, d.actual, d.productive)));
   const maxCallsValue = Math.max(1, ...perDay.map((d) => d.calls));
@@ -497,25 +400,17 @@ export function WeeklyOperations() {
       const perf = agentPerformance(a);
       const ratio = a.actual > 0 ? a.productive / a.actual : null;
       lines.push([
-        `"${a.name}"`,
-        `"${a.team || ""}"`,
-        a.days.size,
-        num(a.scheduled),
-        num(a.actual),
-        num(a.productive),
-        a.calls,
-        a.appointments,
-        a.results,
-        ratio == null ? "" : pct(ratio),
-        recommendation(perf),
+        `"${a.name}"`, `"${a.team || ""}"`, a.days.size, num(a.scheduled), num(a.actual),
+        num(a.productive), a.calls, a.appointments, a.results,
+        ratio == null ? "" : pct(ratio), recommendation(perf),
       ].join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `weekly-operations-${weekStart}.csv`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `weekly-operations-${weekStart}.csv`;
+    anchor.click();
     URL.revokeObjectURL(url);
   }
 
@@ -531,12 +426,8 @@ export function WeeklyOperations() {
           </div>
         </div>
         <div className="readyops-ref-page-actions">
-          <button
-            className="readyops-ref-secondary"
-            onClick={() => void loadWeekData(weekStart)}
-            title="Refresh"
-          >
-            <RefreshCw size={14} /> Refresh
+          <button className="readyops-ref-secondary" onClick={clearWeek} title="Clear this week's uploads">
+            <RefreshCw size={14} /> Clear week
           </button>
           <button className="readyops-ref-secondary" onClick={() => setConfigOpen(true)}>
             <Settings size={14} /> Schedule & Pay
@@ -562,6 +453,13 @@ export function WeeklyOperations() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 flex items-start gap-2">
+        <Info size={14} className="mt-0.5" />
+        <span>
+          Uploaded reports live only in this browser session — refresh the page and you will need to re-upload. Schedule & pay defaults are saved locally in this browser. Nothing is sent to the server.
+        </span>
+      </div>
+
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
@@ -577,7 +475,7 @@ export function WeeklyOperations() {
               onChange={(e) => setWeekStart(e.target.value)}
               className="mt-1 block rounded-lg border p-2"
             >
-              {[weekStart, ...availableWeeks.filter((w) => w !== weekStart)].map((w) => (
+              {availableWeeks.map((w) => (
                 <option key={w} value={w}>{formatWeekLabel(w)}</option>
               ))}
             </select>
@@ -626,244 +524,236 @@ export function WeeklyOperations() {
         </div>
       </section>
 
-      {loading ? (
-        <div className="flex items-center justify-center p-10">
-          <Loader2 className="animate-spin text-blue-600" size={22} />
-        </div>
-      ) : (
-        <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-            <Kpi icon={Users} label="Scheduled Agents" value={String(kpis.scheduledAgents)} accent="blue" />
-            <Kpi icon={CheckCircle2} label="Working Today" value={String(kpis.workingToday)} accent="emerald" />
-            <Kpi icon={X} label="Not Working" value={String(kpis.notWorking)} accent="rose" />
-            <Kpi icon={Calendar} label="Scheduled Hours" value={num(kpis.totalScheduled)} accent="slate" />
-            <Kpi icon={Clock} label="Actual Hours" value={num(kpis.totalActual)} accent="sky" />
-            <Kpi icon={TrendingUp} label="Attendance %" value={pct(kpis.attendance)} accent="emerald" />
-            <Kpi icon={BarChart3} label="Productive Hours" value={num(kpis.totalProductive)} accent="amber" />
-            <Kpi icon={Phone} label="Total Calls" value={kpis.totalCalls.toLocaleString()} accent="indigo" />
-          </section>
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+        <Kpi icon={Users} label="Scheduled Agents" value={String(kpis.scheduledAgents)} accent="blue" />
+        <Kpi icon={CheckCircle2} label="Working Today" value={String(kpis.workingToday)} accent="emerald" />
+        <Kpi icon={X} label="Not Working" value={String(kpis.notWorking)} accent="rose" />
+        <Kpi icon={Calendar} label="Scheduled Hours" value={num(kpis.totalScheduled)} accent="slate" />
+        <Kpi icon={Clock} label="Actual Hours" value={num(kpis.totalActual)} accent="sky" />
+        <Kpi icon={TrendingUp} label="Attendance %" value={pct(kpis.attendance)} accent="emerald" />
+        <Kpi icon={BarChart3} label="Productive Hours" value={num(kpis.totalProductive)} accent="amber" />
+        <Kpi icon={Phone} label="Total Calls" value={kpis.totalCalls.toLocaleString()} accent="indigo" />
+      </section>
 
-          {uploads.length === 0 && rows.length === 0 && (
-            <EmptyUploadState onPick={() => fileRef.current?.click()} />
-          )}
-
-          {lastResult && (
-            <UploadDetail result={lastResult} onDismiss={() => setLastResult(null)} />
-          )}
-
-          <section className="readyops-ref-card p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black uppercase tracking-wide">Today — Who is Working</h3>
-              <span className="text-[11px] opacity-60">{todayIso()}</span>
-            </div>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                    <th className="px-2 py-2">Agent</th>
-                    <th className="px-2 py-2">Team</th>
-                    <th className="px-2 py-2">Scheduled shift</th>
-                    <th className="px-2 py-2">Login</th>
-                    <th className="px-2 py-2">Status</th>
-                    <th className="px-2 py-2 text-right">Actual hrs</th>
-                    <th className="px-2 py-2 text-right">Productivity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {perAgent.length === 0 && (
-                    <tr><td colSpan={7} className="px-2 py-6 text-center text-xs opacity-60">No agent rows for the current filters.</td></tr>
-                  )}
-                  {perAgent.map((a) => {
-                    const todayEntry = a.entriesToday[0];
-                    const actualToday = a.entriesToday.reduce((s, r) => s + (r.actual_hours || 0), 0);
-                    const productiveToday = a.entriesToday.reduce((s, r) => s + (r.productive_hours || 0), 0);
-                    const ratio = actualToday > 0 ? productiveToday / actualToday : null;
-                    const scheduledShift = config.planned_start_time && config.planned_end_time
-                      ? `${config.planned_start_time}–${config.planned_end_time}`
-                      : `${scheduledPerAgentPerDay} h`;
-                    const status = derivedStatus(a, actualToday, todayEntry, config);
-                    return (
-                      <tr key={a.name} className="border-t border-slate-100">
-                        <td className="px-2 py-2 font-bold">{a.name}</td>
-                        <td className="px-2 py-2 opacity-80">{a.team || "—"}</td>
-                        <td className="px-2 py-2 opacity-80">{scheduledShift}</td>
-                        <td className="px-2 py-2 opacity-80">{todayEntry?.login_at ? new Date(todayEntry.login_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-                        <td className="px-2 py-2"><StatusPill status={status} /></td>
-                        <td className="px-2 py-2 text-right">{actualToday > 0 ? num(actualToday) : "—"}</td>
-                        <td className="px-2 py-2 text-right">{pct(ratio)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="readyops-ref-card p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black uppercase tracking-wide">Weekly agent results</h3>
-              <span className="text-[11px] opacity-60">{perAgentPerformance.length} agents</span>
-            </div>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                    <th className="px-2 py-2">Agent</th>
-                    <th className="px-2 py-2">Team</th>
-                    <th className="px-2 py-2 text-right">Days</th>
-                    <th className="px-2 py-2 text-right">Sched hrs</th>
-                    <th className="px-2 py-2 text-right">Actual hrs</th>
-                    <th className="px-2 py-2 text-right">Productive hrs</th>
-                    <th className="px-2 py-2 text-right">Calls</th>
-                    <th className="px-2 py-2 text-right">Appts</th>
-                    <th className="px-2 py-2 text-right">Results</th>
-                    <th className="px-2 py-2 text-right">Productivity</th>
-                    <th className="px-2 py-2">Recommendation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {perAgentPerformance.length === 0 && (
-                    <tr><td colSpan={11} className="px-2 py-6 text-center text-xs opacity-60">No matching agents.</td></tr>
-                  )}
-                  {perAgentPerformance.map((a) => {
-                    const ratio = a.actual > 0 ? a.productive / a.actual : null;
-                    const perf = agentPerformance(a);
-                    return (
-                      <tr key={a.name} className="border-t border-slate-100">
-                        <td className="px-2 py-2 font-bold">{a.name}</td>
-                        <td className="px-2 py-2 opacity-80">{a.team || "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.days.size || "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.scheduled > 0 ? num(a.scheduled) : "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.actual > 0 ? num(a.actual) : "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.productive > 0 ? num(a.productive) : "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.calls > 0 ? a.calls.toLocaleString() : "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.appointments > 0 ? a.appointments : "—"}</td>
-                        <td className="px-2 py-2 text-right">{a.results > 0 ? a.results : "—"}</td>
-                        <td className="px-2 py-2 text-right">{pct(ratio)}</td>
-                        <td className="px-2 py-2">
-                          <RecommendationPill kind={perf} label={recommendation(perf)} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="grid gap-3 lg:grid-cols-2">
-            <ChartCard title="Scheduled vs Actual hours by day">
-              <div className="flex items-end gap-2 h-40 pt-4">
-                {perDay.map((d) => (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full flex items-end gap-0.5 h-32">
-                      <div className="flex-1 bg-slate-300 rounded-t" style={{ height: `${(d.scheduled / maxDayValue) * 100}%` }} title={`Scheduled ${num(d.scheduled)}`} />
-                      <div className="flex-1 bg-sky-500 rounded-t" style={{ height: `${(d.actual / maxDayValue) * 100}%` }} title={`Actual ${num(d.actual)}`} />
-                    </div>
-                    <span className="text-[10px] font-bold opacity-70">{d.day}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex items-center gap-3 text-[10px] opacity-70">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-slate-300 rounded-sm" /> Scheduled</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-sky-500 rounded-sm" /> Actual</span>
-              </div>
-            </ChartCard>
-
-            <ChartCard title="Productive hours & calls by day">
-              <div className="flex items-end gap-2 h-40 pt-4">
-                {perDay.map((d) => (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full flex items-end gap-0.5 h-32">
-                      <div className="flex-1 bg-amber-500 rounded-t" style={{ height: `${(d.productive / maxDayValue) * 100}%` }} title={`Productive ${num(d.productive)}`} />
-                      <div className="flex-1 bg-indigo-500 rounded-t" style={{ height: `${(d.calls / maxCallsValue) * 100}%` }} title={`Calls ${d.calls}`} />
-                    </div>
-                    <span className="text-[10px] font-bold opacity-70">{d.day}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex items-center gap-3 text-[10px] opacity-70">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-500 rounded-sm" /> Productive hrs</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-indigo-500 rounded-sm" /> Calls</span>
-              </div>
-            </ChartCard>
-          </section>
-
-          <section className="readyops-ref-card p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-500" />
-              <h3 className="text-sm font-black uppercase tracking-wide">Exception alerts</h3>
-              <span className="text-[11px] opacity-60">{alerts.length}</span>
-            </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {alerts.length === 0 && (
-                <p className="text-xs opacity-60 col-span-full">No exceptions detected with current thresholds.</p>
-              )}
-              {alerts.map((a, i) => (
-                <div
-                  key={i}
-                  className={`rounded-lg border px-3 py-2 text-xs ${
-                    a.severity === "high" ? "border-red-200 bg-red-50 text-red-700"
-                      : a.severity === "medium" ? "border-amber-200 bg-amber-50 text-amber-800"
-                      : "border-slate-200 bg-slate-50 text-slate-700"
-                  }`}
-                >
-                  <p className="font-bold">{a.label}</p>
-                  {a.agent && <p className="opacity-80">{a.agent}</p>}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="readyops-ref-card p-4">
-            <h3 className="text-sm font-black uppercase tracking-wide">Uploads for this week</h3>
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                    <th className="px-2 py-2">File</th>
-                    <th className="px-2 py-2">Format</th>
-                    <th className="px-2 py-2 text-right">Rows</th>
-                    <th className="px-2 py-2">Detected columns</th>
-                    <th className="px-2 py-2">Unmapped</th>
-                    <th className="px-2 py-2">Uploaded</th>
-                    <th className="px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {uploads.length === 0 && (
-                    <tr><td colSpan={7} className="px-2 py-6 text-center text-xs opacity-60">No uploads for this week.</td></tr>
-                  )}
-                  {uploads.map((u) => (
-                    <tr key={u.id} className="border-t border-slate-100 align-top">
-                      <td className="px-2 py-2 font-bold">{u.filename}</td>
-                      <td className="px-2 py-2 opacity-80">{u.file_type}</td>
-                      <td className="px-2 py-2 text-right">{u.row_count}</td>
-                      <td className="px-2 py-2 text-xs opacity-80">{(u.detected_columns || []).join(", ") || "—"}</td>
-                      <td className="px-2 py-2 text-xs opacity-80">{(u.unmapped_columns || []).join(", ") || "—"}</td>
-                      <td className="px-2 py-2 opacity-80">{new Date(u.created_at).toLocaleString()}</td>
-                      <td className="px-2 py-2">
-                        <button
-                          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
-                          onClick={() => void deleteUpload(u.id)}
-                        >
-                          <Trash2 size={12} className="inline mr-1" /> Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
+      {weekUploads.length === 0 && weekRows.length === 0 && (
+        <EmptyUploadState onPick={() => fileRef.current?.click()} />
       )}
+
+      {lastResult && (
+        <UploadDetail result={lastResult} onDismiss={() => setLastResult(null)} />
+      )}
+
+      <section className="readyops-ref-card p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black uppercase tracking-wide">Today — Who is Working</h3>
+          <span className="text-[11px] opacity-60">{todayIso()}</span>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-2">Agent</th>
+                <th className="px-2 py-2">Team</th>
+                <th className="px-2 py-2">Scheduled shift</th>
+                <th className="px-2 py-2">Login</th>
+                <th className="px-2 py-2">Status</th>
+                <th className="px-2 py-2 text-right">Actual hrs</th>
+                <th className="px-2 py-2 text-right">Productivity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perAgent.length === 0 && (
+                <tr><td colSpan={7} className="px-2 py-6 text-center text-xs opacity-60">No agent rows for the current filters.</td></tr>
+              )}
+              {perAgent.map((a) => {
+                const todayEntry = a.entriesToday[0];
+                const actualToday = a.entriesToday.reduce((s, r) => s + (r.actual_hours || 0), 0);
+                const productiveToday = a.entriesToday.reduce((s, r) => s + (r.productive_hours || 0), 0);
+                const ratio = actualToday > 0 ? productiveToday / actualToday : null;
+                const scheduledShift = config.planned_start_time && config.planned_end_time
+                  ? `${config.planned_start_time}–${config.planned_end_time}`
+                  : `${scheduledPerAgentPerDay} h`;
+                const status = derivedStatus(a, actualToday, todayEntry, config);
+                return (
+                  <tr key={a.name} className="border-t border-slate-100">
+                    <td className="px-2 py-2 font-bold">{a.name}</td>
+                    <td className="px-2 py-2 opacity-80">{a.team || "—"}</td>
+                    <td className="px-2 py-2 opacity-80">{scheduledShift}</td>
+                    <td className="px-2 py-2 opacity-80">{todayEntry?.login_at ? new Date(todayEntry.login_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                    <td className="px-2 py-2"><StatusPill status={status} /></td>
+                    <td className="px-2 py-2 text-right">{actualToday > 0 ? num(actualToday) : "—"}</td>
+                    <td className="px-2 py-2 text-right">{pct(ratio)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="readyops-ref-card p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black uppercase tracking-wide">Weekly agent results</h3>
+          <span className="text-[11px] opacity-60">{perAgentPerformance.length} agents</span>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-2">Agent</th>
+                <th className="px-2 py-2">Team</th>
+                <th className="px-2 py-2 text-right">Days</th>
+                <th className="px-2 py-2 text-right">Sched hrs</th>
+                <th className="px-2 py-2 text-right">Actual hrs</th>
+                <th className="px-2 py-2 text-right">Productive hrs</th>
+                <th className="px-2 py-2 text-right">Calls</th>
+                <th className="px-2 py-2 text-right">Appts</th>
+                <th className="px-2 py-2 text-right">Results</th>
+                <th className="px-2 py-2 text-right">Productivity</th>
+                <th className="px-2 py-2">Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perAgentPerformance.length === 0 && (
+                <tr><td colSpan={11} className="px-2 py-6 text-center text-xs opacity-60">No matching agents.</td></tr>
+              )}
+              {perAgentPerformance.map((a) => {
+                const ratio = a.actual > 0 ? a.productive / a.actual : null;
+                const perf = agentPerformance(a);
+                return (
+                  <tr key={a.name} className="border-t border-slate-100">
+                    <td className="px-2 py-2 font-bold">{a.name}</td>
+                    <td className="px-2 py-2 opacity-80">{a.team || "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.days.size || "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.scheduled > 0 ? num(a.scheduled) : "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.actual > 0 ? num(a.actual) : "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.productive > 0 ? num(a.productive) : "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.calls > 0 ? a.calls.toLocaleString() : "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.appointments > 0 ? a.appointments : "—"}</td>
+                    <td className="px-2 py-2 text-right">{a.results > 0 ? a.results : "—"}</td>
+                    <td className="px-2 py-2 text-right">{pct(ratio)}</td>
+                    <td className="px-2 py-2">
+                      <RecommendationPill kind={perf} label={recommendation(perf)} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-2">
+        <ChartCard title="Scheduled vs Actual hours by day">
+          <div className="flex items-end gap-2 h-40 pt-4">
+            {perDay.map((d) => (
+              <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full flex items-end gap-0.5 h-32">
+                  <div className="flex-1 bg-slate-300 rounded-t" style={{ height: `${(d.scheduled / maxDayValue) * 100}%` }} title={`Scheduled ${num(d.scheduled)}`} />
+                  <div className="flex-1 bg-sky-500 rounded-t" style={{ height: `${(d.actual / maxDayValue) * 100}%` }} title={`Actual ${num(d.actual)}`} />
+                </div>
+                <span className="text-[10px] font-bold opacity-70">{d.day}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-3 text-[10px] opacity-70">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-slate-300 rounded-sm" /> Scheduled</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-sky-500 rounded-sm" /> Actual</span>
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Productive hours & calls by day">
+          <div className="flex items-end gap-2 h-40 pt-4">
+            {perDay.map((d) => (
+              <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full flex items-end gap-0.5 h-32">
+                  <div className="flex-1 bg-amber-500 rounded-t" style={{ height: `${(d.productive / maxDayValue) * 100}%` }} title={`Productive ${num(d.productive)}`} />
+                  <div className="flex-1 bg-indigo-500 rounded-t" style={{ height: `${(d.calls / maxCallsValue) * 100}%` }} title={`Calls ${d.calls}`} />
+                </div>
+                <span className="text-[10px] font-bold opacity-70">{d.day}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-3 text-[10px] opacity-70">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-500 rounded-sm" /> Productive hrs</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-indigo-500 rounded-sm" /> Calls</span>
+          </div>
+        </ChartCard>
+      </section>
+
+      <section className="readyops-ref-card p-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={16} className="text-amber-500" />
+          <h3 className="text-sm font-black uppercase tracking-wide">Exception alerts</h3>
+          <span className="text-[11px] opacity-60">{alerts.length}</span>
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {alerts.length === 0 && (
+            <p className="text-xs opacity-60 col-span-full">No exceptions detected with current thresholds.</p>
+          )}
+          {alerts.map((a, i) => (
+            <div
+              key={i}
+              className={`rounded-lg border px-3 py-2 text-xs ${
+                a.severity === "high" ? "border-red-200 bg-red-50 text-red-700"
+                  : a.severity === "medium" ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-slate-200 bg-slate-50 text-slate-700"
+              }`}
+            >
+              <p className="font-bold">{a.label}</p>
+              {a.agent && <p className="opacity-80">{a.agent}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="readyops-ref-card p-4">
+        <h3 className="text-sm font-black uppercase tracking-wide">Uploads for this week</h3>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-2">File</th>
+                <th className="px-2 py-2">Format</th>
+                <th className="px-2 py-2 text-right">Rows</th>
+                <th className="px-2 py-2">Detected columns</th>
+                <th className="px-2 py-2">Unmapped</th>
+                <th className="px-2 py-2">Uploaded</th>
+                <th className="px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {weekUploads.length === 0 && (
+                <tr><td colSpan={7} className="px-2 py-6 text-center text-xs opacity-60">No uploads for this week (session-only).</td></tr>
+              )}
+              {weekUploads.map((u) => (
+                <tr key={u.id} className="border-t border-slate-100 align-top">
+                  <td className="px-2 py-2 font-bold">{u.filename}</td>
+                  <td className="px-2 py-2 opacity-80">{u.file_type}</td>
+                  <td className="px-2 py-2 text-right">{u.row_count}</td>
+                  <td className="px-2 py-2 text-xs opacity-80">{(u.detected_columns || []).join(", ") || "—"}</td>
+                  <td className="px-2 py-2 text-xs opacity-80">{(u.unmapped_columns || []).join(", ") || "—"}</td>
+                  <td className="px-2 py-2 opacity-80">{new Date(u.created_at).toLocaleString()}</td>
+                  <td className="px-2 py-2">
+                    <button
+                      className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+                      onClick={() => deleteUpload(u.id)}
+                    >
+                      <Trash2 size={12} className="inline mr-1" /> Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {configOpen && (
         <ScheduleConfigModal
           config={config}
           paidBreakHours={paidBreakHours}
-          onSave={(c) => { void saveConfig(c); setConfigOpen(false); }}
+          onSave={saveConfig}
           onClose={() => setConfigOpen(false)}
         />
       )}
@@ -945,7 +835,7 @@ function EmptyUploadState({ onPick }: { onPick: () => void }) {
       </div>
       <h3 className="mt-3 text-base font-black">Upload a workforce report to begin</h3>
       <p className="mx-auto mt-1 max-w-lg text-sm opacity-70">
-        Drop a weekly export from your dialer or workforce system. All metrics on this page are computed from the file you upload — nothing is fabricated. CSV, TSV, and plain text are parsed in the browser; XLSX, XLS, and PDF are not supported here and should be exported to CSV before upload.
+        Drop a weekly export from your dialer or workforce system. All metrics on this page are computed from the file you upload — nothing is fabricated. CSV, TSV, and plain text are parsed in the browser; XLSX, XLS, and PDF are not supported here and should be exported to CSV before upload. Data lives in this browser session only.
       </p>
       <button className="readyops-ref-primary mt-4 inline-flex" onClick={onPick}>
         <Upload size={14} /> Choose file
@@ -966,14 +856,10 @@ function UploadDetail({ result, onDismiss }: { result: ParseResult; onDismiss: (
               {isError ? "Upload could not be processed" : `Imported ${result.rows.length} rows`}
             </h3>
             {result.detectedColumns.length > 0 && (
-              <p className="mt-1 text-xs opacity-80">
-                <b>Detected columns:</b> {result.detectedColumns.join(", ")}
-              </p>
+              <p className="mt-1 text-xs opacity-80"><b>Detected columns:</b> {result.detectedColumns.join(", ")}</p>
             )}
             {result.unmappedColumns.length > 0 && (
-              <p className="mt-1 text-xs opacity-80">
-                <b>Unmapped:</b> {result.unmappedColumns.join(", ")}
-              </p>
+              <p className="mt-1 text-xs opacity-80"><b>Unmapped:</b> {result.unmappedColumns.join(", ")}</p>
             )}
             {result.warnings.slice(0, 5).map((w, i) => (
               <p key={i} className="mt-1 text-xs text-amber-700">• {w}</p>
@@ -1041,7 +927,7 @@ function ScheduleConfigModal({
           </Field>
         </div>
         <div className="border-t p-3 text-xs opacity-70">
-          Paid hours per week ({draft.paid_hours_per_week}) exclude the {draft.lunch_minutes_unpaid}-minute unpaid lunch. The {draft.break_count} paid breaks of {draft.break_minutes_paid_each} minutes ({paidBreakHours.toFixed(2)} h/day) are counted inside the {draft.scheduled_hours_per_day}-hour paid day. Lunch is scheduled outside the paid day. Late arrivals are only flagged when a planned start time is set.
+          Paid hours per week ({draft.paid_hours_per_week}) exclude the {draft.lunch_minutes_unpaid}-minute unpaid lunch. The {draft.break_count} paid breaks of {draft.break_minutes_paid_each} minutes ({paidBreakHours.toFixed(2)} h/day) are counted inside the {draft.scheduled_hours_per_day}-hour paid day. Lunch is scheduled outside the paid day. Late arrivals are only flagged when a planned start time is set. Settings are saved locally in this browser.
         </div>
         <div className="flex justify-end gap-2 border-t p-3">
           <button onClick={onClose} className="rounded-lg border px-3 py-2 text-sm font-bold">Cancel</button>
