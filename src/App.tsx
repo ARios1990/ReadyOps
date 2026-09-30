@@ -92,6 +92,8 @@ function AppContent() {
       </>
     );
 
+  if (profile?.active === false) return <AccessDenied />;
+
   if (activeUsersRequested) {
     if (profile?.role !== "admin") return <AccessDenied />;
     return <ActiveUsers />;

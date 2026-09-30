@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
-import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
+import { formatRoofAge, formatTime, normalizeRoofAgeInput, shouldShowField } from './portalUtils';
+import { buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
 
 type LeadLike = {
   full_name?: string | null;
@@ -242,6 +243,7 @@ export function ClientLeadTemplate({
       ...(editValues || {}),
     },
   } as LeadLike;
+  const serviceSnapshot = lead.form_data?._service_template as ServiceTemplate | undefined;
   const copyService = leadValue(
     copyLead,
     'service_needed',
@@ -262,7 +264,7 @@ export function ClientLeadTemplate({
     'zillow_url',
     'zillow_link',
   );
-  const copyText = [
+  const legacyCopyText = [
     `**${copyTitle}**`,
     '**Customer Information**',
     `App Date & Time: ${formatClientDate(appointment.appointment_date)} • ${formatTime(appointment.start_time)}`,
@@ -292,6 +294,7 @@ export function ClientLeadTemplate({
     `Add. Properties: ${copyValue(formValue(copyLead, 'additional_properties', 'add_properties'))}`,
     `2nd Address: ${copyValue(formValue(copyLead, 'second_address', 'other_address'))}`,
   ].join('\n');
+  const copyText = serviceSnapshot?.form_schema ? buildUniversalLeadTemplate(serviceSnapshot, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) : legacyCopyText;
 
   async function copyLeadTemplate() {
     await navigator.clipboard.writeText(copyText);
@@ -309,11 +312,14 @@ export function ClientLeadTemplate({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <h2 className="bg-blue-600 px-4 py-2.5 text-center text-xl font-black uppercase text-white">
-          {serviceTitle(serviceNeeded, lead)}
+          {serviceSnapshot?.template_title || serviceTitle(serviceNeeded, lead)}
         </h2>
 
         <div className="space-y-5 px-5 py-4">
-          <Section title="Customer Information">
+          {serviceSnapshot?.form_schema ? <>
+            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
+            {serviceSnapshot.form_schema.map(section => <Section key={section.id} title={section.title} columns>{section.fields.filter(f => f.mode !== 'hidden' && f.type !== 'recording' && shouldShowField(f.showWhen, copyLead.form_data || {})).map(f => <Row key={f.key} label={`${f.label}:`} field={f.key} value={leadValue(lead,f.key as keyof LeadLike,f.key)} editValue={editValue(f.key,leadValue(lead,f.key as keyof LeadLike,f.key))} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section>)}
+          </> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
@@ -349,6 +355,7 @@ export function ClientLeadTemplate({
             <Row label="Add. Properties:" field="additional_properties" value={formValue(lead, 'additional_properties', 'add_properties')} editValue={editValue('additional_properties', formValue(lead, 'additional_properties', 'add_properties'))} onChange={onChange} />
             <Row label="2nd Address:" field="second_address" value={formValue(lead, 'second_address', 'other_address')} editValue={editValue('second_address', formValue(lead, 'second_address', 'other_address'))} onChange={onChange} />
           </Section>
+          </>}
         </div>
 
         {editable && (
@@ -374,7 +381,7 @@ export function ClientLeadTemplate({
           <div>
             <h3 className="text-sm font-black text-slate-950">Copy &amp; Send Lead</h3>
             <p className="text-xs text-slate-600">
-              All fields stay visible. Missing answers are shown as —.
+              Fields follow the selected service template. Missing answers are shown as —.
             </p>
           </div>
           <button

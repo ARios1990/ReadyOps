@@ -38,6 +38,7 @@ import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
+import { LeadEmailHistory } from './LeadEmailHistory';
 import {
   buildExternalFormUrl,
   formatDateLong,
@@ -1697,6 +1698,7 @@ function ReviewDialog(props: DialogProps) {
         )}
         <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
           <div className="min-w-0">
+            <LeadEmailHistory leadId={props.row.lead.id} />
             <ClientLeadTemplate
               lead={{ ...props.row.lead, ...props.values }}
               appointment={props.row.appointment}

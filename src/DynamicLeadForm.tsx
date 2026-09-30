@@ -8,6 +8,7 @@ export interface PortalFormField {
   label: string;
   type: string;
   required?: boolean;
+  mode?: 'required' | 'optional' | 'hidden';
   options?: string[];
   defaultValue?: unknown;
   showWhen?: { field?: string; equals?: unknown };
@@ -41,8 +42,8 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
         <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 mb-4">{section.title}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            {section.fields.filter(field => shouldShowField(field.showWhen, values)).map(field => (
-              <Field key={field.key} field={field} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />
+            {section.fields.filter(field => field.mode !== 'hidden' && shouldShowField(field.showWhen, values)).map(field => (
+              <Field key={field.key} field={{ ...field, required: field.mode ? field.mode === 'required' : field.required }} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />
             ))}
           </div>
         </section>

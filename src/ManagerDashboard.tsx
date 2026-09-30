@@ -4,6 +4,8 @@ import { supabase } from './supabase';
 import { buildReadyModeBookingLink, copyText, rpcError } from './portalUtils';
 import { READYOPS_LOGO_DATA_URI } from './brand';
 import { HorizontalScrollFrame } from './HorizontalScrollFrame';
+import { AdminPayroll } from './AdminPayroll';
+import { TeamLeadActivity } from './TeamLeadActivity';
 
 type TeamInfo = { id: string; name: string; abbreviation: string };
 type AgentSummary = {
@@ -47,6 +49,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [view, setView] = useState(new URLSearchParams(window.location.search).get('view') === 'payroll' ? 'payroll' : 'overview');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,25 +104,6 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
     window.location.href = '/';
   }
 
-  async function regenerateAgentPortalLink(agent: AgentSummary) {
-    if (privateLinkMode) return;
-    const existing = Boolean(agent.portal_slug && agent.access_token);
-    if (!window.confirm(existing
-      ? `Generate a new private lead link for ${agent.name}? The old link will stop working immediately.`
-      : `Generate a private lead link for ${agent.name}?`)) return;
-    setError('');
-    const { data: result, error: rpcErr } = await supabase.rpc('regenerate_agent_portal_link', { p_agent_id: agent.id });
-    if (rpcErr) {
-      setError(rpcError(rpcErr));
-      return;
-    }
-    const generated = result as { portal_slug?: string; access_token?: string } | null;
-    if (generated?.portal_slug && generated?.access_token) {
-      const link = `${window.location.origin}/agent/${generated.portal_slug}/${generated.access_token}`;
-      try { await copyText(link); } catch { /* optional clipboard */ }
-    }
-    await load();
-  }
 
   if (loading && !data) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
@@ -143,8 +127,9 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
       </header>
 
       <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6">
+        {!privateLinkMode && <nav className="flex gap-2"><button onClick={() => setView('overview')} className={`rounded-lg border px-4 py-2 font-bold ${view === 'overview' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Team Dashboard</button><button onClick={() => setView('payroll')} className={`rounded-lg border px-4 py-2 font-bold ${view === 'payroll' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Team Payroll</button></nav>}
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
+        {view === 'payroll' && !privateLinkMode ? <AdminPayroll managerMode /> : <>
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Metric label="Agents" value={data.agents.length} />
           <Metric label="QC Pending" value={data.agents.reduce((sum, a) => sum + Number(a.qc_pending || 0), 0)} />
@@ -155,7 +140,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Open an agent's private lead portal to review QC pending, QC approved and QC denied leads.</p></div>
+            <div><h2 className="font-bold">Agents</h2><p className="text-xs text-slate-500">Review your team's leads and appointments in Team QC. Access follows your current team assignment.</p></div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..." className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400" />
           </div>
           <HorizontalScrollFrame
@@ -177,7 +162,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
                     <td className="px-3 py-3 text-center font-bold text-violet-700">{agent.awaiting_final_qc}</td>
                     <td className="px-3 py-3 text-center font-bold text-emerald-700">{agent.approved}</td>
                     <td className="px-3 py-3 text-center font-bold text-red-700">{agent.denied}</td>
-                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{agentLink && <><button onClick={() => void copyText(agentLink)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><ClipboardCopy size={13}/> Copy Link</button><button onClick={() => window.open(agentLink, '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Open <ExternalLink size={13}/></button></>}{!privateLinkMode && <button onClick={() => void regenerateAgentPortalLink(agent)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700"><RefreshCw size={13}/> {agentLink ? 'New Link' : 'Generate Link'}</button>}{!agentLink && privateLinkMode && <span className="text-xs text-slate-400">Link unavailable</span>}</div></td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-2">{agentLink && <><button onClick={() => void copyText(agentLink)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><ClipboardCopy size={13}/> Copy Link</button><button onClick={() => window.open(agentLink, '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Open <ExternalLink size={13}/></button></>}{!privateLinkMode && <a href="/qc" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Review in Team QC</a>}{!agentLink && privateLinkMode && <span className="text-xs text-slate-400">Link unavailable</span>}</div></td>
                   </tr>;
                 })}
               </tbody>
@@ -185,6 +170,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
           </HorizontalScrollFrame>
         </section>
 
+        {!privateLinkMode && <TeamLeadActivity />}
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2"><Users size={16} className="text-blue-600" /><div><h2 className="font-bold">Team Company Links</h2><p className="text-xs text-slate-500">Copy the ReadyMode popup link with all ReadyMode prefill fields already attached.</p></div></div>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -198,6 +184,7 @@ export function ManagerDashboard({ slug, token, profile }: ManagerDashboardProps
             })}
           </div>
         </section>
+        </>}
       </main>
     </div>
   );

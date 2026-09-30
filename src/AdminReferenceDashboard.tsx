@@ -8,6 +8,8 @@ import {
 import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
 import { AdminPanel } from './AdminPanel';
+import { StaffEditor } from './StaffEditor';
+import { AdminServiceTemplates } from './AdminServiceTemplates';
 import type { Agent, Profile, Team } from './types';
 import { useScheduleStore } from './useScheduleStore';
 import { AdminReports } from './AdminReports';
@@ -20,7 +22,7 @@ import { isPendingPackage as pkgIsPending } from './companyMetrics';
 
 type ScheduleStore = ReturnType<typeof useScheduleStore>;
 type StaffTab = 'agents' | 'managers' | 'team';
-type View = 'overview' | 'reports' | 'invoices' | 'payroll' | 'weekly-ops';
+type View = 'overview' | 'reports' | 'invoices' | 'payroll' | 'weekly-ops' | 'templates';
 type IconComponent = typeof Home;
 
 type CompanyOps = {
@@ -63,11 +65,13 @@ const SIDEBAR_MAIN: readonly SidebarItem[] = [
 
 const SIDEBAR_MANAGEMENT: readonly SidebarItem[] = [
   ['staff', 'Agents & Teams', UsersRound],
+  ['managers', 'Managers & Teams', UsersRound],
   ['active-users', 'Active Users', Wifi],
   ['reports', 'Reports', BarChart3],
   ['weekly-ops', 'Weekly Operations', Calendar],
   ['invoices', 'Invoices', WalletCards],
   ['payroll', 'Payroll', CircleDollarSign],
+  ['templates', 'Universal Lead Templates', FileText],
 ] as const;
 
 function getInitialSidebarCollapsed(): boolean {
@@ -78,14 +82,14 @@ function getInitialSidebarCollapsed(): boolean {
 function getInitialView(): View {
   if (typeof window === 'undefined') return 'overview';
   const requested = new URLSearchParams(window.location.search).get('view');
-  return requested === 'reports' || requested === 'invoices' || requested === 'payroll' || requested === 'weekly-ops'
+  return requested === 'reports' || requested === 'invoices' || requested === 'payroll' || requested === 'weekly-ops' || requested === 'templates'
     ? requested
     : 'overview';
 }
 
 export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }: Props) {
   const [view, setView] = useState<View>(getInitialView);
-  const [staffTab, setStaffTab] = useState<StaffTab>('agents');
+  const [staffTab, setStaffTab] = useState<StaffTab>(() => new URLSearchParams(window.location.search).get('view') === 'managers' ? 'managers' : 'agents');
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
@@ -97,6 +101,7 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
   const [showManage, setShowManage] = useState(false);
   const [manageTab, setManageTab] = useState<string | undefined>();
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [editingStaff, setEditingStaff] = useState<{ agent?: Agent; profile?: Profile } | null>(null);
   const [ops, setOps] = useState<CompanyOps[]>([]);
   const [outcomes, setOutcomes] = useState<OutcomeMetrics>(EMPTY_OUTCOME_METRICS);
   const [loadingOps, setLoadingOps] = useState(true);
@@ -235,9 +240,11 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
     else if (key === 'qc') window.location.href = '/qc';
     else if (key === 'companies') window.location.href = '/admin/operations';
     else if (key === 'staff') { setView('overview'); setStaffTab('agents'); scrollStaff(); }
+    else if (key === 'managers') { setView('overview'); setStaffTab('managers'); scrollStaff(); }
     else if (key === 'reports') { setReportStatus('all'); setView('reports'); }
     else if (key === 'invoices') setView('invoices');
     else if (key === 'payroll') setView('payroll');
+    else if (key === 'templates') setView('templates');
     else if (key === 'weekly-ops') setView('weekly-ops');
     else if (key === 'active-users') window.location.href = '/admin/active-users';
     else if (key === 'leads') window.location.href = '/admin/crm';
@@ -409,7 +416,7 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
               <div className="readyops-ref-toolbar">
                 <div className="readyops-ref-search"><Search size={14}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={staffTab === 'managers' ? 'Search managers...' : 'Search agents...'}/></div>
                 <div className="ml-auto flex flex-wrap gap-2">
-                  <button className="readyops-ref-primary" onClick={() => openManage(staffTab === 'managers' ? undefined : 'agents')}><Plus size={14}/> {staffTab === 'managers' ? 'Add Manager' : 'Add Agent'}</button>
+                  <button className="readyops-ref-primary" onClick={() => openManage(staffTab === 'managers' ? 'create-manager' : 'agents')}><Plus size={14}/> {staffTab === 'managers' ? 'Add Manager' : 'Add Agent'}</button>
                   <button className="readyops-ref-secondary" onClick={() => void addTeam()}><Plus size={14}/> Add Team</button>
                   <label className="readyops-ref-filter"><Filter size={14}/><select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}><option value="all">Filter</option>{store.teams.map(team => <option key={team.id} value={team.id}>{team.abbreviation}</option>)}</select></label>
                 </div>
@@ -418,14 +425,14 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
                 {staffTab === 'managers' ? (
                   <table className="readyops-ref-table"><thead><tr><th>MANAGER NAME</th><th>TEAM</th><th>LINKED USER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{managerRows.map(manager => {
                     const team = store.teams.find(t => t.id === manager.team_id);
-                    return <tr key={manager.id}><td>{manager.display_name}</td><td><TeamBadge team={team}/></td><td>{manager.email || '—'}</td><td><StatusBadge/></td><td><div className="readyops-ref-actions"><button onClick={() => openManage()}><Pencil size={14}/></button></div></td></tr>;
+                    return <tr key={manager.id}><td>{manager.display_name}</td><td><TeamBadge team={team}/></td><td>{manager.email || '—'}</td><td><StatusBadge active={manager.active !== false}/></td><td><div className="readyops-ref-actions"><button title="Edit Manager" onClick={() => setEditingStaff({ profile: manager, agent: store.agents.find(a => a.id === manager.agent_id) })}><Pencil size={14}/></button></div></td></tr>;
                   })}</tbody></table>
                 ) : (
                   <table className="readyops-ref-table"><thead><tr><th>AGENT NAME</th><th>TEAM</th><th>LINKED USER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{agentRows.map(agent => {
                     const team = store.teams.find(t => t.id === agent.team_id);
                     const linked = profiles.find(p => p.agent_id === agent.id);
                     const portalLink = agentPortalLink(agent);
-                    return <tr key={agent.id}><td>{agent.name}</td><td><TeamBadge team={team}/></td><td>{linked?.display_name || agent.email || '—'}</td><td><StatusBadge active={agent.active !== false}/></td><td><div className="readyops-ref-actions">{portalLink && <><button title="Copy Agent Portal Link" onClick={() => void navigator.clipboard.writeText(portalLink)}><ClipboardCopy size={14}/></button><button title="Open Agent Lead Portal" onClick={() => window.open(portalLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={14}/></button></>}<button title={portalLink ? 'Generate New Agent Link' : 'Generate Agent Link'} onClick={() => void regenerateAgentPortalLink(agent)}>{portalLink ? <RefreshCw size={14}/> : <Link2 size={14}/>}</button><button title="Edit Agent" onClick={() => openManage('agents')}><Pencil size={14}/></button><button title="Delete Agent" className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></div></td></tr>;
+                    return <tr key={agent.id}><td>{agent.name}</td><td><TeamBadge team={team}/></td><td>{linked?.display_name || agent.email || '—'}</td><td><StatusBadge active={agent.active !== false}/></td><td><div className="readyops-ref-actions">{portalLink && <><button title="Copy Agent Portal Link" onClick={() => void navigator.clipboard.writeText(portalLink)}><ClipboardCopy size={14}/></button><button title="Open Agent Lead Portal" onClick={() => window.open(portalLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={14}/></button></>}<button title={portalLink ? 'Generate New Agent Link' : 'Generate Agent Link'} onClick={() => void regenerateAgentPortalLink(agent)}>{portalLink ? <RefreshCw size={14}/> : <Link2 size={14}/>}</button><button title="Edit Agent" onClick={() => setEditingStaff({ agent, profile: linked })}><Pencil size={14}/></button><button title="Delete Agent" className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></div></td></tr>;
                   })}</tbody></table>
                 )}
               </div>
@@ -436,6 +443,8 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
             <AdminInvoices />
           ) : view === 'weekly-ops' ? (
             <WeeklyOperations />
+          ) : view === 'templates' ? (
+            <AdminServiceTemplates />
           ) : (
             <AdminPayroll />
           )}
@@ -450,7 +459,8 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
           onClose={() => setShowSchedulingManager(false)}
         />
       )}
-      {showManage && <AdminPanel store={store} onClose={() => setShowManage(false)} initialTab={manageTab}/>} 
+      {showManage && <AdminPanel store={store} onClose={() => { setShowManage(false); void refreshDashboard(); }} initialTab={manageTab}/>}
+      {editingStaff && <StaffEditor {...editingStaff} teams={store.teams} onClose={() => setEditingStaff(null)} onSaved={async () => { await store.refetch(); await refreshDashboard(); }}/>}
     </div>
   );
 }
