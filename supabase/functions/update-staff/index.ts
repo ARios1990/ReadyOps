@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +50,8 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false } },
     );
+    if (body.mode === "agent_row")
+      return await saveAgentRow(service, user.id, body);
     const { data: previous, error: validationError } = await service.rpc(
       "save_readyops_staff_account",
       { ...params, p_apply: false },
@@ -139,3 +141,97 @@ Deno.serve(async (req: Request) => {
     return reply({ error: "Unable to save this account" }, 500);
   }
 });
+
+async function saveAgentRow(
+  service: SupabaseClient,
+  actorId: string,
+  body: Record<string, unknown>,
+) {
+  const params = {
+    p_actor_id: actorId,
+    p_agent_id: body.agent_id,
+    p_name: body.name,
+    p_team_id: body.team_id || null,
+    p_active: body.active,
+    p_linked_profile_id: body.linked_profile_id || null,
+    p_expected: body.expected,
+  };
+  const { data: plan, error: validationError } = await service.rpc(
+    "save_readyops_agent_row",
+    { ...params, p_apply: false },
+  );
+  if (validationError)
+    return reply(
+      {
+        error:
+          validationError.code === "P0001"
+            ? validationError.message
+            : "Unable to validate this row. Check deployment and refresh the table.",
+      },
+      400,
+    );
+  const rollbacks: { id: string; ban: string }[] = [];
+  async function restoreLogins() {
+    let restored = true;
+    for (const previous of rollbacks.reverse()) {
+      const { error } = await service.auth.admin.updateUserById(previous.id, {
+        ban_duration: previous.ban,
+      });
+      if (error) {
+        restored = false;
+        console.error("Agent row Auth rollback failed", previous.id);
+      }
+    }
+    return restored;
+  }
+  try {
+    for (const change of plan.profile_changes as {
+      id: string;
+      active: boolean;
+      next_active: boolean;
+    }[]) {
+      if (change.active === change.next_active) continue;
+      const { data: login, error: lookupError } =
+        await service.auth.admin.getUserById(change.id);
+      if (lookupError || !login.user)
+        throw new Error(
+          "Unable to locate a linked login. No row changes were saved.",
+        );
+      const until = (login.user as { banned_until?: string }).banned_until;
+      const remaining = until ? new Date(until).getTime() - Date.now() : 0;
+      const previousBan =
+        remaining > 0 ? `${Math.ceil(remaining / 1000)}s` : "none";
+      const { error } = await service.auth.admin.updateUserById(change.id, {
+        ban_duration: change.next_active ? "none" : "876000h",
+      });
+      if (error)
+        throw new Error(
+          "Unable to update linked login access. No row changes were saved.",
+        );
+      rollbacks.push({ id: change.id, ban: previousBan });
+    }
+    const { error: saveError } = await service.rpc("save_readyops_agent_row", {
+      ...params,
+      p_apply: true,
+    });
+    if (saveError)
+      throw new Error(
+        saveError.code === "P0001"
+          ? saveError.message
+          : "Unable to save this row. Refresh before retrying.",
+      );
+    return reply({ success: true });
+  } catch (error) {
+    const restored = await restoreLogins();
+    return reply(
+      {
+        error: restored
+          ? error instanceof Error
+            ? error.message
+            : "Unable to save this row"
+          : "Row save failed and login access needs Admin reconciliation. Refresh before retrying.",
+      },
+      restored ? 409 : 500,
+    );
+  }
+}

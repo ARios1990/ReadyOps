@@ -72,6 +72,7 @@ grant select,insert,update,delete on all tables in schema public to authenticate
 for (const file of [
   "20260930213257_team_staff_and_manager_payroll.sql",
   "20260930214837_service_templates_and_lead_email_outbox.sql",
+  "20261003193017_inline_agent_staff_rows.sql",
 ]) {
   const sql = fs
     .readFileSync(
@@ -575,6 +576,145 @@ await test("email HTML escapes customer text and never includes QC recordings", 
   assert.ok(email.html.includes("&lt;script&gt;"));
   assert.ok(!email.text.includes("private-audio"));
   assert.ok(!email.html.includes("private-audio"));
+});
+await asUser(null, "postgres");
+await db.exec(`insert into public.agents(id,name,team_id) values('${uid(711)}','Inline A','${uid(101)}'),('${uid(712)}','Inline B','${uid(101)}'),('${uid(713)}','Inline C','${uid(101)}');
+insert into public.profiles(id,display_name,role,email,team_id,agent_id,active) values
+('${uid(721)}','Login A','agent','login-a@example.test','${uid(101)}','${uid(711)}',true),
+('${uid(722)}','Login New','agent','new@example.test','${uid(102)}',null,false),
+('${uid(723)}','Login B','agent','login-b@example.test','${uid(101)}','${uid(712)}',true),
+('${uid(724)}','Manager Login','manager','manager-inline@example.test','${uid(101)}',null,true);`);
+const rowExpected = async (agent, target) => {
+  await asUser(null, "postgres");
+  return scalar(
+    `select jsonb_build_object('name',a.name,'team_id',a.team_id,'active',coalesce(a.active,true),'profile_id',p.id,'profile_updated_at',p.updated_at,'target_updated_at',t.updated_at) as value from public.agents a left join public.profiles p on p.agent_id=a.id left join public.profiles t on t.id='${target || uid(0)}' where a.id='${agent}'`,
+  );
+};
+const saveRow = async (
+  agent,
+  target,
+  expected,
+  {
+    actor = uid(1),
+    name = "Inline Edited",
+    team = uid(101),
+    active = true,
+    apply = true,
+  } = {},
+) =>
+  scalar(
+    `select public.save_readyops_agent_row('${actor}','${agent}','${name}','${team}',${active},${target ? `'${target}'` : "null"},'${JSON.stringify(expected)}',${apply}) as value`,
+  );
+await test("inline row RPC is service-only and requires an active Admin actor", async () => {
+  const expected = await rowExpected(uid(711), uid(721));
+  await asUser(uid(2));
+  await assert.rejects(() => saveRow(uid(711), uid(721), expected));
+  await asUser(null, "anon");
+  await assert.rejects(() => saveRow(uid(711), uid(721), expected));
+  await asUser(null, "service_role");
+  await assert.rejects(() =>
+    saveRow(uid(711), uid(721), expected, { actor: uid(2) }),
+  );
+});
+await test("inline row saves independent name, team and account status together and rotates the token", async () => {
+  const expected = await rowExpected(uid(711), uid(721));
+  const oldToken = await scalar(
+    `select access_token as value from public.agents where id='${uid(711)}'`,
+  );
+  await asUser(null, "service_role");
+  await saveRow(uid(711), uid(721), expected, {
+    team: uid(102),
+    active: false,
+  });
+  await asUser(null, "postgres");
+  const a = (
+    await db.query(`select * from public.agents where id='${uid(711)}'`)
+  ).rows[0];
+  const p = (
+    await db.query(`select * from public.profiles where id='${uid(721)}'`)
+  ).rows[0];
+  assert.equal(a.name, "Inline Edited");
+  assert.equal(p.display_name, "Login A");
+  assert.equal(a.team_id, uid(102));
+  assert.equal(p.team_id, a.team_id);
+  assert.equal(p.role, "agent");
+  assert.equal(a.active, false);
+  assert.equal(p.active, false);
+  assert.notEqual(a.access_token, oldToken);
+  assert.equal(
+    await scalar(
+      `select count(*)::int as value from public.management_audit_events where target_id='${uid(711)}' and event_type='agent_row_updated'`,
+    ),
+    1,
+  );
+});
+await test("inline row replaces the link atomically and disables the displaced login", async () => {
+  const expected = await rowExpected(uid(711), uid(722));
+  await asUser(null, "service_role");
+  const plan = await saveRow(uid(711), uid(722), expected, { apply: false });
+  assert.equal(plan.link_changed, true);
+  assert.equal(plan.profile_changes.length, 2);
+  await saveRow(uid(711), uid(722), expected);
+  await asUser(null, "postgres");
+  assert.equal(
+    await scalar(
+      `select agent_id as value from public.profiles where id='${uid(721)}'`,
+    ),
+    null,
+  );
+  assert.equal(
+    await scalar(
+      `select active as value from public.profiles where id='${uid(721)}'`,
+    ),
+    false,
+  );
+  assert.equal(
+    await scalar(
+      `select agent_id as value from public.profiles where id='${uid(722)}'`,
+    ),
+    uid(711),
+  );
+  await asUser(uid(721));
+  assert.equal(
+    await scalar(`select public.current_profile_role() as value`),
+    "inactive",
+  );
+});
+await test("inline row cannot steal another agent login, attach a Manager or overwrite a stale row", async () => {
+  for (const target of [uid(723), uid(724)]) {
+    const expected = await rowExpected(uid(711), target);
+    await asUser(null, "service_role");
+    await assert.rejects(() => saveRow(uid(711), target, expected));
+  }
+  const expected = await rowExpected(uid(711), uid(722));
+  await db.query(
+    `update public.agents set name='Changed elsewhere' where id='${uid(711)}'`,
+  );
+  await asUser(null, "service_role");
+  await assert.rejects(() => saveRow(uid(711), uid(722), expected));
+});
+await test("two pending row edits cannot link the same user to different agents", async () => {
+  const expectedA = await rowExpected(uid(711), null);
+  await asUser(null, "service_role");
+  await saveRow(uid(711), null, expectedA);
+  const first = await rowExpected(uid(711), uid(722));
+  const second = await rowExpected(uid(713), uid(722));
+  await asUser(null, "service_role");
+  await saveRow(uid(711), uid(722), first);
+  await assert.rejects(() => saveRow(uid(713), uid(722), second));
+  await asUser(null, "postgres");
+  assert.equal(
+    await scalar(
+      `select agent_id as value from public.profiles where id='${uid(722)}'`,
+    ),
+    uid(711),
+  );
+  assert.equal(
+    await scalar(
+      `select name as value from public.agents where id='${uid(713)}'`,
+    ),
+    "Inline C",
+  );
 });
 await db.close();
 console.log(

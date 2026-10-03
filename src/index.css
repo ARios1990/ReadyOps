@@ -622,6 +622,20 @@ html[data-theme='dark'] .readyops-ref-search { background:#0c1d31; }
 html[data-theme='dark'] .team-octo { background:#673237;color:#ff6d72 }.readyops-ref-status { display:inline-flex; padding:2px 7px; border-radius:4px; background:#ddf5e9; color:#11835b; font-size:9px; font-weight:800; }.readyops-ref-status.inactive{background:#eef1f4;color:#7b8da2}
 .readyops-ref-actions { display:flex; justify-content:flex-start; gap:12px; }.readyops-ref-actions button { color:#35506d; }.readyops-ref-actions button.danger { color:#ef3a48; }
 html[data-theme='dark'] .readyops-ref-actions button { color:#c5d0dd; }
+.readyops-inline-cell { display:inline-flex; align-items:center; gap:8px; text-align:left; border-radius:4px; padding:3px 0; max-width:100%; }
+.readyops-inline-cell > svg { color:#74879e; opacity:.45; flex-shrink:0; }
+.readyops-inline-cell:hover > svg,.readyops-inline-cell:focus-visible > svg { opacity:1; }
+.readyops-inline-cell:focus-visible { outline:2px solid #2563eb; outline-offset:4px; }
+.readyops-inline-input { width:100%; min-width:115px; border:1px solid var(--readyops-border); border-radius:6px; background:var(--readyops-surface); color:inherit; padding:8px; font-size:12px; }
+.readyops-inline-input:focus { outline:2px solid #2563eb; outline-offset:1px; }
+.readyops-inline-input:disabled { opacity:.65; }
+.readyops-inline-editing { background:var(--readyops-surface-2); }
+.readyops-inline-buttons { display:flex; flex-wrap:wrap; gap:6px; }
+.readyops-inline-buttons button { display:inline-flex; align-items:center; gap:4px; border-radius:6px; padding:7px 10px; font-size:11px; }
+.readyops-inline-buttons .readyops-inline-save { color:white; background:#2563eb; }
+.readyops-inline-buttons .readyops-inline-cancel { border:1px solid var(--readyops-border); }
+.readyops-inline-buttons button:disabled { opacity:.5; cursor:wait; }
+.readyops-inline-help td { color:var(--readyops-muted-text); font-weight:400; line-height:1.6; }
 .readyops-ref-quick-card { min-height:126px; }
 .readyops-ref-tabs-large { gap:30px; padding-left:18px; }
 .readyops-ref-tabs-large button { font-size:13px; }

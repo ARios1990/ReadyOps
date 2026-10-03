@@ -9,6 +9,7 @@ import { supabase } from './supabase';
 import { ThemeToggle } from './ThemeContext';
 import { AdminPanel } from './AdminPanel';
 import { StaffEditor } from './StaffEditor';
+import { InlineAgentRow } from './InlineAgentRow';
 import { AdminServiceTemplates } from './AdminServiceTemplates';
 import type { Agent, Profile, Team } from './types';
 import { useScheduleStore } from './useScheduleStore';
@@ -429,10 +430,9 @@ export function AdminReferenceDashboard({ store, profile, ownerAccess, signOut }
                   })}</tbody></table>
                 ) : (
                   <table className="readyops-ref-table"><thead><tr><th>AGENT NAME</th><th>TEAM</th><th>LINKED USER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{agentRows.map(agent => {
-                    const team = store.teams.find(t => t.id === agent.team_id);
                     const linked = profiles.find(p => p.agent_id === agent.id);
                     const portalLink = agentPortalLink(agent);
-                    return <tr key={agent.id}><td>{agent.name}</td><td><TeamBadge team={team}/></td><td>{linked?.display_name || agent.email || '—'}</td><td><StatusBadge active={agent.active !== false}/></td><td><div className="readyops-ref-actions">{portalLink && <><button title="Copy Agent Portal Link" onClick={() => void navigator.clipboard.writeText(portalLink)}><ClipboardCopy size={14}/></button><button title="Open Agent Lead Portal" onClick={() => window.open(portalLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={14}/></button></>}<button title={portalLink ? 'Generate New Agent Link' : 'Generate Agent Link'} onClick={() => void regenerateAgentPortalLink(agent)}>{portalLink ? <RefreshCw size={14}/> : <Link2 size={14}/>}</button><button title="Edit Agent" onClick={() => setEditingStaff({ agent, profile: linked })}><Pencil size={14}/></button><button title="Delete Agent" className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></div></td></tr>;
+                    return <InlineAgentRow key={agent.id} agent={agent} profiles={profiles} teams={store.teams} onSaved={async () => { await store.refetch(); await refreshDashboard(); }} onAccountSettings={() => setEditingStaff({ agent, profile: linked })} actions={<>{portalLink && <><button title="Copy Agent Portal Link" onClick={() => void navigator.clipboard.writeText(portalLink)}><ClipboardCopy size={14}/></button><button title="Open Agent Lead Portal" onClick={() => window.open(portalLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={14}/></button></>}<button title={portalLink ? 'Generate New Agent Link' : 'Generate Agent Link'} onClick={() => void regenerateAgentPortalLink(agent)}>{portalLink ? <RefreshCw size={14}/> : <Link2 size={14}/>}</button><button title="Delete Agent" className="danger" onClick={() => void deleteAgent(agent)}><Trash2 size={14}/></button></>}/>;
                   })}</tbody></table>
                 )}
               </div>

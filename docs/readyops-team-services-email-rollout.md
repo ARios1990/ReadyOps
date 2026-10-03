@@ -4,11 +4,12 @@ Repository: [ARios1990/ReadyOps](https://github.com/ARios1990/ReadyOps). Bolt pr
 
 ## Implementation and deployment status
 
-The feature branch contains the implementation and two database migrations. It is **not deployed** to the production database, Edge Functions, Bolt preview or published site. Production inspection was read-only. Tests use fictional records in an isolated PGlite database; no customer emails were sent.
+The feature branch contains the implementation and three database migrations. Production rollout was authorized on October 3, 2026 and is in progress. Tests use fictional records in an isolated PGlite database; no customer emails were sent. Final deployment status is recorded below after verification.
 
 ## What changes
 
 - Admins edit a specific Agent or Manager from the staff list: name, login/profile email, role, team and active status. The server updates linked agent records, checks an active Admin profile, prevents self-demotion/self-disable and records an immutable audit event. Auth email/status and database updates are coordinated with rollback on failure.
+- Admin Overview → Agents & Teams supports direct row editing of Agent Name, Team, Linked User and Status. Click any marked cell or the row pencil; Save commits all four together and Cancel writes nothing. Account Settings retains email/role editing. Only an unlinked Agent login can replace a linked login; replacement disables the displaced login, rotates the agent bearer token and records an audit event. Conflicting/stale changes are rejected. Pre-rollout inspection found two agents with multiple linked profiles; those rows safely refuse edits until an Admin resolves the existing links.
 - Managers & Teams is an Admin navigation section. Managers must have an explicit assigned team. Team dashboards, QC, appointments, performance, lead-email history and payroll enforce the assignment on the server/RLS, including direct-ID requests.
 - Managers review/edit their own team's weekly payroll, including rates, adjustments, notes, status and payment date. Admins retain all-team access and may save permanent agent pay defaults. Managers cannot change those permanent defaults or approve/lock/pay an entire shared payroll period. Paid entries and locked periods cannot be edited through the new RPC.
 - Existing Sunday–Saturday payroll weeks and generated total-pay formulas remain. Recalculation updates counts on pending entries only; it preserves rates, hours, bonuses and payment history. Reassigning an agent does not rewrite historical payroll teams: mismatched historical entries remain Admin-only.
@@ -23,9 +24,10 @@ The feature branch contains the implementation and two database migrations. It i
 ## Ordered rollout
 
 1. Review and test on a staging Supabase branch/project first. Take/verify a production backup. This is an additive migration but replaces shared role helpers, payroll generation, manager-link access and the client-release RPC; do not blindly replay historical migrations.
-2. Apply these two new migrations in order using the Supabase migration tool/workflow:
+2. Apply these three new migrations in order using the Supabase migration tool/workflow:
    - `20260930213257_team_staff_and_manager_payroll.sql`
    - `20260930214837_service_templates_and_lead_email_outbox.sql`
+   - `20261003193017_inline_agent_staff_rows.sql`
 3. Deploy `create-user` and `update-staff` with JWT verification enabled. Deploy `send-lead-emails` with gateway JWT verification **disabled**: it explicitly verifies either the secret worker header or a real authenticated active Admin inside the function. Disabling the gateway without this function's custom checks is unsafe. Keep service-role and worker secrets server-side only.
 4. Configure email through secure Supabase secrets (never frontend environment variables, repository files or chat):
    - `RESEND_API_KEY`: the existing integration may be reused if valid.
@@ -61,7 +63,7 @@ npm run build
 npx deno check --no-lock --node-modules-dir=auto supabase/functions/create-user/index.ts supabase/functions/update-staff/index.ts supabase/functions/send-lead-emails/index.ts
 ```
 
-The schema fixture contains table shapes only, not production/customer records. Generated frontend bundles retain preexisting large-chunk warnings; unrelated hook-dependency lint warnings are not changed by this feature.
+The schema fixture contains table shapes only, not production/customer records. All 26 database/helper tests and four inline React UI tests pass. Generated frontend bundles retain preexisting large-chunk warnings; three unrelated hook-dependency lint warnings are not changed by this feature. Deno's `--node-modules-dir=auto` may replace local npm module links; run `npm ci` before rerunning the Node/React tests after a Deno check.
 
 ## Safe rollback
 
