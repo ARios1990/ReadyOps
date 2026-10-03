@@ -4,7 +4,7 @@ Repository: [ARios1990/ReadyOps](https://github.com/ARios1990/ReadyOps). Bolt pr
 
 ## Implementation and deployment status
 
-The feature branch contains the implementation and three database migrations. Production rollout was authorized on October 3, 2026 and is in progress. Tests use fictional records in an isolated PGlite database; no customer emails were sent. Final deployment status is recorded below after verification.
+The feature branch contains the implementation and three database migrations. Production rollout was authorized on October 3, 2026. The changes are pushed to PR #67, and local checks plus GitHub verification pass. **Not deployed or published yet:** browser control disconnected during the Bolt publishing preparation. No production migrations or Edge Function deployments were performed; GitHub `main` and the published site remain unchanged. Tests use fictional records in an isolated PGlite database; no customer emails were sent.
 
 ## What changes
 
