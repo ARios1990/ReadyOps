@@ -34,6 +34,7 @@ import {
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
+import { LeadEmailHistory } from './LeadEmailHistory';
 import {
   formatDateLong,
   formatRoofAge,
@@ -1591,6 +1592,7 @@ function LeadDetailModal({
           </div>
         </header>
         <div className="space-y-5 p-5">
+          <LeadEmailHistory leadId={lead.id} />
           {editing ? (
             <LeadEditForm
               detail={detail}

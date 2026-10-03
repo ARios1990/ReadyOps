@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { CompanyEmailSettings } from './CompanyEmailSettings';
 import {
   copyText,
   formatDateLong,
@@ -48,6 +49,7 @@ import {
   packageDelivered,
   packagePaymentState,
   packageRemaining,
+  formatCompanyPayment,
   packageTarget,
   statusCounts as canonicalStatusCounts,
   totalLeads as canonicalTotalLeads,
@@ -633,7 +635,7 @@ export function PortalAdmin() {
     if (updateError) {
       setError(
         updateError.code === "23505"
-          ? `The slug â€œ${publicSlug}â€ is already assigned to another company.`
+          ? `The slug “${publicSlug}” is already assigned to another company.`
           : updateError.message,
       );
     } else {
@@ -874,7 +876,7 @@ export function PortalAdmin() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search companiesâ€¦"
+                  placeholder="Search companies…"
                   className="h-10 w-full rounded-lg border pl-9 pr-3 text-xs"
                 />
               </label>
@@ -991,7 +993,7 @@ export function PortalAdmin() {
                   }}
                   className="min-w-0 flex-1 border-0 px-1 text-[11px] font-semibold"
                 />
-                <span className="px-1 text-slate-400">â†’</span>
+                <span className="px-1 text-slate-400">→</span>
                 <input
                   aria-label="Through date"
                   type="date"
@@ -1027,8 +1029,8 @@ export function PortalAdmin() {
                 </button>
               )}
               <p className="text-xs font-semibold text-slate-500">
-                {visible.length} companies â€¢ {rangeAppointmentCount} appointments
-                in selected range â€¢ lead totals are all time
+                {visible.length} companies • {rangeAppointmentCount} appointments
+                in selected range • lead totals are all time
               </p>
             </div>
           </section>
@@ -1239,7 +1241,7 @@ export function PortalAdmin() {
                 Booking slug for {slugEditor.companyName}
               </h2>
               <p className="mt-2 text-sm text-slate-500">
-                Use this exact value for the companyâ€™s{" "}
+                Use this exact value for the company’s{" "}
                 <strong>ReadyOpsSlug</strong> campaign variable. Changing an
                 existing slug changes its booking URL.
               </p>
@@ -1285,7 +1287,7 @@ export function PortalAdmin() {
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
               >
                 {slugSaving && <Loader2 size={15} className="animate-spin" />}
-                {slugSaving ? "Savingâ€¦" : "Save Slug"}
+                {slugSaving ? "Saving…" : "Save Slug"}
               </button>
             </div>
           </section>
@@ -1620,11 +1622,12 @@ function CompanyRow(props: CompanyRowProps) {
             : "No active package"}
         </td>
         <td className="text-center font-bold">
-          {company.package ? packageRemaining(company) : "â€”"}
+          {packageRemaining(company)}
         </td>
         <td>
           {company.package ? (
             <div>
+              <div className="font-bold">{formatCompanyPayment(company)}</div>
               <span
                 className={`rounded-full px-2 py-1 text-[10px] font-bold ${
                   packagePaymentState(company) === "paid"
@@ -1641,7 +1644,7 @@ function CompanyRow(props: CompanyRowProps) {
               </div>
             </div>
           ) : (
-            "â€”"
+            formatCompanyPayment(company)
           )}
         </td>
         <td onClick={(event) => event.stopPropagation()}>
@@ -1816,8 +1819,8 @@ function CompanyRow(props: CompanyRowProps) {
                     <h3 className="font-bold">Overview</h3>
                     {!editing && (
                       <div className="mt-1 space-y-1 text-xs text-slate-500">
-                        <p>{company.contact_name || "No contact"} â€¢{" "}{company.phone || "No phone"} â€¢{" "}{company.email || company.owner_email || "No email"}</p>
-                        <p><strong>Billing:</strong> {company.billing_email || company.owner_email || "No billing email"} â€¢ {company.billing_address || "No billing address"}</p>
+                        <p>{company.contact_name || "No contact"} •{" "}{company.phone || "No phone"} •{" "}{company.email || company.owner_email || "No email"}</p>
+                        <p><strong>Billing:</strong> {company.billing_email || company.owner_email || "No billing email"} • {company.billing_address || "No billing address"}</p>
                         <p><strong>Service area:</strong> {company.metro_tag || company.state || "Not set"}</p>
                         {Array.isArray(company.secondary_emails) && company.secondary_emails.length > 0 && (
                           <p><strong>Secondary:</strong> {company.secondary_emails.join(", ")}</p>
@@ -1847,7 +1850,7 @@ function CompanyRow(props: CompanyRowProps) {
                         ) : (
                           <Save size={13} />
                         )}
-                        {saving ? "Savingâ€¦" : "Save Changes"}
+                        {saving ? "Saving…" : "Save Changes"}
                       </button>
                     </div>
                   ) : (
@@ -1866,7 +1869,7 @@ function CompanyRow(props: CompanyRowProps) {
                         className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold text-slate-500"
                         title="Open full company manager (locations, packages, reps)"
                       >
-                        Advancedâ€¦
+                        Advanced…
                       </button>
                     </div>
                   )}
@@ -1994,7 +1997,7 @@ function CompanyRow(props: CompanyRowProps) {
                           value={draft.metro_tag}
                           onChange={(event) => setDraft({ ...draft, metro_tag: event.target.value })}
                           className="mt-1 h-9 w-full rounded-lg border px-3 text-xs"
-                          placeholder="DFW, Houston, Tampaâ€¦"
+                          placeholder="DFW, Houston, Tampa…"
                         />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600">
@@ -2031,7 +2034,7 @@ function CompanyRow(props: CompanyRowProps) {
                             })
                           }
                           className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
-                          placeholder="Lead qualification requirements shared with the sales teamâ€¦"
+                          placeholder="Lead qualification requirements shared with the sales team…"
                         />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600 md:col-span-2">
@@ -2042,7 +2045,7 @@ function CompanyRow(props: CompanyRowProps) {
                             setDraft({ ...draft, notes: event.target.value })
                           }
                           className="mt-1 min-h-[64px] w-full rounded-lg border p-2 text-xs"
-                          placeholder="Notes visible only to adminsâ€¦"
+                          placeholder="Notes visible only to admins…"
                         />
                       </label>
                     </div>
@@ -2085,8 +2088,8 @@ function CompanyRow(props: CompanyRowProps) {
                         >
                           <span>{item.location_label}</span>
                           <strong>
-                            {String(item.start_time || "09:00").slice(0, 5)}â€“
-                            {String(item.end_time || "18:00").slice(0, 5)} â€¢{" "}
+                            {String(item.start_time || "09:00").slice(0, 5)}–
+                            {String(item.end_time || "18:00").slice(0, 5)} •{" "}
                             {item.max_per_day ?? 5}/day
                           </strong>
                         </div>
@@ -2109,7 +2112,7 @@ function CompanyRow(props: CompanyRowProps) {
                           key={rep.id}
                           className="rounded-lg bg-slate-50 p-2"
                         >
-                          <strong>{rep.name}</strong> â€¢{" "}
+                          <strong>{rep.name}</strong> •{" "}
                           {locations.find((item) => item.id === rep.location_id)
                             ?.location_label || "All locations"}
                           <div className="text-slate-400">
@@ -2138,6 +2141,7 @@ function CompanyRow(props: CompanyRowProps) {
                     </pre>
                   )}
                 </section>
+                <CompanyEmailSettings companyId={String(company.company_id)} />
               </div>
               <section className="rounded-xl border bg-white p-4">
                 <h3 className="font-bold">Scheduled / Submitted Leads</h3>
@@ -2162,7 +2166,7 @@ function CompanyRow(props: CompanyRowProps) {
                           <td>
                             {row.lead.full_name}
                             <div className="text-[10px] text-slate-400">
-                              {row.lead.phone_number} â€¢ {row.lead.address}
+                              {row.lead.phone_number} • {row.lead.address}
                             </div>
                           </td>
                           <td>{row.agent?.name || row.lead.agent_name}</td>
@@ -2215,7 +2219,7 @@ function CompanyAvailabilityGrid({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
           <h3 className="font-bold">
-            Appointment Availability â€” {formatDateLong(appointmentDate)}
+            Appointment Availability — {formatDateLong(appointmentDate)}
           </h3>
           <p className="text-xs text-slate-500">
             Live company blocks and occupied appointments by location and team.
@@ -2408,7 +2412,7 @@ function LocationSection({
                     </td>
                     <td>
                       {[item.city, item.state].filter(Boolean).join(", ") ||
-                        "â€”"}
+                        "—"}
                     </td>
                     <td>{assigned.join(", ") || "Unassigned"}</td>
                     <td>
@@ -2416,14 +2420,14 @@ function LocationSection({
                         ?.map((day) => day.slice(0, 3))
                         .join(", ") || "Default"}
                       <div className="text-[10px] text-slate-400">
-                        {String(item.start_time || "09:00").slice(0, 5)}â€“
+                        {String(item.start_time || "09:00").slice(0, 5)}–
                         {String(item.end_time || "18:00").slice(0, 5)}
                       </div>
                     </td>
                     <td>
                       {item.max_per_day ?? 5}
                       <div className="text-[10px] text-slate-400">
-                        {item.max_per_hour ?? 1}/hour â€¢{" "}
+                        {item.max_per_hour ?? 1}/hour •{" "}
                         {item.slot_interval_minutes ?? 60} min
                       </div>
                     </td>
@@ -2581,8 +2585,8 @@ function PackageSection({
           <h3 className="mt-1 text-lg font-black">Lead Package</h3>
           <p className="text-xs text-slate-500">
             {current
-              ? `${current.package_name || "Lead Package"} â€¢ Package #${current.package_number || "â€”"}`
-              : "Create the companyâ€™s first lead package."}
+              ? `${current.package_name || "Lead Package"} • Package #${current.package_number || "—"}`
+              : "Create the company’s first lead package."}
           </p>
         </div>
         {current && (
@@ -2807,7 +2811,7 @@ function Metric({
       <div className="mt-2 flex items-end justify-between">
         <span className="text-3xl font-black">{value}</span>
         <span className="text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
-          View â†’
+          View →
         </span>
       </div>
     </button>

@@ -102,7 +102,18 @@ export function packageTarget(company: CompanyOverview): number {
 
 export function packageRemaining(company: CompanyOverview): number {
   if (!company?.package) return 0;
-  const explicit = Number(company.package.pending_leads);
+  const explicit = company.package.pending_leads == null ? NaN : Number(company.package.pending_leads);
   if (Number.isFinite(explicit)) return Math.max(0, Math.floor(explicit));
   return Math.max(0, packageTarget(company) - packageDelivered(company));
+}
+
+/** Payment is the amount received for the displayed package. */
+export function packagePaymentAmount(company: CompanyOverview): number {
+  const amount = Number(company?.package?.amount_paid ?? 0);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+export function formatCompanyPayment(company: CompanyOverview): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+    .format(packagePaymentAmount(company));
 }

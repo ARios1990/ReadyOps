@@ -585,7 +585,7 @@ function CorrectionModal({
                 </div>
               )}
               <DynamicLeadForm
-                schema={correction.form_schema || []}
+                schema={(correction.values._service_template as { form_schema?: PortalFormSection[] } | undefined)?.form_schema || correction.form_schema || []}
                 values={values}
                 disabled={saving}
                 recordingUploadSlug={correction.company_slug}

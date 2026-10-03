@@ -4,6 +4,7 @@ import {
   Pencil, Trash2, EyeOff, Eye, Save, Check
 } from 'lucide-react';
 import { supabase } from './supabase';
+import { StaffEditor } from './StaffEditor';
 import { Profile, Agent, Team, Company, CompanyLocation, CompanyTeam } from './types';
 
 interface AdminPanelProps {
@@ -25,10 +26,10 @@ interface AdminPanelProps {
 type Tab = 'companies' | 'agents' | 'users' | 'add-company' | 'create-user';
 
 export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
-  const [tab, setTab] = useState<Tab>((initialTab as Tab) || 'companies');
+  const [tab, setTab] = useState<Tab>(initialTab === 'create-manager' ? 'create-user' : (initialTab as Tab) || 'companies');
 
   useEffect(() => {
-    if (initialTab) setTab(initialTab as Tab);
+    if (initialTab) setTab(initialTab === 'create-manager' ? 'create-user' : initialTab as Tab);
   }, [initialTab]);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
     };
   }, [onClose]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [editingStaff, setEditingStaff] = useState<{ agent?: Agent; profile?: Profile } | null>(null);
   const [search, setSearch] = useState('');
 
   // Add company form
@@ -69,7 +71,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
   const [cuEmail, setCuEmail] = useState('');
   const [cuPassword, setCuPassword] = useState('');
   const [cuName, setCuName] = useState('');
-  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc' | 'manager'>('agent');
+  const [cuRole, setCuRole] = useState<'admin' | 'agent' | 'qc' | 'manager'>(initialTab === 'create-manager' ? 'manager' : 'agent');
   const [cuAgent, setCuAgent] = useState('');
   const [cuTeam, setCuTeam] = useState('');
   const [cuLoading, setCuLoading] = useState(false);
@@ -280,6 +282,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
         aria-label="ReadyOps management"
       >
         <div className="px-4 py-4 sm:px-6">
+        {editingStaff && <StaffEditor {...editingStaff} teams={store.teams} onClose={() => setEditingStaff(null)} onSaved={async () => { await store.refetch(); await fetchProfiles(); }} />}
         {/* Header + Tabs */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
@@ -602,6 +605,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                           {linkedProfile ? linkedProfile.display_name : <span className="text-gray-300 italic">Unlinked</span>}
                         </td>
                         <td className="py-2 px-4 text-right">
+                          <button onClick={() => setEditingStaff({ agent, profile: linkedProfile })} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit agent"><Pencil size={13} /></button>
                           <button
                             onClick={() => setConfirmDelete({ type: 'agent', id: agent.id, name: agent.name })}
                             className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
@@ -633,7 +637,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
               <tbody className="divide-y divide-gray-100">
                 {filteredProfiles.map(p => {
                   const agent = p.agent_id ? store.agents.find(a => a.id === p.agent_id) : null;
-                  const team = agent ? store.teams.find(t => t.id === agent.team_id) : null;
+                  const team = store.teams.find(t => t.id === (p.team_id || agent?.team_id));
                   return (
                     <tr key={p.id} className="hover:bg-gray-50">
                       <td className="py-2 px-4 font-medium text-gray-800">{p.display_name}</td>
@@ -678,6 +682,7 @@ export function AdminPanel({ store, onClose, initialTab }: AdminPanelProps) {
                           </div>
                         ) : (
                           <div className="flex items-center gap-1 justify-end">
+                            <button onClick={() => setEditingStaff({ profile: p, agent: agent || undefined })} className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit account"><Pencil size={13} /></button>
                             <button
                               onClick={() => setLinkingProfile(p.id)}
                               className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1"

@@ -75,7 +75,7 @@ function calculatedTotal(row: Obj) {
   return Math.max(0, gross + numberValue(row.bonus) - numberValue(row.deductions));
 }
 
-export function AdminPayroll() {
+export function AdminPayroll({ managerMode = false }: { managerMode?: boolean }) {
   const [periods, setPeriods] = useState<Obj[]>([]);
   const [entries, setEntries] = useState<Obj[]>([]);
   const [agents, setAgents] = useState<Obj[]>([]);
@@ -86,10 +86,11 @@ export function AdminPayroll() {
   const [error, setError] = useState("");
   const [teamFilter, setTeamFilter] = useState("all");
   const [payStructureFilter, setPayStructureFilter] = useState("all");
-  const [onlyAgentsWithLeads, setOnlyAgentsWithLeads] = useState(true);
+  const [onlyAgentsWithLeads, setOnlyAgentsWithLeads] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, Obj>>({});
   const [savingId, setSavingId] = useState("");
   const [savedId, setSavedId] = useState("");
+  const [saveDefaults, setSaveDefaults] = useState(true);
 
   async function load(preferred?: string) {
     setLoading(true);
@@ -109,9 +110,9 @@ export function AdminPayroll() {
       supabase.rpc("readyops_agent_privileged_fields"),
     ]);
 
-    if (p.error || a.error || t.error) {
+    if (p.error || a.error || t.error || payFields.error) {
       setError(
-        (p.error || a.error || t.error)?.message || "Unable to load payroll",
+        (p.error || a.error || t.error || payFields.error)?.message || "Unable to load payroll",
       );
     }
 
@@ -147,11 +148,7 @@ export function AdminPayroll() {
     const chosen = preferred || periodId || nextPeriods[0]?.id || "";
     setPeriodId(chosen);
     if (chosen) {
-      const e = await supabase
-        .from("payroll_entries")
-        .select("*")
-        .eq("payroll_period_id", chosen)
-        .order("created_at");
+      const e = await supabase.rpc("get_readyops_payroll_entries", { p_period_id: chosen });
       if (e.error) setError(e.error.message);
       setEntries((e.data || []) as Obj[]);
     } else {
@@ -168,13 +165,10 @@ export function AdminPayroll() {
 
   useEffect(() => {
     if (periodId) void loadEntries(periodId);
-  }, [periodId]); // eslint-disable-line react-hooks/exhaustive-deps -- period selection controls entry query
+  }, [periodId]);
 
   async function loadEntries(id: string) {
-    const e = await supabase
-      .from("payroll_entries")
-      .select("*")
-      .eq("payroll_period_id", id);
+    const e = await supabase.rpc("get_readyops_payroll_entries", { p_period_id: id });
     if (e.error) {
       setError(e.error.message);
     } else {
@@ -296,19 +290,17 @@ export function AdminPayroll() {
     setError("");
 
     const { error: saveError } = await supabase.rpc(
-      "save_readyops_payroll_entry",
+      "save_readyops_team_payroll_entry",
       {
         p_entry_id: row.id,
-        p_pay_structure:
+        p_patch: { pay_structure:
           draft.pay_structure || ("commission_only" as PayStructure),
-        p_hours: numberValue(draft.hours),
-        p_base_pay: numberValue(draft.base_pay),
-        p_hourly_rate: numberValue(draft.hourly_rate),
-        p_lead_rate: numberValue(draft.lead_rate),
-        p_signed_contract_rate: numberValue(draft.signed_contract_rate),
-        p_bonus: numberValue(draft.bonus),
-        p_deductions: numberValue(draft.deductions),
-        p_notes: String(draft.notes || ""),
+        hours: numberValue(draft.hours), base_pay: numberValue(draft.base_pay),
+        hourly_rate: numberValue(draft.hourly_rate), lead_rate: numberValue(draft.lead_rate),
+        signed_contract_rate: numberValue(draft.signed_contract_rate), bonus: numberValue(draft.bonus),
+        deductions: numberValue(draft.deductions), notes: String(draft.notes || ""),
+        status: draft.status || 'pending', payment_date: draft.payment_date || null,
+        ...(!managerMode && saveDefaults ? { save_defaults: true } : {}) },
       },
     );
 
@@ -395,7 +387,7 @@ export function AdminPayroll() {
             </select>
           </label>
 
-          {period && (
+          {period && !managerMode && (
             <>
               <span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-bold uppercase text-blue-700">
                 {period.status}
@@ -450,10 +442,9 @@ export function AdminPayroll() {
           <div>
             <h3>Agent Payroll</h3>
             <p className="mt-1 text-xs opacity-60">
-              MSR and BRL default to a $450 weekly base. Dopey-MSR and
-              Yeni-MSR use a $4,000 base; Leah-MSR earns $500 per qualified
-              lead. OCTO pay plans remain configurable per agent.
+              {managerMode ? 'Only your assigned team is visible. Changes apply to this payroll week.' : 'Review payroll across all teams. Changes apply to the selected payroll week.'}
             </p>
+            {!managerMode && <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={saveDefaults} onChange={event => setSaveDefaults(event.target.checked)} />Also save edited rates as this agent's permanent pay defaults</label>}
           </div>
 
           <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3">
@@ -537,6 +528,7 @@ export function AdminPayroll() {
                 <tr className="bg-slate-50 text-left text-[10px] uppercase opacity-70">
                   <th className="p-3">Agent</th>
                   <th>Team</th>
+                  <th>Week</th><th>Leads</th><th>Appointments</th><th>Bad</th><th>No Show</th>
                   <th>Pay Structure</th>
                   <th>Hours</th>
                   <th>Qualified</th>
@@ -549,6 +541,7 @@ export function AdminPayroll() {
                   <th>Deduction</th>
                   <th>Notes</th>
                   <th>Total</th>
+                  <th>Status</th><th>Payment Date</th>
                   <th>Save</th>
                 </tr>
               </thead>
@@ -559,7 +552,7 @@ export function AdminPayroll() {
                   const team = teamById.get(entry.team_id);
                   const structure = (row.pay_structure ||
                     "commission_only") as PayStructure;
-                  const isLocked = period?.status === "locked";
+                  const isLocked = period?.status === "locked" || entry.status === "paid";
                   const isDirty = Boolean(drafts[entry.id]);
                   const inputClass =
                     "w-24 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:bg-slate-100 disabled:text-slate-400";
@@ -567,9 +560,11 @@ export function AdminPayroll() {
                   return (
                     <tr key={entry.id} className="border-t align-top">
                       <td className="p-3 font-bold">
-                        {agent?.name || `Agent ${String(entry.agent_id || "").slice(0, 8) || "unassigned"}`}
+                        {entry.agent_name || agent?.name || `Agent ${String(entry.agent_id || "").slice(0, 8) || "unassigned"}`}
                       </td>
-                      <td>{team?.abbreviation || team?.name || "—"}</td>
+                      <td>{team?.abbreviation || entry.team_name || team?.name || "—"}</td>
+                      <td className="whitespace-nowrap">{entry.week_start} – {entry.week_end}</td>
+                      <td>{numberValue(entry.total_leads)}</td><td>{numberValue(entry.appointments)}</td><td>{numberValue(entry.bad_leads)}</td><td>{numberValue(entry.no_show_leads)}</td>
                       <td>
                         <select
                           aria-label={`${agent?.name || "Agent"} pay structure`}
@@ -710,6 +705,8 @@ export function AdminPayroll() {
                       <td className="font-black">
                         {money(calculatedTotal(row))}
                       </td>
+                      <td><select aria-label={`${entry.agent_name} payroll status`} value={row.status || 'pending'} disabled={isLocked} onChange={event => updateDraft(entry, 'status', event.target.value)} className="rounded-md border p-2"><option value="pending">Pending</option><option value="approved">Approved</option><option value="paid">Paid</option></select></td>
+                      <td><input aria-label={`${entry.agent_name} payment date`} type="date" value={row.payment_date || ''} disabled={isLocked} onChange={event => updateDraft(entry, 'payment_date', event.target.value)} className="rounded-md border p-2" /></td>
                       <td>
                         <div className="flex min-w-32 items-center gap-2">
                           <button
@@ -735,7 +732,7 @@ export function AdminPayroll() {
                           )}
                           {savedId === entry.id && (
                             <span className="text-xs font-bold text-emerald-700">
-                              Saved as this agent&apos;s default
+                              Saved for this week
                             </span>
                           )}
                         </div>
