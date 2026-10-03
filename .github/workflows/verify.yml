@@ -21,5 +21,7 @@ jobs:
         run: npm ci
       - name: TypeScript
         run: npm run typecheck
+      - name: Team permissions, service templates and email regression tests
+        run: npm test
       - name: Production build
         run: npm run build

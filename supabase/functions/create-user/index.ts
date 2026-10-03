@@ -39,18 +39,18 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerProfile } = await callerClient
       .from("profiles")
-      .select("role")
+      .select("role,active")
       .eq("id", caller.id)
       .maybeSingle();
 
-    if (!callerProfile || callerProfile.role !== "admin") {
+    if (!callerProfile || callerProfile.role !== "admin" || !callerProfile.active) {
       return new Response(
         JSON.stringify({ error: "Only admins can create users" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { email, password, display_name, role, agent_id } = await req.json();
+    const { email, password, display_name, role, agent_id, team_id, create_agent } = await req.json();
 
     if (!email || !password || !display_name) {
       return new Response(
@@ -60,6 +60,20 @@ Deno.serve(async (req: Request) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    if (!['admin','agent','manager','qc'].includes(role || 'agent')) return new Response(JSON.stringify({error:'Invalid account role'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+    let linkedAgent = agent_id || null;
+    let assignedTeam = team_id || null;
+    if (linkedAgent) {
+      const {data:agent,error:agentError}=await adminClient.from('agents').select('id,team_id').eq('id',linkedAgent).single();
+      const {data:existing}=await adminClient.from('profiles').select('id').eq('agent_id',linkedAgent).limit(1);
+      if(agentError || existing?.length || (assignedTeam && assignedTeam!==agent.team_id)) return new Response(JSON.stringify({error:'Agent is unavailable, already linked, or assigned to another team'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      assignedTeam=agent.team_id;
+    }
+    if (['agent','manager'].includes(role || 'agent') && !assignedTeam) return new Response(JSON.stringify({error:'Assign a team for this account'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+    if (assignedTeam) {
+      const {data:team}=await adminClient.from('teams').select('id').eq('id',assignedTeam).maybeSingle();
+      if(!team)return new Response(JSON.stringify({error:'Team not found'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+    }
 
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
@@ -77,14 +91,26 @@ Deno.serve(async (req: Request) => {
     }
 
     if (newUser?.user) {
-      await adminClient
+      let createdAgent: string | null=null;
+      if(!linkedAgent && (create_agent || (role || 'agent')==='agent')) {
+        const {data:agent,error:agentError}=await adminClient.from('agents').insert({name:display_name,email:String(email).trim().toLowerCase(),team_id:assignedTeam,active:true}).select('id').single();
+        if(agentError) {await adminClient.auth.admin.deleteUser(newUser.user.id);return new Response(JSON.stringify({error:'Unable to create linked agent; account was rolled back'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});}
+        linkedAgent=agent.id;createdAgent=agent.id;
+      }
+      const {error:profileError}=await adminClient
         .from("profiles")
         .upsert({
           id: newUser.user.id,
           display_name: display_name,
           role: role || "agent",
-          agent_id: agent_id || null,
+          agent_id: linkedAgent,
+          email: String(email).trim().toLowerCase(),team_id:assignedTeam,active:true,
         });
+      if(profileError) {
+        await adminClient.auth.admin.deleteUser(newUser.user.id);
+        if(createdAgent)await adminClient.from('agents').delete().eq('id',createdAgent);
+        return new Response(JSON.stringify({error:'Unable to save profile; newly created account was rolled back'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      }
     }
 
     return new Response(

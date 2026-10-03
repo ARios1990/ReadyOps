@@ -1,6 +1,13 @@
 [functions.create-user]
 verify_jwt = true
 
+[functions.update-staff]
+verify_jwt = true
+
+# Verifies the secret worker header or a real authenticated active Admin itself.
+[functions.send-lead-emails]
+verify_jwt = false
+
 [functions.readymode-sync]
 verify_jwt = false
 

@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
+import { inferServiceType, switchServiceValues, buildUniversalLeadTemplate, visibleTemplateFields, type ServiceTemplate } from './serviceTemplates';
 import { ColdCallScript } from "./ColdCallScript";
 import { getCompanyCallScript } from "./companyCallScripts";
 import { normalizeLeadType, type LeadType } from "./leadTypes";
 import {
   addDays,
-  buildLeadTemplate,
   copyText,
   formatDateLong,
   formatDateShort,
@@ -339,6 +339,24 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [serviceTemplates, setServiceTemplates] = useState<ServiceTemplate[]>([]);
+  const [templatesError, setTemplatesError] = useState('');
+  const selectedTemplate = serviceTemplates.find(s => s.id === formValues.service_type);
+  useEffect(() => {
+    let cancelled = false;
+    setServiceTemplates([]); setTemplatesError('');
+    supabase.rpc('get_public_service_templates', { p_slug: slug }).then(({ data, error: configError }) => {
+      if (cancelled) return;
+      if (configError) { setTemplatesError(configError.message); return; }
+      const templates = (data || []) as ServiceTemplate[];
+      setServiceTemplates(templates);
+      setFormValues(current => {
+        const initial = templates.find(s => s.id === current.service_type) || templates.find(s => s.id === inferServiceType(current.service_needed)) || templates[0];
+        return initial ? { ...current, service_type: initial.id, service_needed: current.service_needed || initial.name, _universal_template: true } : current;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [slug]);
 
   const startDate = localDate(weekStart);
   const endDate = localDate(addDays(weekStart, 6));
@@ -568,16 +586,20 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
   async function submitAppointment() {
     if (!reservation) return;
+    if (!selectedTemplate || templatesError) { setError('Service configuration is unavailable. Refresh or contact an Admin.'); return; }
+    const requiredMissing = visibleTemplateFields(selectedTemplate.form_schema, formValues).find(f => (f.mode === 'required' || (!f.mode && f.required)) && (formValues[f.key] == null || !String(formValues[f.key]).trim() || (Array.isArray(formValues[f.key]) && !(formValues[f.key] as unknown[]).length)));
+    if (requiredMissing) { setError(`${requiredMissing.label} is required.`); return; }
     setBusy(true);
     setError("");
     const basePayload = {
       ...formValues,
       appointment_date: reservation.appointment_date,
       appointment_time: reservation.start_time,
+      timezone: portal?.company.settings.timezone,
     };
     const payload = {
       ...basePayload,
-      lead_template: buildLeadTemplate(basePayload),
+      lead_template: buildUniversalLeadTemplate(selectedTemplate, basePayload),
     };
     const { data, error: rpcErr } = await supabase.rpc(
       "submit_public_appointment",
@@ -941,7 +963,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 Complete the lead details. Your selected time is being held.
               </p>
             </div>
-            <div className="mb-4">
+            {selectedTemplate?.id === 'roofing' && <div className="mb-4">
               <ColdCallScript
                 leadType={String(formValues.lead_type || "")}
                 onLeadTypeChange={(value: LeadType) =>
@@ -958,11 +980,14 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 }}
                 customScript={companyCallScript}
               />
-            </div>
+            </div>}
+            {templatesError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{templatesError}</p>}
+            <label className="block rounded-xl border bg-white p-4 text-sm font-bold">Type of Service<select aria-label="Type of Service" value={String(formValues.service_type || '')} disabled={busy || !serviceTemplates.length} onChange={event => { const next = serviceTemplates.find(s => s.id === event.target.value); if (next) { setFormValues(current => switchServiceValues(current, selectedTemplate, next)); setError(''); } }} className="mt-2 w-full rounded-lg border p-3"><option value="">Select service</option>{serviceTemplates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+            {selectedTemplate && <h2 className="rounded-lg bg-blue-600 p-3 text-center font-bold text-white">{selectedTemplate.template_title}</h2>}
             <DynamicLeadForm
-              schema={settings.formSchema || []}
+              schema={selectedTemplate?.form_schema || []}
               values={formValues}
-              disabled={busy}
+              disabled={busy || !selectedTemplate || Boolean(templatesError)}
               onChange={(key, value) =>
                 setFormValues((prev) => ({ ...prev, [key]: value }))
               }

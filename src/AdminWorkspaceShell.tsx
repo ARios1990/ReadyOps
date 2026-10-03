@@ -28,6 +28,8 @@ type AdminSection =
   | "companies"
   | "leads"
   | "staff"
+  | "managers"
+  | "templates"
   | "active-users"
   | "reports"
   | "weekly-ops"
@@ -49,15 +51,18 @@ const MAIN_ITEMS: readonly SidebarItem[] = [
 const MANAGER_MAIN_ITEMS: readonly SidebarItem[] = [
   ["overview", "Team Dashboard", Home, "/manager"],
   ["qc", "Team QC Queue", ShieldCheck, "/qc"],
+  ["payroll", "Team Payroll", CircleDollarSign, "/manager?view=payroll"],
 ] as const;
 
 const MANAGEMENT_ITEMS: readonly SidebarItem[] = [
   ["staff", "Agents & Teams", UsersRound, "/#readyops-staff"],
+  ["managers", "Managers & Teams", UsersRound, "/?view=managers#readyops-staff"],
   ["active-users", "Active Users", Wifi, "/admin/active-users"],
   ["reports", "Reports", BarChart3, "/?view=reports"],
   ["weekly-ops", "Weekly Operations", Calendar, "/?view=weekly-ops"],
   ["invoices", "Invoices", WalletCards, "/?view=invoices"],
   ["payroll", "Payroll", CircleDollarSign, "/?view=payroll"],
+  ["templates", "Universal Lead Templates", FileText, "/?view=templates"],
 ] as const;
 
 const OWNER_ITEM: SidebarItem = [
