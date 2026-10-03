@@ -70,9 +70,9 @@ await db.exec(`alter table public.company_portal_settings add primary key(compan
 alter table public.payroll_periods add unique(week_start);alter table public.payroll_entries add unique(payroll_period_id,agent_id);
 grant select,insert,update,delete on all tables in schema public to authenticated,service_role;`);
 for (const file of [
-  "20260930213257_team_staff_and_manager_payroll.sql",
-  "20260930214837_service_templates_and_lead_email_outbox.sql",
-  "20261003193017_inline_agent_staff_rows.sql",
+  "20261003230404_team_staff_and_manager_payroll.sql",
+  "20261003230716_service_templates_and_lead_email_outbox.sql",
+  "20261003230718_inline_agent_staff_rows.sql",
 ]) {
   const sql = fs
     .readFileSync(

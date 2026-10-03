@@ -4,7 +4,9 @@ Repository: [ARios1990/ReadyOps](https://github.com/ARios1990/ReadyOps). Bolt pr
 
 ## Implementation and deployment status
 
-The feature branch contains the implementation and three database migrations. Production rollout was authorized on October 3, 2026. The changes are pushed to PR #67, and local checks plus GitHub verification pass. **Not deployed or published yet:** browser control disconnected during the Bolt publishing preparation. No production migrations or Edge Function deployments were performed; GitHub `main` and the published site remain unchanged. Tests use fictional records in an isolated PGlite database; no customer emails were sent.
+Production rollout was authorized on October 3, 2026. All three migrations are now applied to `vzaraqexdsimmasxsano`; their local filenames match the actual deployed versions to prevent future CLI replays. `create-user` v13, `update-staff` v1 and `send-lead-emails` v1 are deployed and Active. Existing-record checksums and counts match the pre-rollout baseline: 70 profiles, 69 agents, 503 leads, 503 appointments, 330 payroll entries and 182 company settings. Frontend merge, Bolt sync and publishing are in progress. Email sender/worker configuration and an approved delivery test remain pending; no customer emails were sent during verification.
+
+The project is on the Free plan with no automatic production backups. An ignored local recovery reference preserves the previous replaced function definitions and privileges; it is **not** a full database backup. Migrations were compiled against an isolated PGlite fixture before deployment. No billing upgrade was made. The dashboard warns that exceeded usage may cause restrictions on October 19, 2026.
 
 ## What changes
 
@@ -25,9 +27,9 @@ The feature branch contains the implementation and three database migrations. Pr
 
 1. Review and test on a staging Supabase branch/project first. Take/verify a production backup. This is an additive migration but replaces shared role helpers, payroll generation, manager-link access and the client-release RPC; do not blindly replay historical migrations.
 2. Apply these three new migrations in order using the Supabase migration tool/workflow:
-   - `20260930213257_team_staff_and_manager_payroll.sql`
-   - `20260930214837_service_templates_and_lead_email_outbox.sql`
-   - `20261003193017_inline_agent_staff_rows.sql`
+   - `20261003230404_team_staff_and_manager_payroll.sql`
+   - `20261003230716_service_templates_and_lead_email_outbox.sql`
+   - `20261003230718_inline_agent_staff_rows.sql`
 3. Deploy `create-user` and `update-staff` with JWT verification enabled. Deploy `send-lead-emails` with gateway JWT verification **disabled**: it explicitly verifies either the secret worker header or a real authenticated active Admin inside the function. Disabling the gateway without this function's custom checks is unsafe. Keep service-role and worker secrets server-side only.
 4. Configure email through secure Supabase secrets (never frontend environment variables, repository files or chat):
    - `RESEND_API_KEY`: the existing integration may be reused if valid.
