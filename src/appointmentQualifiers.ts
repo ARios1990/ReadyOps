@@ -24,6 +24,13 @@ export function qualifierVisible(field: PortalFormField, values: Record<string, 
   return field.mode !== 'hidden' && (!field.showWhen?.field || values[field.showWhen.field] === field.showWhen.equals);
 }
 export const NOTES_ONLY = new Set(['meeting_name', 'visitor_authority', 'access_instructions', 'hail_size', 'claim_filed', 'claim_status', 'approved_work']);
+export function roofingSummarySchema(): PortalFormSection[] {
+  return [
+    { id: 'customer', title: 'Customer Information', fields: [['service_needed','Services Need'],['appointment_display','App Date & Time'],['full_name','Customer Name'],['phone_number','Phone Number'],['address','Address'],['email','Email'],['language','Language']].map(([key,label]) => qualifier(key,label)) },
+    { id: 'property', title: 'Property Details', fields: [['roof_age','Roof Age'],['home_type','Home Type'],['roof_type','Roof Type'],['stories','Stories'],['insurance','Insurance'],['insurance_name','Insurance Name'],['visible_damage','Visible Damage'],['damage_type','Damage Type'],['claim_filed','Claim Filed'],['contract','Contract'],['home_value','Home Value'],['sq_ft','SQ FT'],['web_url','Web Link']].map(([key,label]) => qualifier(key,label)) },
+    { id: 'additional', title: 'Additional Information', fields: [['summary_display','Notes'],['last_checked_on','Last Checked On'],['hail_size','Size of Hail'],['additional_properties','Add. Properties'],['second_address','2nd Address']].map(([key,label]) => qualifier(key,label)) },
+  ];
+}
 export function appointmentLabel(values: Record<string, unknown>) {
   const date = answer(values, 'appointment_date'); const time = answer(values, 'appointment_time');
   let day = date;

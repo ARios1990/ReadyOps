@@ -1,5 +1,5 @@
 import type { PortalFormSection } from "./DynamicLeadForm";
-import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, updateQualifierSchema } from './appointmentQualifiers';
+import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, roofingSummarySchema, updateQualifierSchema } from './appointmentQualifiers';
 
 export type ServiceTemplate = {
   id: string;
@@ -356,6 +356,16 @@ export function buildUniversalLeadTemplate(
   template: Pick<ServiceTemplate, "name" | "template_title" | "form_schema">,
   values: Record<string, unknown>,
 ): string {
+  if (/^roofing$/i.test(template.name)) {
+    const data = { ...values, appointment_display: appointmentLabel(values).replace(' · ', ' at '), summary_display: automaticNotes(template.name, values) };
+    return [
+      `Type of Service: ${template.name}`,
+      ...roofingSummarySchema().flatMap(section => {
+        const fields = section.fields.filter(field => qualifierVisible(field, data) && answer(data, field.key));
+        return fields.length ? [`\n**${section.title}**`, ...fields.map(field => `${field.label}: ${answer(data, field.key)}`)] : [];
+      }),
+    ].join('\n');
+  }
   return [
     `**${template.template_title}**`,
     `Type of Service: ${template.name}`,

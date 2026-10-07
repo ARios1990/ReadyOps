@@ -23,7 +23,8 @@ assert.equal(q.qualifierVisible({ key: 'visitor_authority' }, { ...values, meeti
 const text = s.buildUniversalLeadTemplate(template, values);
 assert.ok(text.includes('Roof Type: Slate'));
 assert.ok(!text.includes('Appointment Visit'));
-assert.ok(!text.includes('Claim Filed:'));
+assert.ok(text.includes('Claim Filed: No'));
+assert.ok(text.includes('App Date & Time: Oct 7, 2026 at 12:00 PM'));
 assert.ok(!text.includes('Approved'));
 assert.ok(text.includes('Reported hail size: 1 inch'));
 assert.ok(text.includes('Maria, a homeowner, will meet'));

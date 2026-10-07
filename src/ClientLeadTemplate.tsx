@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { answer, automaticNotes, NOTES_ONLY, qualifierVisible } from './appointmentQualifiers';
+import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
 import { prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
@@ -320,13 +320,15 @@ export function ClientLeadTemplate({
         <div className="space-y-3 px-4 py-3">
           {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-3">
             <Row label="Type of Service:" value={serviceSnapshot.name} />
-            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />
-            {serviceSnapshot.form_schema.map(section => {
-              const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead };
-              const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && (editable || (!NOTES_ONLY.has(f.key) && answer(data, f.key))));
+            {editable && /^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at ')} />}
+            {!/^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />}
+            {(/^roofing$/i.test(serviceSnapshot.name) && !editable ? roofingSummarySchema() : serviceSnapshot.form_schema).map(section => {
+              const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
+              const roofingSummary = /^roofing$/i.test(serviceSnapshot.name) && !editable;
+              const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
               return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <Row key={f.key} label={`${f.label}:`} field={f.allowOther && data[f.key] === 'Other' ? `${f.key}_other` : f.key} value={answer(data, f.key)} editValue={answer(data, f.key)} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section> : null;
             })}
-            <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>
+            {(editable || !/^roofing$/i.test(serviceSnapshot.name)) && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
           </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
