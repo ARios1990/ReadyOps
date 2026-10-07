@@ -323,7 +323,7 @@ export function ClientLeadTemplate({
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />
             {serviceSnapshot.form_schema.map(section => {
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead };
-              const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(data, f.key));
+              const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && (editable || (!NOTES_ONLY.has(f.key) && answer(data, f.key))));
               return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <Row key={f.key} label={`${f.label}:`} field={f.allowOther && data[f.key] === 'Other' ? `${f.key}_other` : f.key} value={answer(data, f.key)} editValue={answer(data, f.key)} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section> : null;
             })}
             <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>

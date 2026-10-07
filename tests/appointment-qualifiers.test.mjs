@@ -11,6 +11,10 @@ const customized = q.organizeQuestionSchema([{ id: 'service', title: 'Company Qu
 assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'roof_age').mode, 'required');
 assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'company_detail').mode, 'hidden');
 assert.equal(q.appointmentLabel(values), 'Oct 7, 2026 · 12:00 PM');
+const withoutInsurance = template.form_schema.map(section => ({ ...section, fields: section.fields.filter(field => !['insurance', 'insurance_name'].includes(field.key)) }));
+const restoredInsurance = q.updateQualifierSchema(withoutInsurance, 'roofing').flatMap(section => section.fields);
+assert.equal(restoredInsurance.filter(field => field.key === 'insurance').length, 1);
+assert.equal(restoredInsurance.filter(field => field.key === 'insurance_name').length, 1);
 assert.equal(q.automaticNotes('Roofing', { ...values, summary_notes: 'Edited notes from QC.' }), 'Edited notes from QC.');
 assert.ok(s.buildUniversalLeadTemplate(template, { ...values, summary_notes: 'Edited notes from QC.' }).includes('Notes: Edited notes from QC.'));
 assert.equal(q.differentVisitor(values), false);

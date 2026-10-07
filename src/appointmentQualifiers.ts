@@ -64,8 +64,10 @@ export function automaticNotes(service: string, values: Record<string, unknown>)
 export function updateQualifierSchema(schema: PortalFormSection[], serviceId: string): PortalFormSection[] {
   const next = schema.map(section => ({ ...section, fields: section.fields.filter(f => f.key !== 'storm_date').map(f => choices[f.key] ? { ...f, ...qualifier(f.key, f.label) } : f) }));
   if (serviceId === 'roofing') {
-    const fields = next.find(s => s.id === 'service')?.fields;
-    if (fields) { const additions = [['insurance', 'Insurance'], ['visible_damage', 'Visible Damage'], ['claim_filed', 'Claim Filed'], ['claim_status', 'Claim Status'], ['approved_work', 'Approved Work'], ['additional_properties', 'Additional Properties'], ['second_address', '2nd Address']]; additions.forEach(([key, label]) => { if (!fields.some(f => f.key === key)) fields.push(qualifier(key, label)); }); }
+    const existingKeys = new Set(next.flatMap(section => section.fields.map(field => field.key)));
+    const additions = [['insurance', 'Insurance'], ['insurance_name', 'Insurance Name'], ['visible_damage', 'Visible Damage'], ['claim_filed', 'Claim Filed'], ['claim_status', 'Claim Status'], ['approved_work', 'Approved Work'], ['additional_properties', 'Additional Properties'], ['second_address', '2nd Address']];
+    const missing = additions.filter(([key]) => !existingKeys.has(key)).map(([key, label]) => qualifier(key, label));
+    if (missing.length) next.push({ id: 'roofing_missing_qualifiers', title: 'Roofing Qualifiers', fields: missing });
     if (!next.some(s => s.id === 'appointment_visit')) next.splice(next.length - 1, 0, { id: 'appointment_visit', title: 'Appointment Visit', fields: [qualifier('meeting_name', 'Who will meet the roofing representative?'), qualifier('visitor_authority', 'Is this person a homeowner or authorized decision-maker?'), qualifier('access_instructions', 'Access instructions / pets / gate code')] });
   }
   const add = (title: string, pairs: string[][]) => { const keys = new Set(next.flatMap(s => s.fields.map(f => f.key))); const fields = pairs.filter(([key]) => !keys.has(key)).map(([key, label]) => qualifier(key, label)); if (fields.length) next.splice(next.length - 1, 0, { id: 'approved_' + title.replace(/\W/g, '_'), title, fields }); };
