@@ -387,7 +387,7 @@ const loadTs = (path) => {
   const module = { exports: {} };
   new Function("exports", "require", "module", code)(
     module.exports,
-    () => {},
+    (name) => name === "./appointmentQualifiers" ? loadTs("../src/appointmentQualifiers.ts") : {},
     module,
   );
   return module.exports;

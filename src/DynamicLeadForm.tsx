@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { shouldShowField, getPortalSessionId, normalizeRoofAgeInput } from './portalUtils';
 import { supabase } from './supabase';
+import { qualifierVisible } from './appointmentQualifiers';
 
 export interface PortalFormField {
   key: string;
@@ -10,6 +11,7 @@ export interface PortalFormField {
   required?: boolean;
   mode?: 'required' | 'optional' | 'hidden';
   options?: string[];
+  allowOther?: boolean;
   defaultValue?: unknown;
   showWhen?: { field?: string; equals?: unknown };
 }
@@ -37,14 +39,15 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5 appointment-qualifiers">
       {schema.map(section => (
         <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 mb-4">{section.title}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            {section.fields.filter(field => field.mode !== 'hidden' && shouldShowField(field.showWhen, values)).map(field => (
+            {section.fields.filter(field => qualifierVisible(field, values) && shouldShowField(field.showWhen, values)).map(field => (
               <Field key={field.key} field={{ ...field, required: field.mode ? field.mode === 'required' : field.required }} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />
             ))}
+            {section.fields.filter(field => field.allowOther && qualifierVisible(field, values) && values[field.key] === 'Other').map(field => <div key={`${field.key}_other`}><label className="mb-1.5 block text-xs text-slate-600">Other {field.label}<input aria-label={`Other ${field.label}`} required={field.required || field.mode === 'required'} disabled={disabled} className="mt-2 w-full rounded-xl border px-3 py-2.5" value={String(values[`${field.key}_other`] || '')} onChange={event => onChange(`${field.key}_other`, event.target.value)} /></label></div>)}
           </div>
         </section>
       ))}

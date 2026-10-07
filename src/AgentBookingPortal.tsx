@@ -12,10 +12,9 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
-import { inferServiceType, switchServiceValues, buildUniversalLeadTemplate, visibleTemplateFields, type ServiceTemplate } from './serviceTemplates';
-import { ColdCallScript } from "./ColdCallScript";
-import { getCompanyCallScript } from "./companyCallScripts";
-import { normalizeLeadType, type LeadType } from "./leadTypes";
+import { prepareServiceTemplate, inferServiceType, switchServiceValues, buildUniversalLeadTemplate, visibleTemplateFields, type ServiceTemplate } from './serviceTemplates';
+import { automaticNotes } from './appointmentQualifiers';
+import { normalizeLeadType } from "./leadTypes";
 import {
   addDays,
   copyText,
@@ -348,7 +347,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     supabase.rpc('get_public_service_templates', { p_slug: slug }).then(({ data, error: configError }) => {
       if (cancelled) return;
       if (configError) { setTemplatesError(configError.message); return; }
-      const templates = (data || []) as ServiceTemplate[];
+      const templates = ((data || []) as ServiceTemplate[]).map(prepareServiceTemplate);
       setServiceTemplates(templates);
       setFormValues(current => {
         const initial = templates.find(s => s.id === current.service_type) || templates.find(s => s.id === inferServiceType(current.service_needed)) || templates[0];
@@ -599,6 +598,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     };
     const payload = {
       ...basePayload,
+      automatic_notes: automaticNotes(selectedTemplate.name, basePayload),
       lead_template: buildUniversalLeadTemplate(selectedTemplate, basePayload),
     };
     const { data, error: rpcErr } = await supabase.rpc(
@@ -637,7 +637,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
 
   const company = portal.company.company;
   const settings = portal.company.settings;
-  const companyCallScript = getCompanyCallScript(company.slug);
   const weekLabel = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
   const leadTemplate =
     typeof confirmation?.form_data?.lead_template === "string"
@@ -791,7 +790,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
         )}
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-600">
                 Agent Name
@@ -831,6 +830,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 </select>
               </div>
             )}
+            <label className="block text-xs font-semibold text-slate-600">Type of Service<select aria-label="Type of Service" value={String(formValues.service_type || '')} disabled={busy || !serviceTemplates.length} onChange={event => { const next = serviceTemplates.find(s => s.id === event.target.value); if (next) { setFormValues(current => switchServiceValues(current, selectedTemplate, next)); setError(''); } }} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Select service</option>{serviceTemplates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
           </div>
         </section>
 
@@ -963,27 +963,10 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
                 Complete the lead details. Your selected time is being held.
               </p>
             </div>
-            {selectedTemplate?.id === 'roofing' && <div className="mb-4">
-              <ColdCallScript
-                leadType={String(formValues.lead_type || "")}
-                onLeadTypeChange={(value: LeadType) =>
-                  setFormValues((prev) => ({ ...prev, lead_type: value }))
-                }
-                context={{
-                  ...formValues,
-                  agent_name: agentName,
-                  homeowner_name: formValues.full_name,
-                  address: formValues.address,
-                  city: formValues.city,
-                  neighborhood: formValues.city,
-                  company_name: company.name,
-                }}
-                customScript={companyCallScript}
-              />
-            </div>}
             {templatesError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{templatesError}</p>}
-            <label className="block rounded-xl border bg-white p-4 text-sm font-bold">Type of Service<select aria-label="Type of Service" value={String(formValues.service_type || '')} disabled={busy || !serviceTemplates.length} onChange={event => { const next = serviceTemplates.find(s => s.id === event.target.value); if (next) { setFormValues(current => switchServiceValues(current, selectedTemplate, next)); setError(''); } }} className="mt-2 w-full rounded-lg border p-3"><option value="">Select service</option>{serviceTemplates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+
             {selectedTemplate && <h2 className="rounded-lg bg-blue-600 p-3 text-center font-bold text-white">{selectedTemplate.template_title}</h2>}
+            {selectedTemplate && <div className="appointment-qualifiers my-4 rounded-xl border bg-white p-4"><h3 className="font-bold">Notes · Automatic summary</h3><p className="mt-2 text-sm">{automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation?.appointment_date, appointment_time: reservation?.start_time })}</p></div>}
             <DynamicLeadForm
               schema={selectedTemplate?.form_schema || []}
               values={formValues}

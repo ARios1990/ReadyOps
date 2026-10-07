@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=UnifrakturCook:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@700&family=Inter:wght@300;400;500;600;700;800&family=UnifrakturCook:wght@700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -1199,3 +1199,6 @@ html[data-theme='dark'] .readyops-company-lead-modal .bg-blue-50\/60 {
   background-color: #132238 !important;
   border-color: #314761 !important;
 }
+
+.appointment-qualifiers { font-family: Cambria, Georgia, serif; }
+.appointment-qualifiers h2, .appointment-qualifiers h3, .appointment-qualifiers h4 { font-family: Merriweather, Georgia, serif; font-weight: 700; }

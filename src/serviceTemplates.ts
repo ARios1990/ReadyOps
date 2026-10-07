@@ -1,4 +1,5 @@
 import type { PortalFormSection } from "./DynamicLeadForm";
+import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, updateQualifierSchema } from './appointmentQualifiers';
 
 export type ServiceTemplate = {
   id: string;
@@ -308,7 +309,7 @@ export function visibleTemplateFields(
   return schema.flatMap((section) =>
     section.fields.filter(
       (f) =>
-        f.mode !== "hidden" &&
+        (!values || qualifierVisible(f, values)) && f.mode !== "hidden" &&
         (!values ||
           !f.showWhen?.field ||
           values[f.showWhen.field] === f.showWhen.equals),
@@ -355,23 +356,19 @@ export function buildUniversalLeadTemplate(
   template: Pick<ServiceTemplate, "name" | "template_title" | "form_schema">,
   values: Record<string, unknown>,
 ): string {
-  const format = (value: unknown) =>
-    Array.isArray(value) ? value.join(", ") : String(value ?? "").trim() || "—";
   return [
     `**${template.template_title}**`,
-    `Service Type: ${template.name}`,
-    `Appointment: ${format(values.appointment_date)} ${format(values.appointment_time)} ${format(values.timezone)}`,
-    ...template.form_schema.flatMap((section) => [
-      `\n**${section.title}**`,
-      ...section.fields
-        .filter(
-          (f) =>
-            f.mode !== "hidden" &&
-            f.type !== "recording" &&
-            (!f.showWhen?.field ||
-              values[f.showWhen.field] === f.showWhen.equals),
-        )
-        .map((f) => `${f.label}: ${format(values[f.key])}`),
-    ]),
+    `Type of Service: ${template.name}`,
+    ...(appointmentLabel(values) ? [`App Date & Time: ${appointmentLabel(values)}`] : []),
+    ...template.form_schema.flatMap(section => {
+      const fields = section.fields.filter(f => qualifierVisible(f, values) && f.type !== 'recording' && !['notes', 'storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(values, f.key));
+      return fields.length ? [`\n**${section.title}**`, ...fields.map(f => `${f.label.replace(/\?$/, '')}: ${answer(values, f.key)}`)] : [];
+    }),
+    '\n**Additional Information**',
+    `Notes: ${automaticNotes(template.name, values)}`,
   ].join("\n");
+}
+
+export function prepareServiceTemplate(template: ServiceTemplate): ServiceTemplate {
+  return { ...template, form_schema: updateQualifierSchema(template.form_schema, template.id) };
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { answer, automaticNotes, NOTES_ONLY, qualifierVisible } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
-import { formatRoofAge, formatTime, normalizeRoofAgeInput, shouldShowField } from './portalUtils';
-import { buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
+import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
+import { prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
 
 type LeadLike = {
   full_name?: string | null;
@@ -243,7 +244,8 @@ export function ClientLeadTemplate({
       ...(editValues || {}),
     },
   } as LeadLike;
-  const serviceSnapshot = lead.form_data?._service_template as ServiceTemplate | undefined;
+  const rawSnapshot = lead.form_data?._service_template as ServiceTemplate | undefined;
+  const serviceSnapshot = rawSnapshot ? prepareServiceTemplate(rawSnapshot) : undefined;
   const copyService = leadValue(
     copyLead,
     'service_needed',
@@ -316,10 +318,16 @@ export function ClientLeadTemplate({
         </h2>
 
         <div className="space-y-5 px-5 py-4">
-          {serviceSnapshot?.form_schema ? <>
-            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
-            {serviceSnapshot.form_schema.map(section => <Section key={section.id} title={section.title} columns>{section.fields.filter(f => f.mode !== 'hidden' && f.type !== 'recording' && shouldShowField(f.showWhen, copyLead.form_data || {})).map(f => <Row key={f.key} label={`${f.label}:`} field={f.key} value={leadValue(lead,f.key as keyof LeadLike,f.key)} editValue={editValue(f.key,leadValue(lead,f.key as keyof LeadLike,f.key))} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section>)}
-          </> : <><Section title="Customer Information">
+          {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-5">
+            <Row label="Type of Service:" value={serviceSnapshot.name} />
+            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' � ' + formatTime(appointment.start_time)} />
+            {serviceSnapshot.form_schema.map(section => {
+              const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead };
+              const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(data, f.key));
+              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <Row key={f.key} label={`${f.label}:`} field={f.allowOther && data[f.key] === 'Other' ? `${f.key}_other` : f.key} value={answer(data, f.key)} editValue={answer(data, f.key)} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section> : null;
+            })}
+            <Section title="Additional Information"><Row label="Notes:" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline /></Section>
+          </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />

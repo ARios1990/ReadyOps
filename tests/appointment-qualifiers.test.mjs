@@ -1,0 +1,25 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+function load(name) { const module = { exports: {} }; const code = ts.transpileModule(fs.readFileSync(new URL(`../src/${name}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText; new Function('exports', 'require', 'module', code)(module.exports, dependency => load(dependency.slice(2)), module); return module.exports; }
+const q = load('appointmentQualifiers'); const s = load('serviceTemplates');
+const template = s.prepareServiceTemplate(s.DEFAULT_SERVICE_TEMPLATES.find(t => t.id === 'roofing'));
+const values = { full_name: 'Maria', homeowner_authority: 'Homeowner', service_needed: 'Inspection', appointment_date: '2026-10-07', appointment_time: '12:00:00', roof_age: '12', roof_type: 'Other', roof_type_other: 'Slate', claim_filed: 'No', claim_status: 'Approved', meeting_name: 'Maria', visitor_authority: 'Neither', hail_size: '1 inch', access_instructions: 'Call before arrival' };
+assert.equal(q.appointmentLabel(values), 'Oct 7, 2026 · 12:00 PM');
+assert.equal(q.differentVisitor(values), false);
+assert.equal(q.qualifierVisible({ key: 'visitor_authority' }, values), false);
+assert.equal(q.qualifierVisible({ key: 'visitor_authority' }, { ...values, meeting_name: 'John' }), true);
+const text = s.buildUniversalLeadTemplate(template, values);
+assert.ok(text.includes('Roof Type: Slate'));
+assert.ok(!text.includes('Appointment Visit'));
+assert.ok(!text.includes('Claim Filed:'));
+assert.ok(!text.includes('Approved'));
+assert.ok(text.includes('Reported hail size: 1 inch'));
+assert.ok(text.includes('Maria, a homeowner, will meet'));
+assert.ok(!text.includes('not a homeowner'));
+assert.ok(!text.includes('Insurance Carrier:'));
+assert.ok(!template.form_schema.flatMap(s => s.fields).some(f => f.key === 'storm_date'));
+const other = q.automaticNotes('Roofing', { ...values, meeting_name: 'John', visitor_authority: 'Authorized decision-maker', claim_filed: 'Yes', claim_status: 'Awaiting inspection' });
+assert.ok(other.includes('John, an authorized decision-maker,'));
+assert.ok(other.includes('awaiting inspection'));
+console.log('PASS appointment date, Other answers, blank omission, notes-only fields, claim and visitor conditions');
