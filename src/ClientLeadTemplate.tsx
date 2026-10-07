@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
-import { prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
+import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
 
 type LeadLike = {
   full_name?: string | null;
@@ -252,7 +252,7 @@ export function ClientLeadTemplate({
       ...(editValues || {}),
     },
   } as LeadLike;
-  const rawSnapshot = lead.form_data?._service_template as ServiceTemplate | undefined;
+  const rawSnapshot = copyLead.form_data?._service_template as ServiceTemplate | undefined;
   const serviceSnapshot = rawSnapshot ? prepareServiceTemplate(rawSnapshot) : undefined;
   const copyService = leadValue(
     copyLead,
@@ -326,6 +326,7 @@ export function ClientLeadTemplate({
         </h2>
 
         <div className="space-y-3 px-4 py-3">
+          {editable && <label className="block text-sm font-bold">Type of Service<select aria-label="Type of Service" disabled={saving} value={serviceSnapshot?.id || String(copyLead.form_data?.service_type || '')} onChange={event => onChange?.('service_type', event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 font-medium"><option value="">Select service…</option>{DEFAULT_SERVICE_TEMPLATES.filter(template => template.active).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>}
           {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-3">
             <Row label="Type of Service:" value={serviceSnapshot.name} />
             {editable && /^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at ')} />}

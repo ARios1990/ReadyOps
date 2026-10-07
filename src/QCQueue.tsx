@@ -38,6 +38,7 @@ import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
+import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, switchServiceValues, type ServiceTemplate } from './serviceTemplates';
 import { LeadEmailHistory } from './LeadEmailHistory';
 import {
   buildExternalFormUrl,
@@ -408,6 +409,18 @@ export function QCQueue() {
     });
   }
   function change(key: string, value: unknown) {
+    if (key === 'service_type') {
+      const template = DEFAULT_SERVICE_TEMPLATES.find(item => item.id === value);
+      if (!template) return;
+      const next = prepareServiceTemplate(template);
+      setValues(previous => {
+        const current = previous._service_template as ServiceTemplate | undefined;
+        const changed = switchServiceValues(previous, current, next);
+        const cleared = Object.fromEntries((current?.form_schema.flatMap(section => section.fields.map(field => field.key)) || []).flatMap(field => [[field, undefined], [field + '_other', undefined]]));
+        return { ...previous, ...cleared, ...changed, summary_notes: undefined, _service_template: next };
+      });
+      return;
+    }
     setValues((previous) => ({ ...previous, [key]: value }));
   }
 
