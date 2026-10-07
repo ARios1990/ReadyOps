@@ -139,7 +139,7 @@ function Row({
 
   return (
     <label className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-0.5 text-sm leading-5">
-      <strong className="shrink-0 font-bold text-slate-950">{label}</strong>
+      <strong className="min-w-0 max-w-full break-words font-bold text-slate-950">{label}</strong>
       {editable ? (
         <span className="flex min-w-[140px] flex-1 items-center gap-1">
           {multiline ? (
@@ -193,8 +193,8 @@ function Row({
 function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
   return (
     <section>
-      <h3 className="mb-2 text-sm font-black text-blue-950 underline underline-offset-2">{title}</h3>
-      <div className={columns ? 'grid gap-x-6 sm:grid-cols-2' : ''}>{children}</div>
+      <h3 className="mb-1 text-sm font-black text-blue-950 underline underline-offset-2">{title}</h3>
+      <div className={columns ? 'grid gap-x-4 sm:grid-cols-2' : ''}>{children}</div>
     </section>
   );
 }
@@ -317,16 +317,16 @@ export function ClientLeadTemplate({
           {serviceSnapshot?.template_title || serviceTitle(serviceNeeded, lead)}
         </h2>
 
-        <div className="space-y-5 px-5 py-4">
-          {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-5">
+        <div className="space-y-3 px-4 py-3">
+          {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-3">
             <Row label="Type of Service:" value={serviceSnapshot.name} />
-            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' � ' + formatTime(appointment.start_time)} />
+            <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />
             {serviceSnapshot.form_schema.map(section => {
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead };
               const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(data, f.key));
               return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <Row key={f.key} label={`${f.label}:`} field={f.allowOther && data[f.key] === 'Other' ? `${f.key}_other` : f.key} value={answer(data, f.key)} editValue={answer(data, f.key)} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section> : null;
             })}
-            <Section title="Additional Information"><Row label="Notes:" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline /></Section>
+            <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>
           </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />

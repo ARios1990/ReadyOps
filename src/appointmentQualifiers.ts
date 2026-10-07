@@ -33,6 +33,7 @@ export function appointmentLabel(values: Record<string, unknown>) {
   return [day, clock].filter(Boolean).join(' · ');
 }
 export function automaticNotes(service: string, values: Record<string, unknown>) {
+  if (Object.prototype.hasOwnProperty.call(values, 'summary_notes') && values.summary_notes != null) return String(values.summary_notes);
   const get = (key: string) => answer(values, key); const sentences: string[] = [];
   const name = get('full_name'); const authority = get('homeowner_authority');
   const role = authority === 'Homeowner' ? ', the homeowner,' : authority === 'Authorized decision-maker' ? ', an authorized decision-maker,' : authority === 'Yes' ? ', the homeowner or authorized decision-maker,' : '';
@@ -83,6 +84,8 @@ export function organizeQuestionSchema(schema: PortalFormSection[], serviceId: s
     const selected = keys.flatMap(key => { const field = fields.get(key); if (!field) return []; fields.delete(key); return [field]; });
     if (selected.length) result.push({ id, title, fields: selected });
   };
+  const authority = fields.get('homeowner_authority');
+  if (authority) fields.set('homeowner_authority', { ...authority, label: 'Homeowner / Decision-Maker' });
   take('customer', 'Customer Information', ['full_name', 'homeowner_authority', 'phone_number', 'email', 'address', 'city', 'state', 'zip_code', 'language']);
   take('service_appointment', 'Service & Appointment', ['service_needed']);
   if (serviceId === 'roofing') {
