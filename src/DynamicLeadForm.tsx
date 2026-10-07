@@ -26,6 +26,7 @@ interface Props {
   schema: PortalFormSection[];
   values: Record<string, unknown>;
   disabled?: boolean;
+  submitDisabled?: boolean;
   submitLabel?: string;
   recordingUploadSlug?: string;
   appointmentSummary?: string;
@@ -34,9 +35,10 @@ interface Props {
   onSubmit: () => void;
 }
 
-export function DynamicLeadForm({ schema, values, disabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, appointmentSummary, automaticSummary, onChange, onSubmit }: Props) {
+export function DynamicLeadForm({ schema, values, disabled = false, submitDisabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, appointmentSummary, automaticSummary, onChange, onSubmit }: Props) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (disabled || submitDisabled) return;
     onSubmit();
   }
 
@@ -57,7 +59,7 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
       ))}
       <button
         type="submit"
-        disabled={disabled}
+        disabled={disabled || submitDisabled}
         className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {submitLabel}

@@ -834,6 +834,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           </div>
         </section>
 
+        {selectedTemplate && !confirmation && <a href="#service-questions" className="block rounded-xl border border-blue-200 bg-blue-50 p-3 text-center text-sm font-semibold text-blue-700">Open {selectedTemplate.name} questions</a>}
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
             <button
@@ -955,12 +956,12 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           )}
         </section>
 
-        {reservation && !confirmation && (
-          <section>
+        {selectedTemplate && !confirmation && (
+          <section id="service-questions" className="scroll-mt-4">
             <div className="mb-3">
               <h2 className="text-lg font-bold">Appointment Information</h2>
               <p className="text-sm text-slate-500">
-                Complete the lead details. Your selected time is being held.
+                {reservation ? 'Complete the lead details. Your selected time is being held.' : 'Complete the service questions below, then choose an available appointment time above.'}
               </p>
             </div>
             {templatesError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{templatesError}</p>}
@@ -969,14 +970,15 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
             <DynamicLeadForm
               schema={selectedTemplate?.form_schema || []}
               values={formValues}
-              appointmentSummary={appointmentLabel({ appointment_date: reservation.appointment_date, appointment_time: reservation.start_time })}
-              automaticSummary={selectedTemplate ? automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation.appointment_date, appointment_time: reservation.start_time }) : undefined}
+              appointmentSummary={reservation ? appointmentLabel({ appointment_date: reservation.appointment_date, appointment_time: reservation.start_time }) : 'Choose an available appointment time above'}
+              automaticSummary={automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation?.appointment_date, appointment_time: reservation?.start_time })}
+              submitDisabled={!reservation}
               disabled={busy || !selectedTemplate || Boolean(templatesError)}
               onChange={(key, value) =>
                 setFormValues((prev) => ({ ...prev, [key]: value }))
               }
               onSubmit={() => void submitAppointment()}
-              submitLabel={busy ? "Saving..." : "Confirm Appointment"}
+              submitLabel={busy ? "Saving..." : !reservation ? "Select an appointment time to confirm" : "Confirm Appointment"}
             />
           </section>
         )}
