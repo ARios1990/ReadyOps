@@ -118,6 +118,7 @@ type RowProps = {
   field?: string;
   editValue?: string;
   multiline?: boolean;
+  options?: string[];
   inputType?: 'text' | 'email' | 'tel' | 'url';
   onChange?: (key: string, value: string) => void;
 };
@@ -129,6 +130,7 @@ function Row({
   field,
   editValue,
   multiline = false,
+  options,
   inputType = 'text',
   onChange,
 }: RowProps) {
@@ -142,7 +144,13 @@ function Row({
       <strong className="min-w-0 max-w-full break-words font-bold text-slate-950">{label}</strong>
       {editable ? (
         <span className="flex min-w-[140px] flex-1 items-center gap-1">
-          {multiline ? (
+          {options?.length ? (
+            <select aria-label={label.replace(/:$/, '')} value={editValue ?? value} onChange={event => onChange?.(field!, event.target.value)} className={controlClass}>
+              <option value="">Select…</option>
+              {(editValue ?? value) && !options.includes(editValue ?? value) && <option value={editValue ?? value}>{editValue ?? value}</option>}
+              {options.map(option => <option key={option} value={option}>{option}</option>)}
+            </select>
+          ) : multiline ? (
             <textarea
               aria-label={label.replace(/:$/, '')}
               value={editValue ?? value}
@@ -326,7 +334,7 @@ export function ClientLeadTemplate({
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
               const roofingSummary = /^roofing$/i.test(serviceSnapshot.name) && !editable;
               const fields = section.fields.filter(f => qualifierVisible(f, data) && f.type !== 'recording' && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
-              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <Row key={f.key} label={`${f.label}:`} field={f.allowOther && data[f.key] === 'Other' ? `${f.key}_other` : f.key} value={answer(data, f.key)} editValue={answer(data, f.key)} multiline={f.type === 'textarea'} onChange={onChange} />)}</Section> : null;
+              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <div key={f.key}><Row label={`${f.label}:`} field={f.key} value={answer(data, f.key)} editValue={f.options?.length ? String(data[f.key] ?? '') : answer(data, f.key)} options={f.options} multiline={f.type === 'textarea'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>)}</Section> : null;
             })}
             {(editable || !/^roofing$/i.test(serviceSnapshot.name)) && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
           </div> : <><Section title="Customer Information">
