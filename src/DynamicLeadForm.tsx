@@ -28,11 +28,13 @@ interface Props {
   disabled?: boolean;
   submitLabel?: string;
   recordingUploadSlug?: string;
+  appointmentSummary?: string;
+  automaticSummary?: string;
   onChange: (key: string, value: unknown) => void;
   onSubmit: () => void;
 }
 
-export function DynamicLeadForm({ schema, values, disabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, onChange, onSubmit }: Props) {
+export function DynamicLeadForm({ schema, values, disabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, appointmentSummary, automaticSummary, onChange, onSubmit }: Props) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
@@ -40,7 +42,7 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 appointment-qualifiers">
-      {schema.map(section => (
+      {schema.filter(section => section.fields.some(field => qualifierVisible(field, values) && shouldShowField(field.showWhen, values))).map(section => (
         <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 mb-4">{section.title}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -49,6 +51,8 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitLabel 
             ))}
             {section.fields.filter(field => field.allowOther && qualifierVisible(field, values) && values[field.key] === 'Other').map(field => <div key={`${field.key}_other`}><label className="mb-1.5 block text-xs text-slate-600">Other {field.label}<input aria-label={`Other ${field.label}`} required={field.required || field.mode === 'required'} disabled={disabled} className="mt-2 w-full rounded-xl border px-3 py-2.5" value={String(values[`${field.key}_other`] || '')} onChange={event => onChange(`${field.key}_other`, event.target.value)} /></label></div>)}
           </div>
+          {section.id === 'service_appointment' && appointmentSummary && <div className="mt-4"><p className="text-xs font-semibold text-slate-600">App Date & Time</p><p className="mt-1 text-sm text-slate-900">{appointmentSummary}</p></div>}
+          {section.id === 'additional' && automaticSummary && <div className="mt-4"><h3 className="text-sm font-bold text-slate-900">Notes · Automatic summary</h3><p className="mt-2 text-sm text-slate-700" aria-live="polite">{automaticSummary}</p></div>}
         </section>
       ))}
       <button
@@ -66,7 +70,7 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
   const common = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50';
   const label = <label className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}{field.required ? ' *' : ''}</label>;
   const fieldType = field.key === 'roof_age' ? 'text' : field.type;
-  const isWide = fieldType === 'textarea' || fieldType === 'address' || fieldType === 'multiselect' || fieldType === 'recording';
+  const isWide = fieldType === 'textarea' || fieldType === 'address' || fieldType === 'multiselect' || fieldType === 'recording' || ['address', 'damage_type', 'access_instructions', 'web_url'].includes(field.key);
 
   if (fieldType === 'recording') {
     return <RecordingField field={field} value={value} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />;

@@ -73,7 +73,32 @@ export function updateQualifierSchema(schema: PortalFormSection[], serviceId: st
   if (serviceId === 'pdr') add('Damage & Insurance Information', [['hail_damage','Hail Damage'],['damage_severity','Damage Severity'],['vehicle_drivable','Vehicle Drivable'],['insurance','Insurance'],['claim_filed','Claim Filed'],['claim_number','Claim Number'],['free_inspection','Free Inspection / Estimate']]);
   if (serviceId === 'solar') add('Solar Qualifiers', [['home_type','Property Type'],['roof_type','Roof Type'],['roof_age','Roof Age'],['energy_usage','Energy Usage'],['current_system_size','Current System Size'],['credit_range','Credit Range'],['payment_method','Cash / Financing'],['decision_makers_available','All Decision-Makers Available'],['estimate_interest','Estimate Interest'],['ownership','Ownership'],['sun_exposure','Sun Exposure']]);
   if (serviceId === 'home_improvement') { add('Project Category', [['project_category','Project Category']]); const keys = new Set(next.flatMap(s => s.fields.map(f => f.key))); HOME_IMPROVEMENT_SECTIONS.forEach(section => { const fields = section.fields.filter(f => !keys.has(f.key)); fields.forEach(f => keys.add(f.key)); if (fields.length) next.splice(next.length - 1, 0, { ...section, fields }); }); }
-  return next;
+  return organizeQuestionSchema(next, serviceId);
+}
+
+export function organizeQuestionSchema(schema: PortalFormSection[], serviceId: string): PortalFormSection[] {
+  const fields = new Map(schema.flatMap(section => section.fields).map(field => [field.key, field]));
+  const result: PortalFormSection[] = [];
+  const take = (id: string, title: string, keys: string[]) => {
+    const selected = keys.flatMap(key => { const field = fields.get(key); if (!field) return []; fields.delete(key); return [field]; });
+    if (selected.length) result.push({ id, title, fields: selected });
+  };
+  take('customer', 'Customer Information', ['full_name', 'homeowner_authority', 'phone_number', 'email', 'address', 'city', 'state', 'zip_code', 'language']);
+  take('service_appointment', 'Service & Appointment', ['service_needed']);
+  if (serviceId === 'roofing') {
+    take('property', 'Property Details', ['home_type', 'stories', 'roof_type', 'roof_age', 'last_checked_on']);
+    take('damage', 'Roof Concerns & Damage', ['visible_damage', 'damage_type', 'hail_size']);
+    take('insurance_contractor', 'Insurance & Contractor Status', ['insurance', 'insurance_name', 'claim_filed', 'claim_status', 'approved_work', 'contract']);
+    take('appointment_visit', 'Appointment Visit', ['meeting_name', 'visitor_authority', 'access_instructions']);
+    take('additional_properties', 'Additional Properties', ['additional_properties', 'second_address']);
+    take('property_research', 'Internal Property Research', ['home_value', 'sq_ft', 'web_url']);
+  }
+  // Retain company-specific qualifiers and their visibility/requirement settings.
+  for (const section of schema) {
+    take(section.id, section.title, section.fields.filter(field => !['notes', 'recording_url'].includes(field.key)).map(field => field.key));
+  }
+  take('additional', 'Additional Information', ['notes', 'recording_url']);
+  return result;
 }
 
 const HOME_IMPROVEMENT_SECTIONS: PortalFormSection[] = [

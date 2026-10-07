@@ -13,7 +13,7 @@ import {
 import { supabase } from "./supabase";
 import { DynamicLeadForm, PortalFormSection } from "./DynamicLeadForm";
 import { prepareServiceTemplate, inferServiceType, switchServiceValues, buildUniversalLeadTemplate, visibleTemplateFields, type ServiceTemplate } from './serviceTemplates';
-import { automaticNotes } from './appointmentQualifiers';
+import { appointmentLabel, automaticNotes } from './appointmentQualifiers';
 import { normalizeLeadType } from "./leadTypes";
 import {
   addDays,
@@ -966,10 +966,11 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
             {templatesError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{templatesError}</p>}
 
             {selectedTemplate && <h2 className="rounded-lg bg-blue-600 p-3 text-center font-bold text-white">{selectedTemplate.template_title}</h2>}
-            {selectedTemplate && <div className="appointment-qualifiers my-4 rounded-xl border bg-white p-4"><h3 className="font-bold">Notes · Automatic summary</h3><p className="mt-2 text-sm">{automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation?.appointment_date, appointment_time: reservation?.start_time })}</p></div>}
             <DynamicLeadForm
               schema={selectedTemplate?.form_schema || []}
               values={formValues}
+              appointmentSummary={appointmentLabel({ appointment_date: reservation.appointment_date, appointment_time: reservation.start_time })}
+              automaticSummary={selectedTemplate ? automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation.appointment_date, appointment_time: reservation.start_time }) : undefined}
               disabled={busy || !selectedTemplate || Boolean(templatesError)}
               onChange={(key, value) =>
                 setFormValues((prev) => ({ ...prev, [key]: value }))

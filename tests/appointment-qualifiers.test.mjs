@@ -5,6 +5,11 @@ function load(name) { const module = { exports: {} }; const code = ts.transpileM
 const q = load('appointmentQualifiers'); const s = load('serviceTemplates');
 const template = s.prepareServiceTemplate(s.DEFAULT_SERVICE_TEMPLATES.find(t => t.id === 'roofing'));
 const values = { full_name: 'Maria', homeowner_authority: 'Homeowner', service_needed: 'Inspection', appointment_date: '2026-10-07', appointment_time: '12:00:00', roof_age: '12', roof_type: 'Other', roof_type_other: 'Slate', claim_filed: 'No', claim_status: 'Approved', meeting_name: 'Maria', visitor_authority: 'Neither', hail_size: '1 inch', access_instructions: 'Call before arrival' };
+assert.deepEqual(template.form_schema.map(section => section.title), ['Customer Information', 'Service & Appointment', 'Property Details', 'Roof Concerns & Damage', 'Insurance & Contractor Status', 'Appointment Visit', 'Additional Properties', 'Internal Property Research', 'Additional Information']);
+assert.deepEqual(s.prepareServiceTemplate(template).form_schema, template.form_schema, 'Preparing an organized template twice must preserve its fields');
+const customized = q.organizeQuestionSchema([{ id: 'service', title: 'Company Qualifiers', fields: [{ key: 'roof_age', label: 'Roof Age', type: 'text', mode: 'required' }, { key: 'company_detail', label: 'Company Detail', type: 'text', mode: 'hidden' }] }], 'roofing');
+assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'roof_age').mode, 'required');
+assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'company_detail').mode, 'hidden');
 assert.equal(q.appointmentLabel(values), 'Oct 7, 2026 · 12:00 PM');
 assert.equal(q.differentVisitor(values), false);
 assert.equal(q.qualifierVisible({ key: 'visitor_authority' }, values), false);
