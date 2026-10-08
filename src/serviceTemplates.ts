@@ -371,7 +371,7 @@ export function buildUniversalLeadTemplate(
     `Type of Service: ${template.name}`,
     ...(appointmentLabel(values) ? [`App Date & Time: ${appointmentLabel(values)}`] : []),
     ...template.form_schema.flatMap(section => {
-      const fields = section.fields.filter(f => qualifierVisible(f, values) && f.type !== 'recording' && !['notes', 'storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(values, f.key));
+      const fields = section.fields.filter(f => qualifierVisible(f, values) && !['recording', 'internal'].includes(f.type) && !['notes', 'storm_date'].includes(f.key) && !NOTES_ONLY.has(f.key) && answer(values, f.key));
       return fields.length ? [`\n**${section.title}**`, ...fields.map(f => `${f.label.replace(/\?$/, '')}: ${answer(values, f.key)}`)] : [];
     }),
     '\n**Additional Information**',
