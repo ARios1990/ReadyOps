@@ -211,7 +211,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
         ) {
           return false;
         }
-        if (onlyAgentsWithLeads && numberValue(entry.qualified_leads) <= 0) {
+        if (onlyAgentsWithLeads && numberValue(entry.total_leads) <= 0) {
           return false;
         }
         return true;
@@ -229,6 +229,16 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
     const rows = visibleEntries.map((entry) => drafts[entry.id] || entry);
     return {
       agents: rows.length,
+      leads: rows.reduce((sum, entry) => sum + numberValue(entry.total_leads), 0),
+      qcApproved: rows.reduce((sum, entry) => sum + numberValue(entry.qc_approved), 0),
+      good: rows.reduce((sum, entry) => sum + numberValue(entry.good_leads), 0),
+      signed: rows.reduce((sum, entry) => sum + numberValue(entry.successful_leads) - numberValue(entry.good_leads), 0),
+      bad: rows.reduce((sum, entry) => sum + numberValue(entry.bad_leads), 0),
+      noShow: rows.reduce((sum, entry) => sum + numberValue(entry.no_show_leads), 0),
+      denied: rows.reduce((sum, entry) => sum + numberValue(entry.qc_denied), 0),
+      rescheduled: rows.reduce((sum, entry) => sum + numberValue(entry.rescheduled), 0),
+      pending: rows.reduce((sum, entry) => sum + numberValue(entry.pending_leads), 0),
+      correction: rows.reduce((sum, entry) => sum + numberValue(entry.needs_correction), 0),
       qualified: rows.reduce(
         (sum, entry) => sum + numberValue(entry.qualified_leads),
         0,
@@ -296,6 +306,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
         p_patch: { pay_structure:
           draft.pay_structure || ("commission_only" as PayStructure),
         hours: numberValue(draft.hours), base_pay: numberValue(draft.base_pay),
+        days_worked: numberValue(draft.days_worked),
         hourly_rate: numberValue(draft.hourly_rate), lead_rate: numberValue(draft.lead_rate),
         signed_contract_rate: numberValue(draft.signed_contract_rate), bonus: numberValue(draft.bonus),
         deductions: numberValue(draft.deductions), notes: String(draft.notes || ""),
@@ -338,11 +349,11 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
   }
 
   return (
-    <div className="space-y-4">
+    <div className="readyops-payroll space-y-4">
       <div className="readyops-ref-page-header">
         <div className="readyops-ref-title-row">
           <h2>Payroll</h2>
-          <span>Sunday → Saturday</span>
+          <span>Sunday → Saturday · Leads by appointment date</span>
         </div>
         <div className="readyops-ref-page-actions">
           <input
@@ -368,6 +379,8 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
           {error}
         </div>
       )}
+
+      {!managerMode && numberValue(entries[0]?.unassigned_weekly_leads) > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{numberValue(entries[0]?.unassigned_weekly_leads)} appointments this week could not be matched to a unique agent. Assign the correct agent in QC to include them in agent payroll.</div>}
 
       <section className="readyops-ref-card p-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -427,14 +440,23 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Kpi label="Agents" value={stats.agents} />
-        <Kpi label="Qualified Leads" value={stats.qualified} />
+        <Kpi label="Total Weekly Leads" value={stats.leads} />
+        <Kpi label="QC Approved" value={stats.qcApproved} />
+        <Kpi label="Payable Successful Leads" value={stats.qualified} />
         <Kpi label="Hours" value={stats.hours.toFixed(1)} />
         <Kpi label="Commission" value={money(stats.commission)} />
         <Kpi label="Bonuses" value={money(stats.bonuses)} />
         <Kpi label="Deductions" value={money(stats.deductions)} />
         <Kpi label="Total Payroll" value={money(stats.total)} />
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <OutcomeCard title="Successful" tone="emerald" items={[["Good", stats.good], ["Signed Contract", stats.signed]]} />
+        <OutcomeCard title="Unsuccessful" tone="red" items={[["Bad", stats.bad], ["No Show", stats.noShow], ["QC Denied", stats.denied]]} />
+        <OutcomeCard title="Open / Follow-up" tone="amber" items={[["Rescheduled", stats.rescheduled], ["Pending", stats.pending], ["Needs Correction", stats.correction]]} />
+        <OutcomeCard title="QC Approved" tone="blue" total={stats.qcApproved} items={[["Successful", stats.good + stats.signed], ["Other Outcomes", stats.qcApproved - stats.good - stats.signed]]} />
       </section>
 
       <section className="readyops-ref-card overflow-hidden">
@@ -491,7 +513,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                   setOnlyAgentsWithLeads(event.target.checked)
                 }
               />
-              Only agents who made qualified leads this week
+              Only agents with appointments this week
             </label>
             <span className="text-xs text-slate-500">
               {visibleEntries.length} of {entries.length} agents
@@ -523,25 +545,25 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
           </div>
         ) : (
           <HorizontalScrollFrame ariaLabel="Editable payroll table horizontal scroll">
-            <table className="w-full min-w-[2050px] text-sm">
+            <table className="w-full min-w-[2600px] text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] uppercase opacity-70">
                   <th className="p-3">Agent</th>
                   <th>Team</th>
-                  <th>Week</th><th>Leads</th><th>Appointments</th><th>Bad</th><th>No Show</th>
+                  <th>Week</th><th>Days Worked</th><th>Total Leads</th><th>QC Approved</th><th>Successful</th><th>Unsuccessful</th><th>Open</th>
                   <th>Pay Structure</th>
                   <th>Hours</th>
-                  <th>Qualified</th>
+                  <th>Payable Leads</th>
                   <th>Signed</th>
                   <th>Base</th>
                   <th>Hourly Rate</th>
                   <th>Lead Rate</th>
                   <th>Signed Rate</th>
                   <th>Bonus</th>
-                  <th>Deduction</th>
+                  <th>Deductions</th>
                   <th>Notes</th>
                   <th>Total</th>
-                  <th>Status</th><th>Payment Date</th>
+                  <th>Paid</th><th>Status</th><th>Payment Date</th>
                   <th>Save</th>
                 </tr>
               </thead>
@@ -562,9 +584,12 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                       <td className="p-3 font-bold">
                         {entry.agent_name || agent?.name || `Agent ${String(entry.agent_id || "").slice(0, 8) || "unassigned"}`}
                       </td>
-                      <td>{team?.abbreviation || entry.team_name || team?.name || "—"}</td>
+                      <td><span className={`readyops-ref-team team-${String(team?.abbreviation || entry.team_abbreviation || 'none').toLowerCase().replace(/[^a-z0-9]/g, '')}`}>{entry.team_name || team?.name || "—"}</span></td>
                       <td className="whitespace-nowrap">{entry.week_start} – {entry.week_end}</td>
-                      <td>{numberValue(entry.total_leads)}</td><td>{numberValue(entry.appointments)}</td><td>{numberValue(entry.bad_leads)}</td><td>{numberValue(entry.no_show_leads)}</td>
+                      <td><PayrollNumberInput label={`${entry.agent_name} days worked`} value={row.days_worked} disabled={isLocked} className={inputClass} step="1" max={7} onChange={value => updateDraft(entry, "days_worked", value)} /></td>
+                      <td>{numberValue(entry.total_leads)}</td><td>{numberValue(entry.qc_approved)}</td><td>{numberValue(entry.successful_leads)}</td>
+                      <td>{numberValue(entry.bad_leads) + numberValue(entry.no_show_leads) + numberValue(entry.qc_denied)}</td>
+                      <td>{numberValue(entry.rescheduled) + numberValue(entry.pending_leads) + numberValue(entry.needs_correction)}</td>
                       <td>
                         <select
                           aria-label={`${agent?.name || "Agent"} pay structure`}
@@ -590,7 +615,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                         <PayrollNumberInput
                           label="Hours"
                           value={row.hours}
-                          disabled={isLocked || structure !== "hourly"}
+                          disabled={isLocked}
                           className={inputClass}
                           onChange={(value) =>
                             updateDraft(entry, "hours", value)
@@ -705,6 +730,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                       <td className="font-black">
                         {money(calculatedTotal(row))}
                       </td>
+                      <td><span className={`rounded-md px-2 py-1 font-bold ${row.status === 'paid' || period?.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{row.status === 'paid' || period?.status === 'paid' ? 'Paid' : 'Unpaid'}</span></td>
                       <td><select aria-label={`${entry.agent_name} payroll status`} value={row.status || 'pending'} disabled={isLocked} onChange={event => updateDraft(entry, 'status', event.target.value)} className="rounded-md border p-2"><option value="pending">Pending</option><option value="approved">Approved</option><option value="paid">Paid</option></select></td>
                       <td><input aria-label={`${entry.agent_name} payment date`} type="date" value={row.payment_date || ''} disabled={isLocked} onChange={event => updateDraft(entry, 'payment_date', event.target.value)} className="rounded-md border p-2" /></td>
                       <td>
@@ -755,19 +781,24 @@ function PayrollNumberInput({
   disabled,
   className,
   onChange,
+  step = "0.01",
+  max,
 }: {
   label: string;
   value: unknown;
   disabled?: boolean;
   className: string;
   onChange: (value: number) => void;
+  step?: string;
+  max?: number;
 }) {
   return (
     <input
       aria-label={label}
       type="number"
       min={0}
-      step="0.01"
+      step={step}
+      max={max}
       value={numberValue(value)}
       disabled={disabled}
       className={className}
@@ -784,9 +815,14 @@ function Kpi({
   value: string | number;
 }) {
   return (
-    <div className="readyops-ref-card p-4">
+    <div className="readyops-ref-card p-4 text-center">
       <p className="text-[10px] font-extrabold uppercase opacity-60">{label}</p>
       <p className="mt-1 text-2xl font-black">{value}</p>
     </div>
   );
+}
+
+function OutcomeCard({ title, tone, items, total }: { title: string; tone: string; items: Array<[string, number]>; total?: number }) {
+  const tones: Record<string, string> = { emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800', red: 'border-red-200 bg-red-50 text-red-800', amber: 'border-amber-200 bg-amber-50 text-amber-900', blue: 'border-blue-200 bg-blue-50 text-blue-800' };
+  return <div className={`rounded-xl border p-4 text-center ${tones[tone]}`}><h3 className="font-bold">{title}</h3><p className="my-2 text-xl font-bold">{total ?? items.reduce((sum, [, value]) => sum + value, 0)}</p><div className="border-t border-current/10 pt-2">{items.map(([label, value]) => <div key={label} className="flex justify-between gap-3 py-1 text-xs"><span>{label}</span><strong>{value}</strong></div>)}</div></div>;
 }

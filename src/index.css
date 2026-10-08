@@ -618,7 +618,13 @@ html[data-theme='dark'] .readyops-ref-search { background:#0c1d31; }
 .readyops-ref-table td { padding:10px 14px; border-top:1px solid var(--readyops-border); font-size:11px; font-weight:600; }
 .readyops-ref-table th:nth-child(1),.readyops-ref-table td:nth-child(1){width:27%}.readyops-ref-table th:nth-child(2),.readyops-ref-table td:nth-child(2){width:17%}.readyops-ref-table th:nth-child(3),.readyops-ref-table td:nth-child(3){width:23%}.readyops-ref-table th:nth-child(4),.readyops-ref-table td:nth-child(4){width:15%}.readyops-ref-table th:nth-child(5),.readyops-ref-table td:nth-child(5){width:18%}
 .readyops-ref-team { display:inline-flex; min-width:30px; justify-content:center; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:800; }
-.team-octo { color:#ff4d50; background:#ffe7e8; }.team-brl { color:#6f3ce0; background:#eee5ff; }.team-msr { color:#2563eb; background:#e5eeff; }.team-none { color:#8a9bb0; background:#eef2f6; }
+.team-octo { color:#ff4d50; background:#ffe7e8; }.team-brl { color:#6f3ce0; background:#eee5ff; }.team-msr { color:#2563eb; background:#e5eeff; }.team-woo { color:#047857; background:#d1fae5; }.team-none { color:#8a9bb0; background:#eef2f6; }
+.readyops-payroll table th, .readyops-payroll table td { text-align:center; vertical-align:middle; padding:10px; }
+.readyops-payroll table input, .readyops-payroll table select { text-align:center; }
+.readyops-payroll .readyops-ref-card-heading h3 { text-align:center; }
+.readyops-payroll .readyops-ref-card-heading > div:first-child { text-align:center; }
+.readyops-payroll .readyops-ref-card-heading > div:first-child > label { justify-content:center; }
+.readyops-payroll .readyops-ref-team { font-size:12px; white-space:nowrap; }
 html[data-theme='dark'] .team-octo { background:#673237;color:#ff6d72 }.readyops-ref-status { display:inline-flex; padding:2px 7px; border-radius:4px; background:#ddf5e9; color:#11835b; font-size:9px; font-weight:800; }.readyops-ref-status.inactive{background:#eef1f4;color:#7b8da2}
 .readyops-ref-actions { display:flex; justify-content:flex-start; gap:12px; }.readyops-ref-actions button { color:#35506d; }.readyops-ref-actions button.danger { color:#ef3a48; }
 html[data-theme='dark'] .readyops-ref-actions button { color:#c5d0dd; }

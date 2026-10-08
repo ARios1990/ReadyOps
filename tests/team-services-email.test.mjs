@@ -724,6 +724,49 @@ await test("two pending row edits cannot link the same user to different agents"
     "Inline C",
   );
 });
+await asUser(null, "postgres");
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261008210502_payroll_appointment_week_counts.sql', import.meta.url), 'utf8'));
+await db.exec(`insert into public.agents(id,name,team_id,pay_structure,payroll_lead_rate,payroll_signed_contract_rate) values
+('${uid(901)}','Payroll Week Agent','${uid(101)}','commission_only',50,10),
+('${uid(902)}','Payroll Other Team','${uid(102)}','commission_only',50,0),
+('${uid(903)}','Duplicate Payroll Name','${uid(101)}','commission_only',0,0),
+('${uid(904)}','Duplicate Payroll Name','${uid(102)}','commission_only',0,0);`);
+for (const [index, status, qc] of [[0,'good_inspected','approved'],[1,'signed_contract','approved'],[2,'bad','approved'],[3,'no_show','approved'],[4,'rescheduled','approved'],[5,'good','pending'],[6,'good','denied'],[7,'good','needs_correction'],[8,'good','approved'],[9,'good','approved'],[10,'good','approved'],[11,'good','approved'],[12,'good','approved']]) {
+  await db.exec(`insert into public.portal_leads(id,lead_code,company_id,agent_id,agent_name,qc_status,created_at) values
+  ('${uid(910+index)}','PAYROLL-${index}','${uid(21)}',${index===8||index===12?'null':`'${uid(index===11?902:901)}'`},'${index===12?'Duplicate Payroll Name':'Payroll Week Agent'}','${qc}','2026-09-01');
+  insert into public.portal_appointments(id,lead_id,company_id,appointment_date,client_status,canonical_status,created_at) values
+  ('${uid(950+index)}','${uid(910+index)}','${uid(21)}','${index===9||index===10?'2026-10-11':'2026-10-04'}','${status}','pending','2026-10-02');`);
+}
+await db.exec(`insert into public.portal_appointments(id,lead_id,company_id,appointment_date,client_status,created_at) values('${uid(980)}','${uid(920)}','${uid(21)}','2026-10-05','good','2026-10-01');`);
+let payrollWeek;
+await test('payroll counts appointment dates, latest reschedules, legacy names, and exclusive outcomes', async () => {
+  const row=(await db.query(`select * from private.readyops_payroll_week_counts('2026-10-04','2026-10-10') where agent_id='${uid(901)}'`)).rows[0];
+  assert.equal(row.total_leads,9);assert.equal(row.qc_approved,6);assert.equal(row.good_leads,2);assert.equal(row.signed_contracts,1);assert.equal(row.successful_leads,3);
+  assert.equal(row.bad_leads+row.no_show_leads+row.qc_denied,3);
+  assert.equal(row.rescheduled+row.pending_leads+row.needs_correction,3);
+  assert.equal(await scalar(`select total_leads as value from private.readyops_payroll_week_counts('2026-10-04','2026-10-10') where agent_id is null`),1);
+  await asUser(uid(1));payrollWeek=await scalar(`select public.generate_readyops_payroll_week('2026-10-08') as value`);
+});
+await test('payroll saves days and hours and pays only approved successful outcomes', async () => {
+  const id=await scalar(`select id as value from public.payroll_entries where agent_id='${uid(901)}' and payroll_period_id='${payrollWeek}'`);
+  await deny(`select public.save_readyops_team_payroll_entry('${id}','{"days_worked":8}')`);
+  await deny(`select public.save_readyops_team_payroll_entry('${id}','{"days_worked":2.5}')`);
+  await db.query(`select public.save_readyops_team_payroll_entry('${id}','{"days_worked":5,"hours":40,"bonus":20,"deductions":5}')`);
+  const rows=await scalar(`select public.get_readyops_payroll_entries('${payrollWeek}') as value`);
+  const row=rows.find(r=>r.agent_id===uid(901));assert.equal(row.total_leads,9);assert.equal(row.days_worked,5);assert.equal(row.hours,40);assert.equal(row.qualified_leads,3);assert.equal(row.total_pay,175);
+  await asUser(uid(2));const managerRows=await scalar(`select public.get_readyops_payroll_entries('${payrollWeek}') as value`);
+  assert.equal(managerRows.some(r=>r.agent_id===uid(902)),false);
+  await deny(`select * from private.readyops_payroll_week_counts('2026-10-04','2026-10-10')`);
+});
+await test('approval freezes payable counts and period payment marks every row paid', async () => {
+  await asUser(uid(1));await db.query(`update public.payroll_periods set status='approved' where id='${payrollWeek}'`);
+  await asUser(null,'postgres');await db.query(`update public.portal_appointments set client_status='bad' where id='${uid(950)}'`);
+  await asUser(uid(1));const rows=await scalar(`select public.get_readyops_payroll_entries('${payrollWeek}') as value`);
+  const row=rows.find(r=>r.agent_id===uid(901));assert.equal(row.successful_leads,2);assert.equal(row.qualified_leads,3);assert.equal(row.total_pay,175);
+  await deny(`select public.generate_readyops_payroll_week('2026-10-08')`);
+  await db.query(`update public.payroll_periods set status='paid' where id='${payrollWeek}'`);
+  assert.equal(await scalar(`select count(*)::int as value from public.payroll_entries where payroll_period_id='${payrollWeek}' and (status<>'paid' or payment_date is null)`),0);
+});
 await db.close();
 console.log(
   `${count} tests passed. No production records or external emails were used.`,
