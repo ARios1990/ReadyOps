@@ -60,6 +60,7 @@ type CrmData = {
   offset: number;
   summary: Obj;
   companies: Obj[];
+  teams: Obj[];
   sources: string[];
 };
 type ReferenceData = { agents: Obj[]; companies: Obj[]; locations: Obj[] };
@@ -72,6 +73,7 @@ const EMPTY_DATA: CrmData = {
   offset: 0,
   summary: {},
   companies: [],
+  teams: [],
   sources: [],
 };
 
@@ -165,6 +167,7 @@ export function AdminLeadCRM() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [companyId, setCompanyId] = useState("");
+  const [teamId, setTeamId] = useState("");
   const [qcStatus, setQcStatus] = useState("all");
   const [clientStatus, setClientStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -211,9 +214,10 @@ export function AdminLeadCRM() {
       if (!quiet) setLoading(true);
       setError("");
       const [crmResult, referenceResult] = await Promise.all([
-        supabase.rpc("get_admin_lead_crm", {
+        supabase.rpc("get_admin_lead_crm_by_team", {
           p_search: search || null,
           p_company_id: companyId || null,
+          p_team_id: teamId || null,
           p_qc_status: qcStatus === "all" ? null : qcStatus,
           p_client_status: clientStatus === "all" ? null : clientStatus,
           p_source: source === "all" ? null : source,
@@ -242,6 +246,7 @@ export function AdminLeadCRM() {
     [
       clientStatus,
       companyId,
+      teamId,
       dateBasis,
       endDate,
       offset,
@@ -678,6 +683,15 @@ export function AdminLeadCRM() {
             }))}
           />
           <Filter
+            value={teamId}
+            onChange={(value) => updateFilter(() => setTeamId(value))}
+            label="All Teams"
+            options={(data.teams || []).map((team) => ({
+              value: team.id,
+              label: team.name,
+            }))}
+          />
+          <Filter
             value={qcStatus}
             onChange={(value) => updateFilter(() => setQcStatus(value))}
             label="All QC Statuses"
@@ -750,6 +764,7 @@ export function AdminLeadCRM() {
               setSearchInput("");
               setSearch("");
               setCompanyId("");
+              setTeamId("");
               setQcStatus("all");
               setClientStatus("all");
               setSource("all");
