@@ -35,6 +35,7 @@ import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { supabase } from "./supabase";
 import { LeadEmailHistory } from './LeadEmailHistory';
+import { downloadLeadRows } from './downloadLeadRows';
 import {
   formatDateLong,
   formatRoofAge,
@@ -187,6 +188,7 @@ export function AdminLeadCRM() {
   });
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [columnOrder, setColumnOrder] = useState<LeadColumnKey[]>(
     () => loadColumnPreferences().order,
@@ -516,7 +518,7 @@ export function AdminLeadCRM() {
     action();
   }
 
-  function exportCsv() {
+  function exportCsv(exportRows: Obj[] = data.rows, scope = "page") {
     const headers = [
       "Lead ID",
       "Overall Status",
@@ -543,7 +545,7 @@ export function AdminLeadCRM() {
       "Source",
       "Notes",
     ];
-    const rows = data.rows.map((row) => {
+    const rows = exportRows.map((row) => {
       const form = row.lead.form_data || {};
       return [
         row.lead.lead_code,
@@ -581,16 +583,48 @@ export function AdminLeadCRM() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `readyops-admin-crm-${dateBasis}.csv`;
+    link.download = `readyops-leads-${scope}-${dateBasis}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
+  async function downloadLeads() {
+    setDownloading(true);
+    setError("");
+    const filters = {
+      p_search: search || null,
+      p_company_id: companyId || null,
+      p_team_id: teamId || null,
+      p_qc_status: qcStatus === "all" ? null : qcStatus,
+      p_client_status: clientStatus === "all" ? null : clientStatus,
+      p_source: source === "all" ? null : source,
+      p_date_basis: dateBasis,
+      p_start_date: startDate || null,
+      p_end_date: endDate || null,
+    };
+    try {
+      const rows = await downloadLeadRows<Obj>(async (pageOffset, limit) => {
+        const result = await supabase.rpc("get_admin_lead_crm_by_team", { ...filters, p_offset: pageOffset, p_limit: limit });
+        if (result.error) throw new Error(rpcError(result.error));
+        return { rows: result.data?.rows || [], total: result.data?.total || 0 };
+      });
+      exportCsv(rows, "all-filtered");
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Unable to download leads");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const actions = (
     <>
+      <button className="readyops-ref-primary" onClick={() => void downloadLeads()} disabled={downloading || loading || !data.total}>
+        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+        {downloading ? "Downloading…" : "Download Leads"}
+      </button>
       <button
         className="readyops-ref-secondary"
-        onClick={exportCsv}
+        onClick={() => exportCsv()}
         disabled={!data.rows.length}
       >
         <Download size={14} /> Export Page
