@@ -2271,14 +2271,23 @@ export function CompanyPortal({
                       >
                         <Clipboard size={13} /> Copy Rep Link
                       </button>
-                      <button
-                        onClick={() =>
-                          window.open(repLink, "_blank", "noopener,noreferrer")
-                        }
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold"
-                      >
-                        <ExternalLink size={13} /> Open
-                      </button>
+                      {rep.access_token ? (
+                        <a
+                          href={repLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold transition-colors hover:bg-slate-50"
+                        >
+                          <ExternalLink size={13} /> Open
+                        </a>
+                      ) : (
+                        <span
+                          title="Generate a new link first"
+                          className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold opacity-50"
+                        >
+                          <ExternalLink size={13} /> Open
+                        </span>
+                      )}
                       <button
                         onClick={() =>
                           void updateRep(rep, { active: !rep.active })
