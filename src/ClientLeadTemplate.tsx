@@ -254,6 +254,13 @@ export function ClientLeadTemplate({
   } as LeadLike;
   const rawSnapshot = copyLead.form_data?._service_template as ServiceTemplate | undefined;
   const serviceSnapshot = rawSnapshot ? prepareServiceTemplate(rawSnapshot) : undefined;
+  const isRoofing = Boolean(serviceSnapshot && /^roofing$/i.test(serviceSnapshot.name));
+  const roofingFields = new Map(serviceSnapshot?.form_schema.flatMap(section => section.fields).map(field => [field.key, field]) || []);
+  const matchedRoofingSchema = roofingSummarySchema().map(section => ({ ...section, fields: section.fields.map(field => ({ ...field, ...roofingFields.get(field.key), label: field.label })) }));
+  if (editable && isRoofing) {
+    const details = ['homeowner_authority', 'claim_status', 'approved_work', 'meeting_name', 'visitor_authority', 'access_instructions'].map(key => roofingFields.get(key)).filter((field): field is NonNullable<typeof field> => Boolean(field));
+    if (details.length) matchedRoofingSchema.splice(2, 0, { id: 'call_visit_details', title: 'Call & Visit Details', fields: details });
+  }
   const copyService = leadValue(
     copyLead,
     'service_needed',
@@ -329,15 +336,19 @@ export function ClientLeadTemplate({
           {editable && <label className="block text-sm font-bold">Type of Service<select aria-label="Type of Service" disabled={saving} value={serviceSnapshot?.id || String(copyLead.form_data?.service_type || '')} onChange={event => onChange?.('service_type', event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 font-medium"><option value="">Select service…</option>{DEFAULT_SERVICE_TEMPLATES.filter(template => template.active).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>}
           {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-3">
             <Row label="Type of Service:" value={serviceSnapshot.name} />
-            {editable && /^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at ')} />}
             {!/^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />}
-            {(/^roofing$/i.test(serviceSnapshot.name) && !editable ? roofingSummarySchema() : serviceSnapshot.form_schema).map(section => {
+            {(isRoofing ? matchedRoofingSchema : serviceSnapshot.form_schema).map(section => {
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
-              const roofingSummary = /^roofing$/i.test(serviceSnapshot.name) && !editable;
+              const roofingSummary = isRoofing;
               const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
-              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => <div key={f.key}><Row label={`${f.label}:`} field={f.key} value={answer(data, f.key)} editValue={String(data[f.key] ?? '')} options={f.options} multiline={f.type === 'textarea'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>)}</Section> : null;
+              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => {
+                const fieldKey = f.key === 'summary_display' ? 'summary_notes' : f.key;
+                const value = !editable && f.key === 'address' ? formatAddress(copyLead) : answer(data, f.key);
+                const rawValue = f.key === 'summary_display' ? String(data.summary_notes ?? data.summary_display ?? '') : String(data[f.key] ?? '');
+                return <div key={f.key}><Row label={`${f.label}:`} field={f.key === 'appointment_display' ? undefined : fieldKey} value={value} editValue={rawValue} options={f.options} multiline={f.type === 'textarea' || f.key === 'summary_display'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>;
+              })}</Section> : null;
             })}
-            {(editable || !/^roofing$/i.test(serviceSnapshot.name)) && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
+            {!isRoofing && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
           </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
