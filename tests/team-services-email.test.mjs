@@ -73,6 +73,8 @@ for (const file of [
   "20261003230404_team_staff_and_manager_payroll.sql",
   "20261003230716_service_templates_and_lead_email_outbox.sql",
   "20261003230718_inline_agent_staff_rows.sql",
+  "20261009123458_approved_portal_contact_editing.sql",
+  "20261009124839_preserve_portal_optional_answers.sql",
 ]) {
   const sql = fs
     .readFileSync(
@@ -333,6 +335,15 @@ await test("automatic release deduplicates and uses profile email list", async (
     ["client@example.test", "second@example.test"],
   );
 });
+await test('lighting save preserves Other answers and removes a hidden second address', async () => {
+  await asUser(null,'postgres');
+  const payload={_universal_template:true,service_type:'permanent_exterior_lighting',full_name:'Lighting Test',phone_number:'5551234567',address:'Test Address',service_needed:'Free Design & Estimate',decision_makers:'Other',decision_makers_other:'Owner and property manager',additional_properties:'No',second_address:'Should be removed',forged:'Should be removed'};
+  const row=(await db.query('insert into public.portal_leads(company_id,agent_id,form_data) values($1,$2,$3) returning form_data',[uid(21),uid(11),JSON.stringify(payload)])).rows[0];
+  assert.equal(row.form_data.decision_makers_other,payload.decision_makers_other);
+  assert.equal(row.form_data.second_address,undefined);
+  assert.equal(row.form_data.forged,undefined);
+  assert.equal(row.form_data._service_template.name,'Permanent Lighting Appointment');
+});
 await test("email worker claiming prevents concurrent duplicates", async () => {
   await asUser(null, "service_role");
   const jobs = await scalar(
@@ -395,7 +406,7 @@ const loadTs = (path) => {
   const module = { exports: {} };
   new Function("exports", "require", "module", code)(
     module.exports,
-    (name) => name === "./appointmentQualifiers" ? loadTs("../src/appointmentQualifiers.ts") : {},
+    (name) => name.startsWith('./') ? loadTs(`../src/${name.slice(2)}.ts`) : {},
     module,
   );
   return module.exports;
@@ -560,7 +571,7 @@ await test("switching services clears old qualifiers without losing contact data
   assert.equal(values.full_name, "Test");
   assert.equal(values.service_type, lighting.id);
   const text = m.buildUniversalLeadTemplate(lighting, values);
-  assert.ok(text.includes("Exterior Lighting Appointment"));
+  assert.ok(text.includes("Permanent Lighting Appointment"));
   assert.ok(!text.includes("Roof Age:"));
 });
 await test("email HTML escapes customer text and never includes QC recordings", async () => {

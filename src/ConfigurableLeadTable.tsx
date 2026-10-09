@@ -1,7 +1,8 @@
 import { Children, cloneElement, isValidElement, useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { Eye, Columns3, Lock } from 'lucide-react';
 import { HorizontalScrollFrame } from './HorizontalScrollFrame';
 
-type Column = { key: string; label: string; width: number };
+type Column = { key: string; label: string; width: number; pinRight?: boolean };
 type Layout = { order: string[]; hidden: string[]; frozen: string[] };
 type ElementProps = { children?: ReactNode; className?: string; style?: CSSProperties };
 
@@ -13,7 +14,7 @@ export function normalizeColumnLayout(columns: Column[], input?: Partial<Layout>
   return { order: [...order, ...keys.filter(key => !order.includes(key))], hidden: hidden.length === keys.length ? hidden.slice(1) : hidden, frozen: input ? valid(input.frozen) : keys.slice(0, 1) };
 }
 
-export function ConfigurableLeadTable({ columns, storageKey, children }: { columns: Column[]; storageKey: string; children: ReactNode }) {
+export function ConfigurableLeadTable({ columns, storageKey, children, toolbarRight }: { columns: Column[]; storageKey: string; children: ReactNode; toolbarRight?: ReactNode }) {
   const [layout, setLayout] = useState<Layout>(() => {
     try { const saved = window.localStorage.getItem(storageKey); return normalizeColumnLayout(columns, saved ? JSON.parse(saved) : undefined); }
     catch { return normalizeColumnLayout(columns); }
@@ -25,7 +26,10 @@ export function ConfigurableLeadTable({ columns, storageKey, children }: { colum
   const columnByKey = new Map(columns.map(column => [column.key, column]));
   const frozenOffsets = new Map<string, number>();
   let frozenWidth = 0;
-  visible.forEach(key => { if (layout.frozen.includes(key)) { frozenOffsets.set(key, frozenWidth); frozenWidth += columnByKey.get(key)!.width; } });
+  visible.forEach(key => { if (layout.frozen.includes(key) && !columnByKey.get(key)!.pinRight) { frozenOffsets.set(key, frozenWidth); frozenWidth += columnByKey.get(key)!.width; } });
+  const rightOffsets = new Map<string, number>();
+  let rightWidth = 0;
+  [...visible].reverse().forEach(key => { if (columnByKey.get(key)!.pinRight) { rightOffsets.set(key, rightWidth); rightWidth += columnByKey.get(key)!.width; } });
   const toggle = (kind: 'hidden' | 'frozen', key: string) => setLayout(current => ({ ...current, [kind]: current[kind].includes(key) ? current[kind].filter(value => value !== key) : [...current[kind], key] }));
   const move = (key: string, target: string) => setLayout(current => {
     if (key === target) return current;
@@ -39,7 +43,7 @@ export function ConfigurableLeadTable({ columns, storageKey, children }: { colum
     [order[index], order[target]] = [order[target], order[index]];
     return { ...current, order };
   });
-  const cellStyle = (key: string, header: boolean): CSSProperties => ({ width: columnByKey.get(key)!.width, minWidth: columnByKey.get(key)!.width, maxWidth: columnByKey.get(key)!.width, ...(frozenOffsets.has(key) ? { position: 'sticky', left: frozenOffsets.get(key), zIndex: header ? 30 : 2 } : {}) });
+  const cellStyle = (key: string, header: boolean): CSSProperties => ({ width: columnByKey.get(key)!.width, minWidth: columnByKey.get(key)!.width, maxWidth: columnByKey.get(key)!.width, ...(rightOffsets.has(key) ? { position: 'sticky', right: rightOffsets.get(key), zIndex: header ? 31 : 3 } : frozenOffsets.has(key) ? { position: 'sticky', left: frozenOffsets.get(key), zIndex: header ? 30 : 2 } : {}) });
   const bodies = Children.toArray(children).map(body => {
     if (!isValidElement<ElementProps>(body)) return body;
     return cloneElement(body, {}, Children.toArray(body.props.children).map(row => {
@@ -49,16 +53,17 @@ export function ConfigurableLeadTable({ columns, storageKey, children }: { colum
         const cell = cells[columns.findIndex(column => column.key === key)];
         if (!isValidElement<ElementProps>(cell)) return cell;
         const className = (cell.props.className || '').split(' ').filter(token => !/^(sticky|left-|right-|z-|shadow-|min-w-)/.test(token)).join(' ');
-        return cloneElement(cell as ReactElement<ElementProps>, { key, className: className + (frozenOffsets.has(key) ? ' bg-inherit shadow-sm' : ''), style: { ...cell.props.style, ...cellStyle(key, false) } });
+        return cloneElement(cell as ReactElement<ElementProps>, { key, className: className + (frozenOffsets.has(key) || rightOffsets.has(key) ? ' bg-inherit shadow-sm' : ''), style: { ...cell.props.style, ...cellStyle(key, false) } });
       }));
     }));
   });
-  return <div className="hidden md:block">
-    <div className="flex flex-wrap gap-2 border-y bg-white p-3">
-      {([['hidden','Show / Hide Columns'],['frozen','Freeze Columns'],['order','Reorder Columns']] as const).map(([kind,label]) => <button key={kind} type="button" aria-expanded={panel === kind} onClick={() => setPanel(panel === kind ? null : kind)} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700">{label}</button>)}
-      <button type="button" onClick={() => setLayout(normalizeColumnLayout(columns))} className="rounded-lg border px-3 py-2 text-xs font-bold">Reset Columns</button>
+  return <div className="readyops-delivered-sheet hidden md:block">
+    <div className="flex items-center justify-between bg-white px-3 py-2"><div><h3 className="font-bold">Delivered lead spreadsheet</h3><p className="text-xs text-slate-500">Approved leads matching your filters</p></div></div>
+    <div className="flex flex-wrap justify-end gap-2 border-y bg-white px-3 py-2">
+      {([['hidden','Show / Hide Columns',Eye],['order','Reorder Columns',Columns3],['frozen','Lock / Unlock Columns',Lock]] as const).map(([kind,label,Icon]) => <button key={kind} type="button" aria-expanded={panel === kind} onClick={() => setPanel(panel === kind ? null : kind)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition ${panel === kind ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'}`}><Icon size={14} />{label}</button>)}
+      {toolbarRight}
     </div>
-    {panel && <div className="border-b bg-slate-50 p-3"><div className="mb-2 flex items-center justify-between"><strong>{panel === 'hidden' ? 'Visible columns' : panel === 'frozen' ? 'Keep columns visible while scrolling' : 'Column order'}</strong><button type="button" onClick={() => setPanel(null)} className="rounded border px-3 py-1">Close</button></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{layout.order.map((key,index) => <div key={key} className="flex items-center justify-between gap-2 rounded border bg-white p-2 text-xs">{panel === 'order' ? <><span>{columnByKey.get(key)!.label}</span><span className="flex gap-1"><button type="button" aria-label={`Move ${columnByKey.get(key)!.label} left`} disabled={index === 0} onClick={() => moveBy(key,-1)} className="rounded border px-2 py-1 disabled:opacity-30">←</button><button type="button" aria-label={`Move ${columnByKey.get(key)!.label} right`} disabled={index === layout.order.length-1} onClick={() => moveBy(key,1)} className="rounded border px-2 py-1 disabled:opacity-30">→</button></span></> : <label className="flex w-full items-center gap-2"><input type="checkbox" aria-label={`${panel === 'hidden' ? 'Show' : 'Freeze'} ${columnByKey.get(key)!.label}`} checked={panel === 'hidden' ? !layout.hidden.includes(key) : layout.frozen.includes(key)} disabled={panel === 'hidden' && visible.length === 1 && visible[0] === key} onChange={() => toggle(panel,key)} />{columnByKey.get(key)!.label}</label>}</div>)}</div></div>}
+    {panel && <div className="border-b bg-slate-50 p-3"><div className="mb-2 flex items-center justify-between"><button type="button" onClick={() => setLayout(normalizeColumnLayout(columns))} className="rounded border px-3 py-1 text-xs">Reset Columns</button><strong>{panel === 'hidden' ? 'Visible columns' : panel === 'frozen' ? 'Keep columns visible while scrolling' : 'Column order'}</strong><button type="button" onClick={() => setPanel(null)} className="rounded border px-3 py-1">Close</button></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{layout.order.map((key,index) => <div key={key} className="flex items-center justify-between gap-2 rounded border bg-white p-2 text-xs">{panel === 'order' ? <><span>{columnByKey.get(key)!.label}</span><span className="flex gap-1"><button type="button" aria-label={`Move ${columnByKey.get(key)!.label} left`} disabled={index === 0} onClick={() => moveBy(key,-1)} className="rounded border px-2 py-1 disabled:opacity-30">←</button><button type="button" aria-label={`Move ${columnByKey.get(key)!.label} right`} disabled={index === layout.order.length-1} onClick={() => moveBy(key,1)} className="rounded border px-2 py-1 disabled:opacity-30">→</button></span></> : <label className="flex w-full items-center gap-2"><input type="checkbox" aria-label={`${panel === 'hidden' ? 'Show' : 'Freeze'} ${columnByKey.get(key)!.label}`} checked={panel === 'hidden' ? !layout.hidden.includes(key) : Boolean(columnByKey.get(key)!.pinRight) || layout.frozen.includes(key)} disabled={panel === 'frozen' ? Boolean(columnByKey.get(key)!.pinRight) : visible.length === 1 && visible[0] === key} onChange={() => toggle(panel,key)} />{columnByKey.get(key)!.label}</label>}</div>)}</div></div>}
     <HorizontalScrollFrame className="readyops-sticky-table" ariaLabel="Company leads horizontal scroll"><table className="readyops-company-leads-table border-separate border-spacing-0 text-xs" style={{ tableLayout:'fixed', width:visible.reduce((sum,key) => sum + columnByKey.get(key)!.width,0) }}><thead className="table-header sticky top-0 z-10 bg-[#071525] text-left uppercase tracking-wide text-white"><tr>{visible.map(key => <th key={key} draggable onDragStart={() => setDragged(key)} onDragEnd={() => setDragged(null)} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (dragged) move(dragged,key); setDragged(null); }} style={cellStyle(key,true)} className="border-b border-[#17314d] bg-[#071525] px-2 py-3" title="Drag to move this column, or use Reorder Columns"><span className="flex items-center justify-between gap-1">{columnByKey.get(key)!.label}<span aria-hidden="true">↔</span></span></th>)}</tr></thead>{bodies}</table></HorizontalScrollFrame>
   </div>;
 }

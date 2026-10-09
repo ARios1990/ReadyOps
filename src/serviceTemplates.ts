@@ -1,4 +1,5 @@
 import type { PortalFormSection } from "./DynamicLeadForm";
+import { permanentLightingSchema } from './permanentLighting';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema, updateQualifierSchema } from './appointmentQualifiers';
 
 export type ServiceTemplate = {
@@ -111,37 +112,11 @@ export const DEFAULT_SERVICE_TEMPLATES: ServiceTemplate[] = [
   },
   {
     id: "permanent_exterior_lighting",
-    name: "Permanent Exterior Lighting",
-    template_title: "Exterior Lighting Appointment",
+    name: "Permanent Lighting Appointment",
+    template_title: "Permanent Lighting Appointment",
     active: true,
     qualification_rules: {},
-    form_schema: [
-      customer,
-      {
-        id: "service",
-        title: "Lighting Qualifiers & Design",
-        fields: [
-          yesNo("homeowner_authority", "Authorized property decision-maker?"),
-          field("lighting_type", "Lighting Type", "select", [
-            "Permanent Exterior Lighting",
-            "Seasonal Holiday Lighting",
-            "Both",
-          ]),
-          field("lighting_areas", "Areas to Light", "multiselect", [
-            "Roofline",
-            "Patio",
-            "Landscape",
-            "Other",
-          ]),
-          field("stories", "Stories", "number"),
-          field("lighting_length", "Estimated Linear Feet", "number"),
-          field("power_access", "Available Power Access"),
-          field("budget", "Budget", "currency"),
-          field("project_timeline", "Desired Installation Timeline"),
-        ],
-      },
-      notes,
-    ],
+    form_schema: permanentLightingSchema,
   },
   {
     id: "tree_service",
@@ -347,7 +322,7 @@ export function switchServiceValues(
   return {
     ...kept,
     service_type: next.id,
-    service_needed: next.name,
+    service_needed: next.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : next.name,
     _universal_template: true,
   };
 }
@@ -356,6 +331,17 @@ export function buildUniversalLeadTemplate(
   template: Pick<ServiceTemplate, "name" | "template_title" | "form_schema">,
   values: Record<string, unknown>,
 ): string {
+  if (/lighting/i.test(template.name)) {
+    const data = { ...values, appointment_display: appointmentLabel(values).replace(' · ', ' at ') };
+    const notes = answer(values, 'summary_notes') || answer(values, 'notes') || (answer(values, 'full_name') ? `Spoke with ${answer(values, 'full_name')}.` : '');
+    return ['Type of Service: Permanent Lighting Appointment', ...permanentLightingSchema.flatMap(section => {
+      const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording', 'internal'].includes(f.type) && f.key !== 'notes' && answer(data, f.key));
+      const lines = fields.map(f => `${f.label}: ${answer(data, f.key)}`);
+      if (section.id === 'customer' && data.appointment_display) lines.unshift(`Appointment Date & Time: ${data.appointment_display}`);
+      if (section.id === 'additional' && notes) lines.push(`Notes: ${notes}`);
+      return lines.length ? [`\n**${section.title}**`, ...lines] : [];
+    })].join('\n');
+  }
   if (/^roofing$/i.test(template.name)) {
     const data = { ...values, appointment_display: appointmentLabel(values).replace(' · ', ' at '), summary_display: automaticNotes(template.name, values) };
     return [
@@ -380,5 +366,5 @@ export function buildUniversalLeadTemplate(
 }
 
 export function prepareServiceTemplate(template: ServiceTemplate): ServiceTemplate {
-  return { ...template, form_schema: updateQualifierSchema(template.form_schema, template.id) };
+  return { ...template, ...(template.id === 'permanent_exterior_lighting' ? { name: 'Permanent Lighting Appointment', template_title: 'Permanent Lighting Appointment' } : {}), form_schema: updateQualifierSchema(template.form_schema, template.id) };
 }

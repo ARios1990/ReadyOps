@@ -1,3 +1,5 @@
+import { LeadContactEditor } from './LeadContactEditor';
+import { ClientLeadTemplate } from './ClientLeadTemplate';
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -271,6 +273,7 @@ export function RepresentativePortal({ token }: { token: string }) {
                   </div>
                   <ClientStatusActions
                     className="mt-2"
+                    compact
                     currentStatus={
                       appt.company_action ||
                       appt.client_status ||
@@ -322,41 +325,8 @@ export function RepresentativePortal({ token }: { token: string }) {
                 Close
               </button>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <Detail label="Phone" value={selected.lead.phone_number} />
-              <Detail
-                label="Address"
-                value={formatLeadAddress(selected.lead)}
-              />
-              <Detail label="Email" value={selected.lead.email} />
-              <Detail label="Language" value={selected.lead.language} />
-            </div>
-            <h3 className="mt-6 mb-2 font-bold">Lead Template</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {Object.entries(selected.lead.form_data || {}).map(
-                ([key, value]) => (
-                  <Detail
-                    key={key}
-                    label={key.replace(/_/g, " ")}
-                    value={
-                      Array.isArray(value)
-                        ? value.join(", ")
-                        : value == null
-                          ? ""
-                          : String(value)
-                    }
-                  />
-                ),
-              )}
-            </div>
-            {selected.lead.notes && (
-              <div className="mt-4 rounded-xl bg-slate-50 p-3">
-                <p className="text-xs font-bold text-slate-500">Notes</p>
-                <p className="mt-1 whitespace-pre-line text-sm">
-                  {selected.lead.notes}
-                </p>
-              </div>
-            )}
+            <div className="mt-3"><LeadContactEditor key={selected.id} appointmentId={selected.id} token={token} representative phone={selected.lead.phone_number} email={selected.lead.email} onSaved={(phone,email) => { setSelected({...selected,lead:{...selected.lead,phone_number:phone,email}}); void load(); }}/></div>
+            <div className="mt-3"><ClientLeadTemplate lead={selected.lead} appointment={selected} /></div>
           </div>
         </div>
       )}
@@ -364,18 +334,6 @@ export function RepresentativePortal({ token }: { token: string }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm font-medium">
-        {value == null || value === "" ? "—" : String(value)}
-      </p>
-    </div>
-  );
-}
 function State({
   icon,
   title,
@@ -386,7 +344,7 @@ function State({
   detail?: string;
 }) {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+    <div className="readyops-representative-portal min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
           {icon}

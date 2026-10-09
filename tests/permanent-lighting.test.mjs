@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+function load(name) { const module = { exports: {} }; const code = ts.transpileModule(fs.readFileSync(new URL(`../src/${name}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText; new Function('exports','require','module',code)(module.exports,id=>load(id.slice(2)),module);return module.exports; }
+const s=load('serviceTemplates'),q=load('appointmentQualifiers');
+const t=s.prepareServiceTemplate(s.DEFAULT_SERVICE_TEMPLATES.find(t=>t.id==='permanent_exterior_lighting'));
+assert.deepEqual(t.form_schema.map(s=>s.title),['Customer Information','Project Information','Customer Notes']);
+assert.deepEqual(s.prepareServiceTemplate(t),t);
+const values={full_name:'Maria Lopez',phone_number:'555-010-0001',appointment_date:'2026-10-09',appointment_time:'11:00',service_needed:'Free Design & Estimate',decision_makers:'Other',decision_makers_other:'Owner and property manager',additional_properties:'No',second_address:'Stale address'};
+const out=s.buildUniversalLeadTemplate(t,values);
+assert.ok(out.startsWith('Type of Service: Permanent Lighting Appointment'));
+assert.ok(out.includes('Appointment Date & Time: Oct 9, 2026 at 11:00 AM'));
+assert.ok(out.includes('Decision Maker Present: Owner and property manager'));
+assert.ok(out.includes('Notes: Spoke with Maria Lopez.'));
+assert.ok(!out.includes('Stale address'));
+assert.ok(!out.includes('Email:'));
+assert.ok(!out.includes('Roof Age'));
+assert.ok(s.buildUniversalLeadTemplate(t,{...values,additional_properties:'Yes'}).includes('2nd Address: Stale address'));
+assert.equal(q.qualifierVisible(t.form_schema[1].fields.find(f=>f.key==='second_address'),values),false);
+assert.equal(s.switchServiceValues({},undefined,t).service_needed,'Free Design & Estimate');
+console.log('PASS permanent lighting questions, Other answers, conditional second address, dates and blank omission');

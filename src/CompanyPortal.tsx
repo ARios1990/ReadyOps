@@ -1,4 +1,9 @@
+import { LeadContactEditor } from './LeadContactEditor';
+import { downloadLeadRows } from './downloadLeadRows';
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PortalSection } from './PortalSection';
+import { CompanyCalendar } from './CompanyCalendar';
+import { ThemeToggle } from './ThemeContext';
 import { ConfigurableLeadTable } from './ConfigurableLeadTable';
 import {
   AlertTriangle,
@@ -57,10 +62,8 @@ import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
 import {
   ClientStatusActions,
-  COMPANY_PORTAL_DISPOSITIONS,
   LeadReceivedIndicator,
 } from "./LeadStatusControls";
-import { CollapsibleSection, CompanyDailyAppointments } from "./CompanyDailyAppointments";
 import {
   clientLeadStatusLabel,
   leadStatusClasses,
@@ -107,7 +110,7 @@ interface ScheduleException {
   end_time: string | null;
   note: string | null;
 }
-export interface Representative {
+interface Representative {
   id: string;
   name: string;
   phone: string | null;
@@ -134,7 +137,7 @@ interface LeadRecord {
   recording_url: string | null;
   recording_shared?: boolean;
 }
-export interface Appointment {
+interface Appointment {
   id: string;
   appointment_date: string;
   start_time: string;
@@ -263,7 +266,7 @@ interface CompanyDashboardSummary {
   last_updated_at: string | null;
 }
 
-type Tab = "overview" | "leads" | "setup" | "reports";
+type Tab = "overview" | "calendar" | "leads" | "setup" | "reports";
 type SetupTab = "locations" | "schedule" | "requirements" | "forms" | "payments" | "reps";
 const DAY_NAMES = [
   "Sunday",
@@ -365,6 +368,7 @@ export function CompanyPortal({
   const [dashboard, setDashboard] = useState<CompanyDashboardSummary | null>(
     null,
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [setupTab, setSetupTab] = useState<SetupTab>("locations");
   const [companyLeadFilter, setCompanyLeadFilter] = useState("all");
@@ -435,8 +439,10 @@ export function CompanyPortal({
   const selectedWeekStart = calendarWeekStart(
     new Date(`${selectedDay}T12:00:00`),
   );
-  const windowStart = localDate(addDays(selectedWeekStart, -7));
-  const windowEnd = localDate(addDays(selectedWeekStart, 28));
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const calendarStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1 - calendarMonth.getDay());
+  const windowStart = tab === 'reports' ? '1900-01-01' : tab === 'calendar' ? localDate(calendarStart) : localDate(addDays(selectedWeekStart, -7));
+  const windowEnd = tab === 'reports' ? '2100-12-31' : tab === 'calendar' ? localDate(addDays(calendarStart,41)) : localDate(addDays(selectedWeekStart, 28));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1316,7 +1322,15 @@ export function CompanyPortal({
   const companyLink = `${window.location.origin}/company/${settingsDraft.public_slug}/manage/${token}`;
 
   return (
-    <div className="readyops-company-portal body-text min-h-screen w-full min-w-0 overflow-x-clip bg-slate-50 text-slate-900">
+    <div className={`readyops-company-portal readyops-approved-shell body-text min-h-screen w-full min-w-0 bg-slate-50 text-slate-900 ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <aside className="readyops-company-sidebar" aria-label="Company navigation">
+        <img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps" className="mb-5 w-full" />
+        <button className="readyops-sidebar-toggle" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? <ChevronRight size={14}/> : <ChevronLeft size={14}/>}</button>
+        {([
+          ['overview','Dashboard',CalendarDays],['calendar','Calendar',CalendarClock],['leads','Leads',FileSpreadsheet],['setup','Company Setup',ShieldCheck],['payments','Payments',WalletCards],['reps','Representatives',Users],['reports','Reports',BarChart3],
+        ] as const).map(([key,label,Icon]) => <button key={key} type="button" title={sidebarCollapsed ? label : undefined} aria-label={label} aria-current={(key === 'setup' ? tab === 'setup' && !['payments','reps'].includes(setupTab) : tab === key || tab === 'setup' && setupTab === key) ? 'page' : undefined} onClick={() => { if(key === 'payments' || key === 'reps'){setTab('setup');setSetupTab(key);}else {setTab(key);if(key === 'setup')setSetupTab('locations');} }}><Icon size={15}/><span>{label}</span></button>)}
+      </aside>
+      <div className="min-w-0">
       <header className="readyops-company-header sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-5">
@@ -1400,6 +1414,7 @@ export function CompanyPortal({
             />
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <span className="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 sm:inline">
               Secure Link
             </span>
@@ -1445,25 +1460,6 @@ export function CompanyPortal({
           />
         </section>
 
-        <nav className="readyops-company-primary-nav mb-5 hidden gap-4 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm sm:flex">
-          {(
-            [
-              ["overview", "Dashboard", CalendarDays],
-              ["leads", "Leads", FileSpreadsheet],
-              ["setup", "Company Setup", ShieldCheck],
-              ["reports", "Reports", BarChart3],
-            ] as [Tab, string, typeof CalendarDays][]
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold ${tab === key ? "bg-blue-600 text-white shadow-sm" : "text-white hover:bg-white/10"}`}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
-        </nav>
 
         {tab === "setup" && (
           <nav className="readyops-company-subnav mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#17314d] bg-[#06152b] p-2 shadow-sm">
@@ -1484,6 +1480,7 @@ export function CompanyPortal({
           </nav>
         )}
 
+        {tab === "calendar" && <CompanyCalendar appointments={data.appointments} representatives={data.representatives} openLead={setSelectedLead} month={calendarMonth} setMonth={setCalendarMonth} />}
         {tab === "overview" && (
           <CompanyAppointmentsDashboard
             data={data}
@@ -1546,10 +1543,10 @@ export function CompanyPortal({
         )}
 
         {tab === "setup" && setupTab === "requirements" && (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <PortalSection title="Portal & Qualification Settings">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h2 className="font-bold">Portal & Qualification Settings</h2>
+
                 <p className="text-sm text-slate-500">
                   Changes are reflected on the agent link.
                 </p>
@@ -1618,6 +1615,16 @@ export function CompanyPortal({
                   }
                 />
               </div>
+              {[
+                ['excluded_home_types','Home types not accepted (mobile homes, townhomes, other)'],
+                ['target_cities','Cities to target'],['target_zip_codes','ZIP codes to target'],
+                ['young_roof_conditions','Roofs 3–5 years old: accepted roof types and required hail size'],
+                ['other_services','Other services offered'],['booking_notice','Appointment notice (same day, next day, 24–48 hours)'],
+              ].map(([key,label]) => <TextField key={key} label={label} value={String(settingsDraft.qualification_rules[key] || '')} onChange={value => setSettingsDraft({...settingsDraft, qualification_rules:{...settingsDraft.qualification_rules,[key]:value}})}/>)}
+              <NumberField label="Minimum Home Value ($)" value={numberOrBlank(settingsDraft.qualification_rules.minimum_home_value)} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,minimum_home_value:value === '' ? null : Number(value)}})}/>
+              {[
+                ['financing_available','Financing available'],['cash_jobs','Accept cash jobs'],['insurance_jobs','Accept insurance jobs'],['insurance_only','Insurance jobs only'],['call_before_arrival','Call homeowner before arrival'],['drone_inspections','Drone inspections available'],
+              ].map(([key,label]) => <Toggle key={key} label={label} checked={Boolean(settingsDraft.qualification_rules[key])} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,[key]:value}})}/>)}
               <NumberField
                 label="Minimum Roof Age"
                 value={numberOrBlank(
@@ -1688,11 +1695,21 @@ export function CompanyPortal({
                 </button>
               </div>
             </div>
-          </section>
+          </PortalSection>
         )}
 
         {tab === "setup" && setupTab === "payments" && (
           <section className="space-y-5">
+            <PortalSection title="Billing Model & Package Terms">
+              <div className="grid gap-3 rounded-xl border bg-white p-3 sm:grid-cols-2">
+                <label className="text-xs font-bold">Billing Model<select className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" value={String(settingsDraft.qualification_rules.billing_model || 'per_lead')} onChange={event => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,billing_model:event.target.value}})}><option value="per_lead">Per Lead</option><option value="signed_fixed">Signed Contract · Set Price</option><option value="signed_percentage">Signed Contract · Percentage</option><option value="weekly">Weekly Pay</option></select></label>
+                <NumberField label={settingsDraft.qualification_rules.billing_model === 'signed_percentage' ? 'Contract Percentage (%)' : settingsDraft.qualification_rules.billing_model === 'weekly' ? 'Weekly Pay ($)' : 'Set Price ($)'} value={numberOrBlank(settingsDraft.qualification_rules.billing_rate)} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,billing_rate:value === '' ? null : Number(value)}})}/>
+                <TextField label="Package Start Date" type="date" value={String(settingsDraft.qualification_rules.package_start_date || dashboard?.active_package?.start_date || '')} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,package_start_date:value}})}/>
+                <TextField label="Package Completion Date" type="date" value={String(settingsDraft.qualification_rules.package_completion_date || dashboard?.active_package?.completion_date || '')} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,package_completion_date:value}})}/>
+                <div className="sm:col-span-2"><TextArea label="Package Notes" value={String(settingsDraft.qualification_rules.package_notes || '')} onChange={value => setSettingsDraft({...settingsDraft,qualification_rules:{...settingsDraft.qualification_rules,package_notes:value}})}/></div>
+                <button disabled={busy} onClick={() => void saveRequirements()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Save Billing Terms</button>
+              </div>
+            </PortalSection>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -1925,8 +1942,8 @@ export function CompanyPortal({
               <div className="mb-2 hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[110px_90px_repeat(5,1fr)_70px] md:items-center md:gap-2">
                 <span>Day</span>
                 <span>Open</span>
-                <span>Start Time</span>
-                <span>End Time</span>
+                <span>First Appointment</span>
+                <span>Latest Appointment</span>
                 <span>Appointment Length (min)</span>
                 <span>Appointments per Time Slot</span>
                 <span>Max Appointments per Day</span>
@@ -2254,23 +2271,14 @@ export function CompanyPortal({
                       >
                         <Clipboard size={13} /> Copy Rep Link
                       </button>
-                      {rep.access_token ? (
-                        <a
-                          href={repLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold transition-colors hover:bg-slate-50"
-                        >
-                          <ExternalLink size={13} /> Open
-                        </a>
-                      ) : (
-                        <span
-                          title="Generate a new link first"
-                          className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold opacity-50"
-                        >
-                          <ExternalLink size={13} /> Open
-                        </span>
-                      )}
+                      <button
+                        onClick={() =>
+                          window.open(repLink, "_blank", "noopener,noreferrer")
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold"
+                      >
+                        <ExternalLink size={13} /> Open
+                      </button>
                       <button
                         onClick={() =>
                           void updateRep(rep, { active: !rep.active })
@@ -2296,12 +2304,12 @@ export function CompanyPortal({
         )}
 
         {tab === "reports" && (
-          <CompanyReports data={data} dashboard={dashboard} />
+          <CompanyReports data={data} dashboard={dashboard} openLeads={filter => {setCompanyLeadFilter(filter);setTab("leads");}} />
         )}
 
         {tab === "reports" && (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="font-bold">Audit History</h2>
+          <PortalSection title="Audit History">
+
             <div className="mt-4 space-y-2">
               {data.audit_logs.length === 0 ? (
                 <Empty text="No recorded changes yet." />
@@ -2326,9 +2334,10 @@ export function CompanyPortal({
                 ))
               )}
             </div>
-          </section>
+          </PortalSection>
         )}
       </main>
+      </div>
 
       <nav
         aria-label="Mobile company navigation"
@@ -2755,6 +2764,12 @@ function CompanyLeadsSpreadsheet({
   activePackage: CompanyDashboardSummary["active_package"];
   refreshKey: number;
 }) {
+  const extraColumns = [
+    ['email','Email'],['language','Language'],['type_of_service','Type of Service'],['homeowner_authority','Homeowner / Decision Maker'],
+    ['claim_filed','Claim Filed'],['claim_status','Claim Status'],['contract','Contract'],['home_value','Home Value'],['sq_ft','Square Feet'],
+    ['web_url','Property Link'],['damage_type','Damage Type'],['decision_makers','Decision Maker Present'],
+    ['additional_properties','Additional Properties'],['second_address','2nd Address'],['notes','Customer Notes'],['inspector_notes','Inspector Notes of the Inspection'],
+  ];
   const [data, setData] = useState<CompanyLeadSheetData>({
     rows: [],
     total: 0,
@@ -2819,6 +2834,23 @@ function CompanyLeadsSpreadsheet({
     setOffset(0);
     setFilter(next);
   };
+  const [exporting, setExporting] = useState(false);
+  async function exportLeads() {
+    setExporting(true); setError('');
+    try {
+      const rows = await downloadLeadRows<Appointment>(async (pageOffset,pageLimit) => {
+        const { data: result,error: exportError } = await supabase.rpc('get_company_location_lead_spreadsheet',{
+          p_company_id:companyId,p_access_token:token,p_filter:filter,p_location_id:locationId || null,
+          p_representative_id:representativeId || null,p_start_date:startDate || null,p_end_date:endDate || null,
+          p_search:search || null,p_limit:pageLimit,p_offset:pageOffset,
+        });
+        if(exportError) throw exportError;
+        return result as CompanyLeadSheetData;
+      });
+      downloadAppointments(rows,'csv');
+    } catch (exportError) { setError(rpcError(exportError)); }
+    finally { setExporting(false); }
+  }
   const filterCards = [
     {
       key: "all",
@@ -2881,13 +2913,58 @@ function CompanyLeadsSpreadsheet({
             Every QC-approved lead delivered to this company, across all dates.
           </p>
         </div>
+        <button disabled={exporting} onClick={() => void exportLeads()} className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"><Download size={13} className="mr-1 inline"/>{exporting ? 'Preparing Download…' : 'Download Leads'}</button>
         <div className="w-full rounded-xl border bg-white px-4 py-2 text-xs sm:w-auto">
           <strong>{activePackage?.remaining_leads ?? "—"}</strong> package leads
           remaining{" "}
           <span className="text-slate-400">(not yet delivered records)</span>
         </div>
       </div>
-      <div className="grid gap-3 rounded-xl border bg-white p-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_180px_auto]">
+      <PortalSection title="Company Performance">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+        {filterCards.map(({ key, label, count, tone, Icon }) => (
+          <button
+            key={key}
+            onClick={() => chooseFilter(key)}
+            className={`relative min-h-[86px] overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md bg-white border-slate-200 ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+          >
+            <Icon
+              size={18}
+              strokeWidth={1.8}
+              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-90"
+            />
+            <span className={`kpi-title block max-w-[72%] font-bold ${tone.split(" ").find(cls => cls.startsWith("text-")) || "text-blue-700"}`}>
+              {label}
+            </span>
+            <strong className={`kpi-number mt-1 block text-slate-950`}>
+              {count}
+            </strong>
+            <span className="mt-2 block text-[9px] font-bold">Show matching leads →</span>
+          </button>
+        ))}
+      </div>
+      </PortalSection>
+      <PortalSection title="Search & Filters">
+      <div className="grid gap-3 rounded-xl border bg-white p-3 md:grid-cols-2 xl:grid-cols-4">
+          <form
+            className="relative w-full min-w-0 self-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setOffset(0);
+              setSearch(searchInput.trim());
+            }}
+          >
+            <Search
+              size={14}
+              className="absolute left-3 top-3 text-slate-400"
+            />
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search homeowner, phone, address, service…"
+              className="h-11 w-full rounded-lg border pl-9 pr-3 text-sm sm:h-10 sm:text-xs"
+            />
+          </form>
         <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
           <span className="flex items-center gap-1">
             <MapPin size={13} className="text-blue-600" /> Location
@@ -2930,6 +3007,12 @@ function CompanyLeadsSpreadsheet({
             ))}
           </select>
         </label>
+        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">Lead Status
+          <select value={filter} onChange={event => chooseFilter(event.target.value)} className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs">
+            <option value="all">All lead statuses</option>
+            {filterCards.filter(card => card.key !== 'all').map(card => <option key={card.key} value={card.key}>{card.label}</option>)}
+          </select>
+        </label>
         <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
           Start Date
           <input
@@ -2959,9 +3042,10 @@ function CompanyLeadsSpreadsheet({
         </label>
         <button
           type="button"
-          disabled={!locationId && !representativeId && !startDate && !endDate}
+          disabled={!locationId && !representativeId && !startDate && !endDate && !searchInput && !search && filter === "all"}
           onClick={() => {
             setOffset(0);
+            setSearchInput(""); setSearch(""); setFilter("all");
             setLocationId("");
             setRepresentativeId("");
             setStartDate("");
@@ -2972,49 +3056,10 @@ function CompanyLeadsSpreadsheet({
           Clear Filters
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
-        {filterCards.map(({ key, label, count, tone, Icon }) => (
-          <button
-            key={key}
-            onClick={() => chooseFilter(key)}
-            className={`relative min-h-[112px] overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${tone} ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
-          >
-            <Icon
-              size={29}
-              strokeWidth={1.8}
-              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-90"
-            />
-            <span className="kpi-title block max-w-[72%] uppercase tracking-wide">
-              {label}
-            </span>
-            <strong className={`kpi-number mt-1 block ${key === "signed_contract" ? "text-white" : "text-slate-950"}`}>
-              {count}
-            </strong>
-            <span className="mt-2 block text-[9px] font-bold">Show matching leads →</span>
-          </button>
-        ))}
-      </div>
+      </PortalSection>
       <section className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-wrap items-stretch justify-between gap-3 border-b p-3 sm:items-center">
-          <form
-            className="relative w-full min-w-0 sm:flex-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setOffset(0);
-              setSearch(searchInput.trim());
-            }}
-          >
-            <Search
-              size={14}
-              className="absolute left-3 top-3 text-slate-400"
-            />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search homeowner, phone, address, service…"
-              className="h-11 w-full rounded-lg border pl-9 pr-3 text-sm sm:h-10 sm:text-xs"
-            />
-          </form>
+
           <button
             onClick={() => void load()}
             className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-bold sm:min-h-0"
@@ -3170,14 +3215,15 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
               })}
             </div>
 
-            <ConfigurableLeadTable key={companyId} storageKey={`readyops-company-lead-columns-${companyId}`} columns={[
+            <ConfigurableLeadTable key={companyId} storageKey={`readyops-company-lead-columns-${companyId}`} toolbarRight={<div className="flex items-center gap-2 text-xs font-bold"><button type="button" aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset(value => Math.max(0, value - 100))} className="rounded-lg border px-3 py-2 disabled:opacity-40">‹</button><span>Page {page} of {pages}</span><button type="button" aria-label="Next page" disabled={page >= pages || loading} onClick={() => setOffset(value => value + 100)} className="rounded-lg border px-3 py-2 disabled:opacity-40">›</button></div>} columns={[
  {key:'inspector',label:'Inspector Assignment',width:150}, {key:'homeowner',label:'Homeowner',width:175},
  {key:'appointment',label:'Appointment Date & Time',width:150}, {key:'address',label:'Full Address',width:240},
  {key:'service',label:'Service',width:120}, {key:'roofAge',label:'Roof Age',width:85},
  {key:'roofType',label:'Roof Type',width:90}, {key:'homeType',label:'Home Type',width:110},
  {key:'stories',label:'Stories',width:75}, {key:'insurance',label:'Insurance',width:85},
  {key:'carrier',label:'Carrier',width:110}, {key:'damage',label:'Damage / Hail',width:115},
- {key:'action',label:'Action',width:110}, {key:'status',label:'Lead Status',width:150},
+ ...extraColumns.map(([key,label]) => ({key,label,width: key.includes('notes') || key.includes('address') || key === 'web_url' ? 230 : 160})),
+ {key:'action',label:'Action',width:110}, {key:'status',label:'Lead Status',width:150,pinRight:true},
 ]}>
                 <tbody>
                   {data.rows.map((appointment) => {
@@ -3267,6 +3313,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                         <td className="min-w-[75px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.visible_damage || form.hail_size || "—")}
                         </td>
+                        {extraColumns.map(([key]) => <td key={key} className="border-b border-r border-slate-200 px-2.5 py-3">{String(key === 'inspector_notes' ? appointment.inspector_notes || '—' : key === 'type_of_service' ? form.service_type || '—' : key === 'second_address' && form.additional_properties !== 'Yes' ? '—' : form[key] || appointment.lead[key as keyof LeadRecord] || '—')}</td>)}
                         <td className="min-w-[75px] border-b border-r border-slate-200 px-2.5 py-3">
                           <button
                             onClick={(event) => {
@@ -3366,6 +3413,10 @@ function CompanyAppointmentsDashboard({
   ) => Promise<boolean>;
   openLeads: (filter: string) => void;
 }) {
+  const [previewId, setPreviewId] = useState('');
+  const [appointmentSearch, setAppointmentSearch] = useState('');
+  const [appointmentInspector, setAppointmentInspector] = useState('');
+  const [appointmentLocation, setAppointmentLocation] = useState('');
   const delivered = data.appointments;
   const fallbackPerformance = performanceFromAppointments(delivered);
   const performance = dashboard?.performance || fallbackPerformance;
@@ -3373,9 +3424,6 @@ function CompanyAppointmentsDashboard({
   const [editingPackage, setEditingPackage] = useState(false);
   const [addingPackage, setAddingPackage] = useState(false);
   const [creatingPackage, setCreatingPackage] = useState(false);
-  const [search, setSearch] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState("");
-  const [inspectorFilter, setInspectorFilter] = useState("");
   const [packageDraft, setPackageDraft] = useState({
     leadTarget: "",
     amountPerLead: "",
@@ -3459,80 +3507,31 @@ function CompanyAppointmentsDashboard({
   );
   const moveWeek = (weeks: number) =>
     setSelectedDay(localDate(addDays(visibleWeekStart, weeks * 7)));
-  const normalizedSearch = search.trim().toLowerCase();
-  const filtered = delivered.filter((appointment) => {
-    if (inspectorFilter === "unassigned" && appointment.representative_id) return false;
-    if (inspectorFilter && inspectorFilter !== "unassigned" && appointment.representative_id !== inspectorFilter) return false;
-    if (outcomeFilter) {
-      const current = normalizeLeadDisposition(
-        appointment.company_action || appointment.canonical_status || appointment.client_status || appointment.status,
-      ) || "pending";
-      if (current !== outcomeFilter) return false;
-    }
-    if (!normalizedSearch) return true;
-    return [
-      appointment.lead.full_name,
-      appointment.lead.phone_number,
-      appointment.lead.lead_code,
-      formatLeadAddress(appointment.lead),
-      appointment.lead.service_needed,
-    ].some((value) => value?.toLowerCase().includes(normalizedSearch));
-  });
-  const filtersActive = Boolean(normalizedSearch || outcomeFilter || inspectorFilter);
-  const selectedAppointments = filtered
-    .filter((appointment) => appointment.appointment_date === selectedDay)
+  const selectedAppointments = delivered
+    .filter((appointment) => appointment.appointment_date === selectedDay
+      && (!appointmentInspector || appointment.representative_id === appointmentInspector)
+      && (!appointmentLocation || appointment.location_label === appointmentLocation)
+      && (!appointmentSearch || `${appointment.lead.full_name} ${formatLeadAddress(appointment.lead)} ${appointment.lead.phone_number}`.toLowerCase().includes(appointmentSearch.toLowerCase())))
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const preview = selectedAppointments.find(item => item.id === previewId) || selectedAppointments[0];
   const rescheduled = performance.rescheduled;
   const pendingUpdates = performance.pending_updates;
-  const weekRange = `${visibleWeekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${visibleWeekEnd.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
-  const filterFieldClass =
-    "mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
   return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <span className="text-[11px] text-slate-500">
-          Last updated:{" "}
-          {dashboard?.last_updated_at
-            ? new Date(dashboard.last_updated_at).toLocaleString()
-            : "Live"}
-        </span>
-        <details className="group relative">
-          <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 [&::-webkit-details-marker]:hidden">
-            <Download size={15} /> Download Leads
-          </summary>
-          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => downloadAppointments(filtered, "csv")}
-              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Download CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadAppointments(filtered, "excel")}
-              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Download Excel
-            </button>
-          </div>
-        </details>
-      </div>
-      <CollapsibleSection title="Company Performance">
-      <div className="grid gap-3 xl:grid-cols-[1.55fr_1.35fr_250px]">
-        <section className="rounded-2xl border bg-white p-3 shadow-sm">
-          <h2 className="mb-3 font-black">Company Performance</h2>
+    <section className="space-y-4">
+      <div className="space-y-3">
+        <PortalSection title="Company Performance">
+
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <PerformanceCard
               tone="blue"
-              label="Delivered"
-              value={pkg?.delivered_leads ?? performance.total_leads}
+              label="Delivered · all time"
+              value={performance.total_leads}
               icon={<Users size={18} />}
               onClick={() => openLeads("all")}
             />
             <PerformanceCard
               tone="purple"
-              label="Remaining"
+              label="Remaining leads"
               value={pkg?.remaining_leads ?? "—"}
               icon={<CalendarDays size={18} />}
               onClick={() => openLeads("all")}
@@ -3596,8 +3595,8 @@ function CompanyAppointmentsDashboard({
               </strong>
             </div>
           </div>
-        </section>
-        <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+        </PortalSection>
+        <PortalSection title="Lead Package" className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
@@ -3799,8 +3798,8 @@ function CompanyAppointmentsDashboard({
               )}
             </div>
           )}
-        </section>
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        </PortalSection>
+        <PortalSection title="Client Agreement" className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="font-black">Client Agreement</h2>
           <p className="mt-8 text-xs font-bold text-slate-600">
             {pkg?.agreement_type?.replace(/_/g, " ") || "Paid Per Lead"}
@@ -3816,130 +3815,346 @@ function CompanyAppointmentsDashboard({
           >
             Agreement managed by ReadyOps
           </button>
-        </section>
+        </PortalSection>
       </div>
-      </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Search & Filters"
-        aside={filtersActive ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Active</span> : undefined}
-      >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end">
-          <label className="block text-xs text-slate-500">
-            Search
-            <span className="relative block">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 mt-0.5 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Name, phone, address, or lead ID"
-                className={`${filterFieldClass} pl-9`}
-              />
-            </span>
-          </label>
-          <label className="block text-xs text-slate-500">
-            Lead outcome
-            <select value={outcomeFilter} onChange={(event) => setOutcomeFilter(event.target.value)} className={filterFieldClass}>
-              <option value="">All outcomes</option>
-              {COMPANY_PORTAL_DISPOSITIONS.map((value) => (
-                <option key={value} value={value}>{clientLeadStatusLabel(value)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs text-slate-500">
-            Inspector
-            <select value={inspectorFilter} onChange={(event) => setInspectorFilter(event.target.value)} className={filterFieldClass}>
-              <option value="">All inspectors</option>
-              <option value="unassigned">Unassigned</option>
-              {data.representatives.map((rep) => (
-                <option key={rep.id} value={rep.id}>{rep.name}</option>
-              ))}
-            </select>
-          </label>
+      <section className="rounded-2xl border bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-auto">
+            <h2 className="font-black">Lead Data Tools</h2>
+            <p className="text-[10px] text-slate-500">
+              Company-approved and delivered appointments only
+            </p>
+          </div>
           <button
-            type="button"
-            disabled={!filtersActive}
-            onClick={() => {
-              setSearch("");
-              setOutcomeFilter("");
-              setInspectorFilter("");
-            }}
-            className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            disabled
+            title="Configure a Google Sheets connection in ReadyOps Admin"
+            className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
           >
-            Clear
+            <FileSpreadsheet
+              size={14}
+              className="mr-1 inline text-emerald-600"
+            />{" "}
+            Sync Google Sheets
           </button>
+          <button
+            disabled
+            title="Configure an Excel connection in ReadyOps Admin"
+            className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
+          >
+            <FileSpreadsheet
+              size={14}
+              className="mr-1 inline text-emerald-600"
+            />{" "}
+            Sync Excel
+          </button>
+          <button
+            onClick={() => downloadAppointments(delivered, "csv")}
+            className="rounded-lg border px-3 py-2 text-xs font-bold"
+          >
+            <Download size={14} className="mr-1 inline" /> Download CSV
+          </button>
+          <button
+            onClick={() => downloadAppointments(delivered, "excel")}
+            className="rounded-lg border px-3 py-2 text-xs font-bold"
+          >
+            <FileSpreadsheet
+              size={14}
+              className="mr-1 inline text-emerald-600"
+            />{" "}
+            Download Excel
+          </button>
+          <span className="ml-2 text-[10px] font-semibold text-slate-500">
+            Last updated:{" "}
+            {dashboard?.last_updated_at
+              ? new Date(dashboard.last_updated_at).toLocaleString()
+              : "Live"}
+          </span>
         </div>
-      </CollapsibleSection>
+      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-        <h2 className="text-lg font-bold text-slate-900">Daily Appointments · {weekRange}</h2>
-        <span className="text-xs text-slate-500">Appointment dates · Company local time</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          aria-label="Previous week"
-          title="Previous week"
-          onClick={() => moveWeek(-1)}
-          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
-        >
-          <ChevronLeft size={15} />
-        </button>
-        {days.map((day) => {
-          const date = new Date(`${day}T12:00:00`);
-          const count = filtered.filter((appointment) => appointment.appointment_date === day).length;
-          const active = day === selectedDay;
-          return (
+      <PortalSection title="Search & Filters">
+        <div className="grid gap-2 rounded-lg border bg-white p-3 sm:grid-cols-3">
+          <label className="text-xs">Search<input aria-label="Search daily appointments" value={appointmentSearch} onChange={event => setAppointmentSearch(event.target.value)} className="mt-1 w-full rounded-md border px-2 py-2" /></label>
+          <label className="text-xs">Inspector<select value={appointmentInspector} onChange={event => setAppointmentInspector(event.target.value)} className="mt-1 w-full rounded-md border px-2 py-2"><option value="">All inspectors</option>{data.representatives.map(rep => <option key={rep.id} value={rep.id}>{rep.name}</option>)}</select></label>
+          <label className="text-xs">Location<select value={appointmentLocation} onChange={event => setAppointmentLocation(event.target.value)} className="mt-1 w-full rounded-md border px-2 py-2"><option value="">All locations</option>{[...new Set(delivered.map(item => item.location_label).filter(Boolean))].map(location => <option key={location!} value={location!}>{location}</option>)}</select></label>
+        </div>
+      </PortalSection>
+      <section className="rounded-2xl border bg-white p-3 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold text-slate-600">
+              Daily Appointments
+            </p>
+            <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+              {visibleWeekStart.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}{" "}
+              –{" "}
+              {visibleWeekEnd.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={day}
               type="button"
-              title={`${count} appointment${count === 1 ? "" : "s"}`}
-              onClick={() => setSelectedDay(day)}
-              className={`relative min-h-10 rounded-lg border px-4 text-sm font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white shadow-md" : "border-slate-300 bg-white text-slate-800 hover:border-blue-300 hover:bg-blue-50"}`}
+              onClick={() => moveWeek(-1)}
+              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
             >
-              {date.toLocaleDateString(undefined, { weekday: "short" })} {date.getDate()}
-              {count > 0 && (
-                <span className={`absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] ${active ? "bg-white text-blue-700" : "bg-blue-600 text-white"}`}>
-                  {count}
-                </span>
-              )}
+              <ChevronLeft size={14} /> Previous Week
             </button>
-          );
-        })}
-        <button
-          type="button"
-          aria-label="Next week"
-          title="Next week"
-          onClick={() => moveWeek(1)}
-          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
-        >
-          <ChevronRight size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedDay(localDate(new Date()))}
-          className="min-h-10 rounded-lg px-3 text-sm font-bold text-blue-600 transition hover:bg-blue-50"
-        >
-          Today
-        </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDay(localDate(new Date()))}
+              className="rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => moveWeek(1)}
+              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
+            >
+              Next Week <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+          {days.map((day) => {
+            const date = new Date(`${day}T12:00:00`);
+            const count = delivered.filter(
+              (appointment) => appointment.appointment_date === day,
+            ).length;
+            const active = day === selectedDay;
+            return (
+              <button
+                key={day}
+                onClick={() => setSelectedDay(day)}
+                className={`rounded-xl border p-3 text-left transition ${active ? "border-blue-600 bg-blue-600 text-white shadow-md" : "bg-white hover:border-blue-300"}`}
+              >
+                <span className="text-xs font-bold">
+                  {date.toLocaleDateString(undefined, { weekday: "long" })}
+                </span>
+                <span className="float-right text-[10px]">
+                  {date.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span>
+                    {count} Lead{count === 1 ? "" : "s"}
+                  </span>
+                  <CalendarDays size={14} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-black">
+          {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
+            weekday: "long",
+          })}{" "}
+          Leads
+        </h2>
+        <span className="text-xs font-bold">
+          {selectedAppointments.length} total leads
+        </span>
       </div>
-      <div className="pt-2">
-        <CompanyDailyAppointments
-          appointments={selectedAppointments}
-          representatives={data.representatives}
-          busy={busy}
-          openLead={openLead}
-          assignRep={assignRep}
-          updateAppointmentStatus={updateAppointmentStatus}
-          updateLeadOutcome={updateLeadOutcome}
-          confirmLeadReceipt={confirmLeadReceipt}
-        />
-      </div>
+      {selectedAppointments.length === 0 ? (
+        <Empty text="No approved appointments were sent for this date." />
+      ) : (
+        <div className="grid items-start gap-3 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
+          <section className="rounded-xl border bg-white p-3"><h3 className="mb-2 font-bold">Appointments</h3><div className="space-y-2">{selectedAppointments.map(appointment => <button key={appointment.id} onClick={() => setPreviewId(appointment.id)} className={`w-full rounded-lg border p-2.5 text-left text-xs ${preview?.id === appointment.id ? 'border-blue-500 bg-blue-50' : 'bg-white'}`}>
+            <p className="text-blue-600">{formatTime(appointment.start_time)}</p><p className="mt-1 font-bold">{appointment.lead.full_name}</p><p className="mt-1">{formatLeadAddress(appointment.lead)}</p><p className="my-1 text-slate-500">{appointment.lead.service_needed || 'Appointment'} · {appointment.representative_name || 'Unassigned'}</p><StatusChip status={appointment.company_action || appointment.canonical_status || appointment.status} />
+          </button>)}</div></section>
+          {preview && <section key={preview.id} className="readyops-appointment-preview min-w-0 rounded-xl border bg-white p-3"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="font-bold">{preview.lead.full_name}</h3><StatusChip status={preview.company_action || preview.canonical_status || preview.status}/></div><ClientLeadTemplate lead={preview.lead} appointment={preview} showLabel={false} showCopySection={false}/><button onClick={() => openLead(preview)} className="my-2 rounded-md border px-3 py-1.5 text-xs font-bold">Edit Contact & Inspection Notes</button><CompanyAppointmentRow appointment={preview} representatives={data.representatives} busy={busy} openLead={openLead} assignRep={assignRep} updateAppointmentStatus={updateAppointmentStatus} updateLeadOutcome={updateLeadOutcome} confirmLeadReceipt={confirmLeadReceipt}/></section>}
+        </div>
+      )}
     </section>
   );
 }
 
-function CompanyReports({
+function CompanyAppointmentRow({
+  appointment,
+  representatives,
+  busy,
+  openLead,
+  assignRep,
+  updateAppointmentStatus,
+  updateLeadOutcome,
+  confirmLeadReceipt,
+}: {
+  appointment: Appointment;
+  representatives: Representative[];
+  busy: boolean;
+  openLead: (appointment: Appointment) => void;
+  assignRep: (appointmentId: string, repId: string) => Promise<void>;
+  updateAppointmentStatus: (
+    appointmentId: string,
+    status: string,
+  ) => Promise<void>;
+  updateLeadOutcome: (
+    appointment: Appointment,
+    clientStatus: string,
+    notes?: string,
+  ) => Promise<void>;
+  confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
+}) {
+  const canonical =
+    appointment.canonical_status ||
+    appointment.client_status ||
+    appointment.status;
+  const form = appointment.lead.form_data || {};
+  const qualification = [
+    form.roof_age && `Roof ${formatRoofAge(form.roof_age)}`,
+    form.roof_type,
+    form.insurance_name || form.insurance,
+    form.visible_damage && `Damage: ${form.visible_damage}`,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  return (
+    <article className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr_1fr_1fr]">
+        <button onClick={() => openLead(appointment)} className="text-left">
+          <p className="text-xs font-bold text-blue-600">
+            {formatDateLong(appointment.appointment_date)} •{" "}
+            {formatTime(appointment.start_time)}
+          </p>
+          <h3 className="mt-1 font-black">{appointment.lead.full_name}</h3>
+          <p className="text-xs text-slate-600">
+            {appointment.lead.phone_number} •{" "}
+            {formatLeadAddress(appointment.lead)}
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            {qualification ||
+              "Open the lead for full property and qualification details."}
+          </p>
+        </button>
+        <div className="border-l pl-4">
+          <p className="text-[10px] font-bold text-slate-500">
+            Inspector / Lead Status
+          </p>
+          <button onClick={() => openLead(appointment)} className="mt-2">
+            <StatusChip status={appointment.company_action || canonical} />
+          </button>
+          <p className="mt-2 text-[10px] text-slate-400">
+            {appointment.location_label || "Company-wide"} •{" "}
+            {appointment.lead.qualification_status.replace(/_/g, " ")}
+          </p>
+        </div>
+        <div className="hidden space-y-2 border-l pl-4 sm:block">
+          <p className="text-[10px] font-bold text-slate-500">
+            Inspector Assignment
+          </p>
+          <select
+            aria-label={`Assign inspector for ${appointment.lead.full_name}`}
+            value={appointment.representative_id || ""}
+            onChange={(event) =>
+              void assignRep(appointment.id, event.target.value)
+            }
+            disabled={busy}
+            className="w-full rounded-lg border border-blue-300 bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900"
+          >
+            <option value="">Unassigned</option>
+            {representatives
+              .filter(
+                (rep) =>
+                  rep.active || rep.id === appointment.representative_id,
+              )
+              .map((rep) => (
+                <option key={rep.id} value={rep.id}>
+                  {rep.name}
+                  {rep.active ? "" : " (Inactive)"}
+                </option>
+              ))}
+          </select>
+          <p className="text-[10px] font-bold text-slate-500">
+            Latest company action
+          </p>
+          <StatusChip status={appointment.company_action || "pending"} />
+        </div>
+        <div className="hidden border-l pl-4 sm:block">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold text-slate-500">Appointment</p>
+            <AppointmentWeatherBadge
+              date={appointment.appointment_date}
+              city={appointment.lead.city}
+              state={appointment.lead.state}
+              zip={appointment.lead.zip_code}
+            />
+          </div>
+          <select
+            value={appointment.status}
+            onChange={(event) =>
+              void updateAppointmentStatus(appointment.id, event.target.value)
+            }
+            disabled={busy}
+            className="mt-2 w-full rounded-lg border px-3 py-2 text-xs"
+          >
+            <option value="confirmed">Confirmed</option>
+            <option value="assigned">Assigned</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => openLead(appointment)}
+        className="mt-4 min-h-12 w-full rounded-xl bg-blue-600 px-4 text-sm font-black text-white sm:hidden"
+      >
+        Assign representative or update status
+      </button>
+      <div className="mt-4 hidden border-t pt-3 sm:block">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+            Quick update
+          </span>
+          <LeadReceivedIndicator
+            received={Boolean(appointment.client_received)}
+          />
+        </div>
+        <ClientStatusActions
+          currentStatus={appointment.company_action || canonical}
+          received={Boolean(appointment.client_received)}
+          disabled={busy}
+          includePending
+          compact
+          onConfirm={() => void confirmLeadReceipt(appointment)}
+          onDisposition={(status) =>
+            void updateLeadOutcome(appointment, status, "")
+          }
+        />
+      </div>
+    </article>
+  );
+}
+
+function CompanyReports({ data, dashboard, openLeads }: { data: CompanyPortalData; dashboard: CompanyDashboardSummary | null; openLeads: (filter: string) => void }) {
+  const [location,setLocation] = useState('');
+  const [inspector,setInspector] = useState('');
+  const [from,setFrom] = useState('');
+  const [through,setThrough] = useState('');
+  const appointments = data.appointments.filter(a => (!location || a.location_label === location) && (!inspector || a.representative_id === inspector) && (!from || a.appointment_date >= from) && (!through || a.appointment_date <= through));
+  const perf = performanceFromAppointments(appointments);
+  return <section className="space-y-3"><div className="flex items-center justify-between gap-2"><h2 className="font-bold">Performance & Reports</h2><button className="rounded border bg-white px-3 py-2 text-xs font-bold" onClick={() => downloadAppointments(appointments,'csv')}>Download Report</button></div>
+    <PortalSection title="Search & Filters"><div className="grid gap-2 sm:grid-cols-2"><label>Location<select className="mt-1 w-full rounded border p-2" value={location} onChange={e => setLocation(e.target.value)}><option value="">All locations</option>{Array.from(new Set(data.appointments.map(a=>a.location_label).filter(Boolean))).map(l=><option key={l} value={l!}>{l}</option>)}</select></label><label>Inspector<select className="mt-1 w-full rounded border p-2" value={inspector} onChange={e=>setInspector(e.target.value)}><option value="">All inspectors</option>{data.representatives.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label><label>From<input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="mt-1 w-full rounded border p-2"/></label><label>Through<input type="date" value={through} onChange={e=>setThrough(e.target.value)} className="mt-1 w-full rounded border p-2"/></label></div></PortalSection>
+    <p className="text-xs text-slate-500">{appointments.length} approved, delivered leads match the selected appointment filters</p>
+    <PortalSection title="Report Results"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{([['all','Delivered · all time',perf.total_leads,'blue'],['good','Inspected',perf.good_inspected,'green'],['bad','Bad / Canceled',perf.bad_leads,'red'],['no_show','No Show',perf.no_shows,'yellow'],['rescheduled','Rescheduled',perf.rescheduled,'orange'],['signed_contract','Signed Contract',perf.signed_contracts,'signed'],['pending','Pending Updates',perf.pending_updates,'cyan']] as const).map(([key,label,value,tone])=><PerformanceCard key={key} tone={tone} label={label} value={value} icon={<></>} onClick={()=>openLeads(key)}/>)}</div></PortalSection>
+    <PortalSection title="Lead outcomes · Selected filters"><CompanyReportsBase data={{...data,appointments}} dashboard={dashboard ? {...dashboard,performance:perf} : null}/></PortalSection>
+  </section>;
+}
+function CompanyReportsBase({
   data,
   dashboard,
 }: {
@@ -4076,19 +4291,19 @@ function PerformanceCard({
   onClick?: () => void;
 }) {
   const colors = {
-    blue: "border-[#7DD3FC] bg-[#BAE6FD] text-[#075985]",
-    cyan: "border-[#67E8F9] bg-[#A5F3FC] text-[#0E7490]",
-    green: "border-[#6EE7B7] bg-[#A7F3D0] text-[#047857]",
-    signed: "border-[#34D399] bg-[#6EE7B7] text-[#00512E]",
-    purple: "border-[#C4B5FD] bg-[#DDD6FE] text-[#6D28D9]",
-    yellow: "border-[#FBBF24] bg-[#FDE68A] text-[#92400E]",
-    orange: "border-[#FDBA74] bg-[#FED7AA] text-[#C2410C]",
-    red: "border-[#FCA5A5] bg-[#FECACA] text-[#B91C1C]",
+    blue: "text-sky-700",
+    cyan: "text-cyan-700",
+    green: "text-emerald-700",
+    signed: "text-green-800",
+    purple: "text-violet-700",
+    yellow: "text-amber-700",
+    orange: "text-orange-700",
+    red: "text-red-700",
   };
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <span className="kpi-title text-slate-600">{label}</span>
+        <span className={`kpi-title font-bold ${colors[tone]}`}>{label}</span>
         {icon}
       </div>
       <strong className="kpi-number mt-2 block text-slate-950">{value}</strong>
@@ -4099,7 +4314,7 @@ function PerformanceCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${colors[tone]}`}
+      className={`rounded-xl border bg-white p-3 text-left font-bold transition hover:shadow-md border-slate-200`}
       title={`Open ${label} leads`}
     >
       {content}
@@ -4252,7 +4467,7 @@ function downloadAppointments(
       item.start_time,
       item.lead.full_name,
       item.lead.phone_number,
-      item.lead.address,
+      formatLeadAddress(item.lead),
       item.location_label || "Company-wide",
       leadStatusExportValue(
         item.company_action ||
@@ -4496,7 +4711,7 @@ function LeadModal({
   confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
   onClose: () => void;
 }) {
-  const lead = appointment.lead;
+  const [lead, setLead] = useState(appointment.lead);
   const [notes, setNotes] = useState(appointment.inspector_notes || "");
   const currentStatus =
     appointment.company_action ||
@@ -4602,7 +4817,7 @@ function LeadModal({
             </div>
 
             <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">
-              Notes (optional)
+              Inspector Notes of the Inspection
               <textarea
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
@@ -4611,6 +4826,7 @@ function LeadModal({
               />
             </label>
 
+            <button disabled={busy} onClick={() => void updateLeadOutcome(appointment,normalizeLeadDisposition(currentStatus) || 'pending',notes)} className="mt-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white">Save Inspection Notes</button>
             <details className="mt-3 rounded-xl border border-blue-100 bg-white">
               <summary className="cursor-pointer px-3 py-3 text-xs font-black text-slate-700">
                 Appointment options
@@ -4638,6 +4854,7 @@ function LeadModal({
           </section>
 
           <div className="mt-5">
+            <LeadContactEditor appointmentId={appointment.id} token={token} companyId={companyId} phone={lead.phone_number} email={lead.email} onSaved={(phone,email) => setLead({...lead,phone_number:phone,email})} />
             <ClientLeadTemplate lead={lead} appointment={appointment} />
           </div>
           <div className="mt-3">

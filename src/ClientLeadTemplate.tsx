@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
-import { Check, ChevronDown, Copy, ExternalLink, Save } from 'lucide-react';
+import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
-import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
+import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, inferServiceType, type ServiceTemplate } from './serviceTemplates';
 
 type LeadLike = {
   full_name?: string | null;
@@ -198,25 +198,12 @@ function Row({
   );
 }
 
-function Section({ title, children, columns = false, collapsible = false }: { title: string; children: React.ReactNode; columns?: boolean; collapsible?: boolean }) {
-  if (collapsible) {
-    return (
-      <details className="group border-b border-slate-200">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm font-bold text-slate-900 [&::-webkit-details-marker]:hidden">
-          {title}
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition group-open:rotate-180">
-            <ChevronDown size={14} />
-          </span>
-        </summary>
-        <div className={`pb-3 ${columns ? 'grid gap-x-4 sm:grid-cols-2' : ''}`}>{children}</div>
-      </details>
-    );
-  }
+function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
   return (
-    <section>
-      <h3 className="mb-1 text-sm font-black text-blue-950 underline underline-offset-2">{title}</h3>
+    <details className="readyops-template-section">
+      <summary className="flex cursor-pointer items-center justify-between border-b py-1 text-sm font-bold text-blue-950"><h3>{title}</h3><span className="readyops-collapse-arrow" aria-hidden="true" /></summary>
       <div className={columns ? 'grid gap-x-4 sm:grid-cols-2' : ''}>{children}</div>
-    </section>
+    </details>
   );
 }
 
@@ -225,7 +212,6 @@ export function ClientLeadTemplate({
   appointment,
   showLabel = true,
   showCopySection = true,
-  collapsibleSections = false,
   editValues,
   onChange,
   onSave,
@@ -235,7 +221,6 @@ export function ClientLeadTemplate({
   appointment: AppointmentLike;
   showLabel?: boolean;
   showCopySection?: boolean;
-  collapsibleSections?: boolean;
   editValues?: Record<string, unknown>;
   onChange?: (key: string, value: string) => void;
   onSave?: () => void | Promise<void>;
@@ -268,7 +253,9 @@ export function ClientLeadTemplate({
     },
   } as LeadLike;
   const rawSnapshot = copyLead.form_data?._service_template as ServiceTemplate | undefined;
-  const serviceSnapshot = rawSnapshot ? prepareServiceTemplate(rawSnapshot) : undefined;
+  const inferred = inferServiceType(copyLead.form_data?.service_type || serviceNeeded);
+  const serviceSnapshot = rawSnapshot ? prepareServiceTemplate(rawSnapshot) : inferred === 'permanent_exterior_lighting' ? prepareServiceTemplate(DEFAULT_SERVICE_TEMPLATES.find(t => t.id === inferred)!) : undefined;
+  const isLighting = serviceSnapshot?.id === 'permanent_exterior_lighting';
   const isRoofing = Boolean(serviceSnapshot && /^roofing$/i.test(serviceSnapshot.name));
   const roofingFields = new Map(serviceSnapshot?.form_schema.flatMap(section => section.fields).map(field => [field.key, field]) || []);
   const matchedRoofingSchema = roofingSummarySchema().map(section => ({ ...section, fields: section.fields.map(field => ({ ...field, ...roofingFields.get(field.key), label: field.label })) }));
@@ -351,20 +338,20 @@ export function ClientLeadTemplate({
           {editable && <label className="block text-sm font-bold">Type of Service<select aria-label="Type of Service" disabled={saving} value={serviceSnapshot?.id || String(copyLead.form_data?.service_type || '')} onChange={event => onChange?.('service_type', event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 font-medium"><option value="">Select service…</option>{DEFAULT_SERVICE_TEMPLATES.filter(template => template.active).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>}
           {serviceSnapshot?.form_schema ? <div className="appointment-qualifiers space-y-3">
             <Row label="Type of Service:" value={serviceSnapshot.name} />
-            {!/^roofing$/i.test(serviceSnapshot.name) && <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />}
+            {!isRoofing && !isLighting && <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />}
             {(isRoofing ? matchedRoofingSchema : serviceSnapshot.form_schema).map(section => {
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
               const roofingSummary = isRoofing;
               const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
-              return fields.length ? <Section collapsible={collapsibleSections} key={section.id} title={section.title} columns>{fields.map(f => {
+              return fields.length || (isLighting && section.id === 'additional') ? <Section key={section.id} title={section.title} columns>{isLighting && section.id === 'customer' && <Row label="Appointment Date & Time:" value={String(data.appointment_display)} />}{isLighting && section.id === 'additional' && <Row label="Notes:" field="summary_notes" value={answer(data, 'summary_notes') || answer(data, 'notes') || (answer(data, 'full_name') ? `Spoke with ${answer(data, 'full_name')}.` : '')} multiline onChange={onChange} />}{fields.map(f => {
                 const fieldKey = f.key === 'summary_display' ? 'summary_notes' : f.key;
                 const value = !editable && f.key === 'address' ? formatAddress(copyLead) : answer(data, f.key);
                 const rawValue = f.key === 'summary_display' ? String(data.summary_notes ?? data.summary_display ?? '') : String(data[f.key] ?? '');
                 return <div key={f.key}><Row label={`${f.label}:`} field={f.key === 'appointment_display' ? undefined : fieldKey} value={value} editValue={rawValue} options={f.options} multiline={f.type === 'textarea' || f.key === 'summary_display'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>;
               })}</Section> : null;
             })}
-            {!isRoofing && <Section collapsible={collapsibleSections} title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
-          </div> : <><Section collapsible={collapsibleSections} title="Customer Information">
+            {!isRoofing && !isLighting && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
+          </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
@@ -374,7 +361,7 @@ export function ClientLeadTemplate({
             <Row label="Services Needed:" field="service_needed" value={serviceNeeded} editValue={editValue('service_needed', serviceNeeded)} onChange={onChange} />
           </Section>
 
-          <Section collapsible={collapsibleSections} title="Property Details" columns>
+          <Section title="Property Details" columns>
             <Row label="Roof Age:" field="roof_age" value={formatRoofAge(formValue(lead, 'roof_age'))} editValue={normalizeRoofAgeInput(editValue('roof_age', formValue(lead, 'roof_age')))} onChange={onChange} />
             <Row label="Home Type:" field="home_type" value={formValue(lead, 'home_type')} editValue={editValue('home_type', formValue(lead, 'home_type'))} onChange={onChange} />
             <Row label="Roof Type:" field="roof_type" value={formValue(lead, 'roof_type')} editValue={editValue('roof_type', formValue(lead, 'roof_type'))} onChange={onChange} />
@@ -387,7 +374,7 @@ export function ClientLeadTemplate({
             <Row label="Web Link:" field="web_url" inputType="url" value={webLink} editValue={editValue('web_url', webLink)} href={webLink || undefined} onChange={onChange} />
           </Section>
 
-          <Section collapsible={collapsibleSections} title="Additional Information" columns>
+          <Section title="Additional Information" columns>
             <div className="col-span-full space-y-2">
               <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
               <div className="border-t border-blue-100 pt-1">

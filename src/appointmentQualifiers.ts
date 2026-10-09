@@ -1,4 +1,5 @@
 import type { PortalFormField, PortalFormSection } from './DynamicLeadForm';
+import { preparePermanentLightingSchema } from './permanentLighting';
 export const LANGUAGE_OPTIONS = ['English', 'Spanish', 'Bilingual', 'Other'];
 
 export const HOME_TYPES = ['Single Family Home', 'Town Home', 'Multifamily Home', 'Commercial', 'Mobile Home', 'Other'];
@@ -9,7 +10,7 @@ choices.language = LANGUAGE_OPTIONS;
 export function qualifier(key: string, label: string): PortalFormField { return { key, label, type: choices[key] ? 'select' : 'text', options: choices[key], allowOther: ['home_type', 'roof_type', 'insurance_name'].includes(key) }; }
 export function answer(values: Record<string, unknown>, key: string): string {
   const value = values[key];
-  const raw = value === 'Other' && ['home_type', 'roof_type', 'insurance_name'].includes(key) ? values[key + '_other'] : value;
+  const raw = value === 'Other' && ['home_type', 'roof_type', 'insurance_name', 'decision_makers'].includes(key) ? values[key + '_other'] : value;
   const text = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '').trim();
   return /^\(profile\.[^)]+\)/i.test(text) ? '' : text;
 }
@@ -45,6 +46,7 @@ export function automaticNotes(service: string, values: Record<string, unknown>)
   if (Object.prototype.hasOwnProperty.call(values, 'summary_notes') && values.summary_notes != null) return String(values.summary_notes);
   const get = (key: string) => answer(values, key); const sentences: string[] = [];
   const name = get('full_name'); const authority = get('homeowner_authority');
+  if (/lighting/i.test(service)) return [name ? `Spoke with ${name}.` : '', get('notes')].filter(Boolean).join(' ');
   const role = authority === 'Homeowner' ? ', the homeowner,' : authority === 'Authorized decision-maker' ? ', an authorized decision-maker,' : authority === 'Yes' ? ', the homeowner or authorized decision-maker,' : '';
   const need = get('service_needed');
   sentences.push(name ? `Spoke with ${name}${role} about ${service.toLowerCase()}${need ? ` (${need.toLowerCase()})` : ''}.` : `Service requested: ${service}${need ? ` (${need})` : ''}.`);
@@ -71,6 +73,7 @@ export function automaticNotes(service: string, values: Record<string, unknown>)
   return sentences.join(' ');
 }
 export function updateQualifierSchema(schema: PortalFormSection[], serviceId: string): PortalFormSection[] {
+  if (serviceId === 'permanent_exterior_lighting') return preparePermanentLightingSchema(schema);
   const next = schema.map(section => ({ ...section, fields: section.fields.filter(f => f.key !== 'storm_date').map(f => choices[f.key] ? { ...f, ...qualifier(f.key, f.label) } : f) }));
   if (serviceId === 'roofing') {
     const existingKeys = new Set(next.flatMap(section => section.fields.map(field => field.key)));

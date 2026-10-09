@@ -351,7 +351,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       setServiceTemplates(templates);
       setFormValues(current => {
         const initial = templates.find(s => s.id === current.service_type) || templates.find(s => s.id === inferServiceType(current.service_needed)) || templates[0];
-        return initial ? { ...current, service_type: initial.id, service_needed: current.service_needed || initial.name, _universal_template: true } : current;
+        return initial ? { ...current, service_type: initial.id, service_needed: initial.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : current.service_needed || initial.name, _universal_template: true } : current;
       });
     });
     return () => { cancelled = true; };

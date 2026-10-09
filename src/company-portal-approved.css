@@ -1,0 +1,35 @@
+.readyops-approved-shell {display:grid;grid-template-columns:170px minmax(0,1fr);overflow:clip;font-family:Cambria,Georgia,serif!important}
+.readyops-approved-shell.sidebar-collapsed {grid-template-columns:58px minmax(0,1fr)}
+.readyops-company-sidebar {position:sticky;top:0;align-self:start;min-height:100dvh;background:var(--readyops-surface,#fff);border-right:1px solid var(--readyops-border,#dbe5f0);padding:16px 10px;z-index:40}
+.readyops-company-sidebar>button:not(.readyops-sidebar-toggle) {display:flex;align-items:center;gap:10px;width:100%;padding:10px 8px;margin:3px 0;border-radius:7px;text-align:left;font-size:13px;font-weight:700}
+.readyops-company-sidebar>button[aria-current=page] {background:#eaf2ff;color:#0059eb}
+.readyops-company-sidebar .readyops-sidebar-toggle {position:absolute;right:-12px;top:88px;border:1px solid #dbe5f0;border-radius:50%;width:24px;height:24px;background:var(--readyops-surface,#fff);display:flex;align-items:center;justify-content:center}
+.sidebar-collapsed .readyops-company-sidebar>button>span {display:none}
+.readyops-approved-shell :is(h1,h2,h3,h4,summary) {font-family:Merriweather,Georgia,serif;color:#092b50;font-weight:700!important}
+.readyops-portal-section>summary,.readyops-template-section>summary {list-style:none;font-size:13px;font-weight:700}
+.readyops-portal-section>summary::-webkit-details-marker,.readyops-template-section>summary::-webkit-details-marker {display:none}
+.readyops-collapse-arrow {display:flex;width:20px;height:20px;flex-shrink:0;align-items:center;justify-content:center;border:1px solid #dbe5f0;border-radius:50%;background:var(--readyops-surface,#fff)}
+.readyops-collapse-arrow::after {content:'';width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-1px) rotate(45deg)}
+details[open]>.readyops-collapse-arrow,details[open]>summary>.readyops-collapse-arrow {transform:rotate(180deg)}
+.readyops-client-lead-template {font-family:Cambria,Georgia,serif;font-size:13px}
+.readyops-client-lead-template .space-y-3>:not([hidden])~:not([hidden]) {margin-top:6px}
+.readyops-client-lead-template label {font-size:13px;line-height:1.35}
+.readyops-client-lead-template label>strong {color:#092b50;font-weight:700}
+.readyops-client-lead-template label>span,.readyops-client-lead-template input,.readyops-client-lead-template select {font-weight:400}
+.readyops-delivered-sheet .readyops-hscroll-body {max-height:430px;overflow:auto}
+.readyops-appointment-preview article {padding:8px;box-shadow:none;border-radius:8px}
+.readyops-appointment-preview article>div:first-child {grid-template-columns:1fr 1fr;gap:8px}
+.readyops-appointment-preview article>div:first-child>button,.readyops-appointment-preview article>div:first-child>div:nth-child(2) {display:none}
+.readyops-appointment-preview article>div:first-child>div {border:0;padding-left:0}
+.readyops-representative-portal {font-family:Cambria,Georgia,serif}
+.readyops-representative-portal :is(h1,h2,h3,summary) {font-family:Merriweather,Georgia,serif;font-weight:700;color:#092b50}
+.readyops-approved-shell .readyops-company-header img {display:none}
+.readyops-approved-shell .readyops-company-header {min-height:72px}
+.readyops-approved-shell .kpi-number {font-size:23px;font-weight:700}
+.readyops-approved-shell main {position:relative;isolation:isolate;min-height:calc(100dvh - 72px)}
+body:has(.readyops-approved-shell) .readyops-theme-floating {display:none}
+.readyops-approved-shell main::before {content:'';position:absolute;inset:0;pointer-events:none;z-index:-1;filter:grayscale(1);opacity:.025;background-image:url('/brand/masters-ready-background.jpg'),url('/brand/big-ready-background.jpg');background-position:center,center;background-repeat:no-repeat;background-size:cover,cover;background-blend-mode:screen}
+.readyops-approved-shell main::after {display:none}
+html[data-theme=dark] .readyops-approved-shell :is(h1,h2,h3,h4,summary),html[data-theme=dark] .readyops-client-lead-template label>strong {color:#c5ddff}
+html[data-theme=dark] .readyops-company-sidebar>button[aria-current=page] {background:#243e60;color:#a0c2ff}
+@media(max-width:639px){.readyops-approved-shell,.readyops-approved-shell.sidebar-collapsed{grid-template-columns:1fr}.readyops-company-sidebar{display:none}}
