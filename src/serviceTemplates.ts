@@ -1,5 +1,5 @@
 import type { PortalFormSection } from "./DynamicLeadForm";
-import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, roofingSummarySchema, updateQualifierSchema } from './appointmentQualifiers';
+import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema, updateQualifierSchema } from './appointmentQualifiers';
 
 export type ServiceTemplate = {
   id: string;
@@ -36,7 +36,7 @@ const customer: PortalFormSection = {
       key: "language",
       label: "Language",
       type: "select",
-      options: ["English", "Spanish", "Other"],
+      options: LANGUAGE_OPTIONS,
     },
     {
       key: "service_needed",

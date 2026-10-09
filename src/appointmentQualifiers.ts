@@ -1,9 +1,11 @@
 import type { PortalFormField, PortalFormSection } from './DynamicLeadForm';
+export const LANGUAGE_OPTIONS = ['English', 'Spanish', 'Bilingual', 'Other'];
 
 export const HOME_TYPES = ['Single Family Home', 'Town Home', 'Multifamily Home', 'Commercial', 'Mobile Home', 'Other'];
 export const ROOF_TYPES = ['Shingle', 'Metal', 'Tile', 'Flat', 'Wood', 'Other'];
 export const INSURERS = ['State Farm', 'Allstate', 'Farmers Insurance', 'USAA', 'Liberty Mutual', 'Nationwide', 'Progressive', 'Travelers', 'American Family Insurance', 'GEICO', 'Auto-Owners Insurance', 'Erie Insurance', 'The Hartford', 'Amica', 'Safeco', 'Mercury Insurance', 'Homesite', 'Hippo', 'Lemonade', 'Nationwide Private Client', 'Other', 'Unknown / Not Sure'];
 const choices: Record<string, string[]> = { home_type: HOME_TYPES, roof_type: ROOF_TYPES, insurance_name: INSURERS, stories: ['1', '1.5', '2', '2.5', '3'], homeowner_authority: ['Homeowner', 'Authorized decision-maker', 'Neither', 'Unsure'], visitor_authority: ['Homeowner', 'Authorized decision-maker', 'Neither', 'Unsure'], visible_damage: ['Yes', 'Not Sure', 'Minimal', 'None reported'], claim_filed: ['Yes', 'No', 'Unsure'], claim_status: ['Awaiting inspection', 'Awaiting a decision', 'Approved', 'Partially approved', 'Denied', 'Unsure'], approved_work: ['Repair', 'Replacement', 'Other', 'Unsure'], insurance: ['Yes', 'No', 'Unsure'], contract: ['Yes', 'No', 'Unsure'], additional_properties: ['Yes', 'No'], project_category: ['Windows', 'Doors', 'Siding', 'Gutters', 'Kitchen / Bathroom', 'Flooring', 'Exterior / Other Services'] };
+choices.language = LANGUAGE_OPTIONS;
 export function qualifier(key: string, label: string): PortalFormField { return { key, label, type: choices[key] ? 'select' : 'text', options: choices[key], allowOther: ['home_type', 'roof_type', 'insurance_name'].includes(key) }; }
 export function answer(values: Record<string, unknown>, key: string): string {
   const value = values[key];

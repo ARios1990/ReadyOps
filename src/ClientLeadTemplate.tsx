@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { answer, appointmentLabel, automaticNotes, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
+import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
 import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
@@ -355,7 +355,7 @@ export function ClientLeadTemplate({
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
             <Row label="Address:" field="address" value={formatAddress(lead)} editValue={editValue('address', formatAddress(lead))} onChange={onChange} />
             <Row label="Email:" field="email" inputType="email" value={leadValue(lead, 'email', 'email').toLowerCase()} editValue={editValue('email', leadValue(lead, 'email', 'email').toLowerCase())} onChange={onChange} />
-            <Row label="Language:" field="language" value={leadValue(lead, 'language', 'language')} editValue={editValue('language', leadValue(lead, 'language', 'language'))} onChange={onChange} />
+            <Row label="Language:" field="language" value={leadValue(lead, 'language', 'language')} editValue={editValue('language', leadValue(lead, 'language', 'language'))} options={LANGUAGE_OPTIONS} onChange={onChange} />
             <Row label="Services Needed:" field="service_needed" value={serviceNeeded} editValue={editValue('service_needed', serviceNeeded)} onChange={onChange} />
           </Section>
 
