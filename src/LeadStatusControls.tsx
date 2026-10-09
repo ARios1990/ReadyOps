@@ -75,10 +75,10 @@ export function ClientStatusActions({
     ? COMPANY_PORTAL_DISPOSITIONS
     : CLIENT_DISPOSITIONS;
   const sizeClasses = compact
-    ? "min-h-9 px-2.5 py-1.5 text-[11px]"
+    ? "min-h-8 px-3 py-1 text-[11px]"
     : "min-h-11 px-3 py-2 text-xs";
   return (
-    <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${className}`}>
+    <div className={`${compact ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-2 sm:grid-cols-3"} ${className}`}>
       <button
         type="button"
         disabled={disabled || received}
