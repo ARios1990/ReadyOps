@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfigurableLeadTable } from './ConfigurableLeadTable';
 import {
   AlertTriangle,
   BarChart3,
@@ -38,7 +39,6 @@ import {
 import { supabase } from "./supabase";
 import { isLeadOutcome } from "./leadOutcome";
 import { PortalFormField, PortalFormSection } from "./DynamicLeadForm";
-import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import {
   addDays,
   calendarWeekStart,
@@ -3159,41 +3159,15 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
               })}
             </div>
 
-            <HorizontalScrollFrame
-              className="readyops-sticky-table hidden md:block"
-              ariaLabel="Company leads horizontal scroll"
-            >
-              <table className="readyops-company-leads-table w-full min-w-[1380px] border-separate border-spacing-0 text-xs">
-                <thead className="table-header sticky top-0 z-10 bg-[#071525] text-left uppercase tracking-wide text-white">
-                  <tr>
-                    {[
-                      "Inspector Assignment",
-                      "Homeowner",
-                      "Appointment Date & Time",
-                      "Full Address",
-                      "Service",
-                      "Roof Age",
-                      "Roof Type",
-                      "Home Type",
-                      "Stories",
-                      "Insurance",
-                      "Carrier",
-                      "Damage / Hail",
-                      "Action",
-                      "Lead Status",
-                    ].map((label, index, labels) => (
-                      <th
-                        key={label}
-                        className={`border-b border-[#17314d] px-2 py-3 ${index === 0 ? "sticky left-0 z-20 min-w-[126px] bg-[#071525] shadow-[4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""} ${index === labels.length - 1 ? "sticky right-0 z-20 bg-[#071525] shadow-[-4px_0_8px_-6px_rgba(15,23,42,0.9)]" : ""}`}
-                      >
-                        <span className="flex items-center justify-between gap-1">
-                          {label}
-                          <span className="text-[9px] text-blue-100/80">↕</span>
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+            <ConfigurableLeadTable key={companyId} storageKey={`readyops-company-lead-columns-${companyId}`} columns={[
+ {key:'inspector',label:'Inspector Assignment',width:150}, {key:'homeowner',label:'Homeowner',width:175},
+ {key:'appointment',label:'Appointment Date & Time',width:150}, {key:'address',label:'Full Address',width:240},
+ {key:'service',label:'Service',width:120}, {key:'roofAge',label:'Roof Age',width:85},
+ {key:'roofType',label:'Roof Type',width:90}, {key:'homeType',label:'Home Type',width:110},
+ {key:'stories',label:'Stories',width:75}, {key:'insurance',label:'Insurance',width:85},
+ {key:'carrier',label:'Carrier',width:110}, {key:'damage',label:'Damage / Hail',width:115},
+ {key:'action',label:'Action',width:110}, {key:'status',label:'Lead Status',width:150},
+]}>
                 <tbody>
                   {data.rows.map((appointment) => {
                     const form = appointment.lead.form_data || {};
@@ -3303,8 +3277,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                     );
                   })}
                 </tbody>
-              </table>
-            </HorizontalScrollFrame>
+              </ConfigurableLeadTable>
           </>
         )}
         <div className="flex justify-between gap-2 border-t p-3 sm:justify-end">
