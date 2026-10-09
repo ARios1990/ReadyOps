@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
-import { Check, Copy, ExternalLink, Save } from 'lucide-react';
+import { Check, ChevronDown, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
 import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, type ServiceTemplate } from './serviceTemplates';
 
@@ -198,7 +198,20 @@ function Row({
   );
 }
 
-function Section({ title, children, columns = false }: { title: string; children: React.ReactNode; columns?: boolean }) {
+function Section({ title, children, columns = false, collapsible = false }: { title: string; children: React.ReactNode; columns?: boolean; collapsible?: boolean }) {
+  if (collapsible) {
+    return (
+      <details className="group border-b border-slate-200">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm font-bold text-slate-900 [&::-webkit-details-marker]:hidden">
+          {title}
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition group-open:rotate-180">
+            <ChevronDown size={14} />
+          </span>
+        </summary>
+        <div className={`pb-3 ${columns ? 'grid gap-x-4 sm:grid-cols-2' : ''}`}>{children}</div>
+      </details>
+    );
+  }
   return (
     <section>
       <h3 className="mb-1 text-sm font-black text-blue-950 underline underline-offset-2">{title}</h3>
@@ -212,6 +225,7 @@ export function ClientLeadTemplate({
   appointment,
   showLabel = true,
   showCopySection = true,
+  collapsibleSections = false,
   editValues,
   onChange,
   onSave,
@@ -221,6 +235,7 @@ export function ClientLeadTemplate({
   appointment: AppointmentLike;
   showLabel?: boolean;
   showCopySection?: boolean;
+  collapsibleSections?: boolean;
   editValues?: Record<string, unknown>;
   onChange?: (key: string, value: string) => void;
   onSave?: () => void | Promise<void>;
@@ -341,15 +356,15 @@ export function ClientLeadTemplate({
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
               const roofingSummary = isRoofing;
               const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
-              return fields.length ? <Section key={section.id} title={section.title} columns>{fields.map(f => {
+              return fields.length ? <Section collapsible={collapsibleSections} key={section.id} title={section.title} columns>{fields.map(f => {
                 const fieldKey = f.key === 'summary_display' ? 'summary_notes' : f.key;
                 const value = !editable && f.key === 'address' ? formatAddress(copyLead) : answer(data, f.key);
                 const rawValue = f.key === 'summary_display' ? String(data.summary_notes ?? data.summary_display ?? '') : String(data[f.key] ?? '');
                 return <div key={f.key}><Row label={`${f.label}:`} field={f.key === 'appointment_display' ? undefined : fieldKey} value={value} editValue={rawValue} options={f.options} multiline={f.type === 'textarea' || f.key === 'summary_display'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>;
               })}</Section> : null;
             })}
-            {!isRoofing && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
-          </div> : <><Section title="Customer Information">
+            {!isRoofing && <Section collapsible={collapsibleSections} title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
+          </div> : <><Section collapsible={collapsibleSections} title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
@@ -359,7 +374,7 @@ export function ClientLeadTemplate({
             <Row label="Services Needed:" field="service_needed" value={serviceNeeded} editValue={editValue('service_needed', serviceNeeded)} onChange={onChange} />
           </Section>
 
-          <Section title="Property Details" columns>
+          <Section collapsible={collapsibleSections} title="Property Details" columns>
             <Row label="Roof Age:" field="roof_age" value={formatRoofAge(formValue(lead, 'roof_age'))} editValue={normalizeRoofAgeInput(editValue('roof_age', formValue(lead, 'roof_age')))} onChange={onChange} />
             <Row label="Home Type:" field="home_type" value={formValue(lead, 'home_type')} editValue={editValue('home_type', formValue(lead, 'home_type'))} onChange={onChange} />
             <Row label="Roof Type:" field="roof_type" value={formValue(lead, 'roof_type')} editValue={editValue('roof_type', formValue(lead, 'roof_type'))} onChange={onChange} />
@@ -372,7 +387,7 @@ export function ClientLeadTemplate({
             <Row label="Web Link:" field="web_url" inputType="url" value={webLink} editValue={editValue('web_url', webLink)} href={webLink || undefined} onChange={onChange} />
           </Section>
 
-          <Section title="Additional Information" columns>
+          <Section collapsible={collapsibleSections} title="Additional Information" columns>
             <div className="col-span-full space-y-2">
               <Row label="Last Checked On:" field="last_checked_on" value={normalizeLastChecked(formValue(lead, 'last_checked_on', 'last_inspection_date'))} editValue={editValue('last_checked_on', formValue(lead, 'last_checked_on', 'last_inspection_date'))} onChange={onChange} />
               <div className="border-t border-blue-100 pt-1">

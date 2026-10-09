@@ -15,7 +15,7 @@ const CLIENT_DISPOSITIONS: Exclude<LeadDisposition, "pending">[] = [
   "rescheduled",
 ];
 
-const COMPANY_PORTAL_DISPOSITIONS: LeadDisposition[] = [
+export const COMPANY_PORTAL_DISPOSITIONS: LeadDisposition[] = [
   "pending",
   "good",
   "no_show",

@@ -57,8 +57,10 @@ import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
 import {
   ClientStatusActions,
+  COMPANY_PORTAL_DISPOSITIONS,
   LeadReceivedIndicator,
 } from "./LeadStatusControls";
+import { CollapsibleSection, CompanyDailyAppointments } from "./CompanyDailyAppointments";
 import {
   clientLeadStatusLabel,
   leadStatusClasses,
@@ -105,7 +107,7 @@ interface ScheduleException {
   end_time: string | null;
   note: string | null;
 }
-interface Representative {
+export interface Representative {
   id: string;
   name: string;
   phone: string | null;
@@ -132,7 +134,7 @@ interface LeadRecord {
   recording_url: string | null;
   recording_shared?: boolean;
 }
-interface Appointment {
+export interface Appointment {
   id: string;
   appointment_date: string;
   start_time: string;
@@ -3371,6 +3373,9 @@ function CompanyAppointmentsDashboard({
   const [editingPackage, setEditingPackage] = useState(false);
   const [addingPackage, setAddingPackage] = useState(false);
   const [creatingPackage, setCreatingPackage] = useState(false);
+  const [search, setSearch] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState("");
+  const [inspectorFilter, setInspectorFilter] = useState("");
   const [packageDraft, setPackageDraft] = useState({
     leadTarget: "",
     amountPerLead: "",
@@ -3454,13 +3459,66 @@ function CompanyAppointmentsDashboard({
   );
   const moveWeek = (weeks: number) =>
     setSelectedDay(localDate(addDays(visibleWeekStart, weeks * 7)));
-  const selectedAppointments = delivered
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = delivered.filter((appointment) => {
+    if (inspectorFilter === "unassigned" && appointment.representative_id) return false;
+    if (inspectorFilter && inspectorFilter !== "unassigned" && appointment.representative_id !== inspectorFilter) return false;
+    if (outcomeFilter) {
+      const current = normalizeLeadDisposition(
+        appointment.company_action || appointment.canonical_status || appointment.client_status || appointment.status,
+      ) || "pending";
+      if (current !== outcomeFilter) return false;
+    }
+    if (!normalizedSearch) return true;
+    return [
+      appointment.lead.full_name,
+      appointment.lead.phone_number,
+      appointment.lead.lead_code,
+      formatLeadAddress(appointment.lead),
+      appointment.lead.service_needed,
+    ].some((value) => value?.toLowerCase().includes(normalizedSearch));
+  });
+  const filtersActive = Boolean(normalizedSearch || outcomeFilter || inspectorFilter);
+  const selectedAppointments = filtered
     .filter((appointment) => appointment.appointment_date === selectedDay)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
   const rescheduled = performance.rescheduled;
   const pendingUpdates = performance.pending_updates;
+  const weekRange = `${visibleWeekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${visibleWeekEnd.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  const filterFieldClass =
+    "mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
   return (
-    <section className="space-y-4">
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <span className="text-[11px] text-slate-500">
+          Last updated:{" "}
+          {dashboard?.last_updated_at
+            ? new Date(dashboard.last_updated_at).toLocaleString()
+            : "Live"}
+        </span>
+        <details className="group relative">
+          <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 [&::-webkit-details-marker]:hidden">
+            <Download size={15} /> Download Leads
+          </summary>
+          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => downloadAppointments(filtered, "csv")}
+              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Download CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadAppointments(filtered, "excel")}
+              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Download Excel
+            </button>
+          </div>
+        </details>
+      </div>
+      <CollapsibleSection title="Company Performance">
       <div className="grid gap-3 xl:grid-cols-[1.55fr_1.35fr_250px]">
         <section className="rounded-2xl border bg-white p-3 shadow-sm">
           <h2 className="mb-3 font-black">Company Performance</h2>
@@ -3760,326 +3818,124 @@ function CompanyAppointmentsDashboard({
           </button>
         </section>
       </div>
+      </CollapsibleSection>
 
-      <section className="rounded-2xl border bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-auto">
-            <h2 className="font-black">Lead Data Tools</h2>
-            <p className="text-[10px] text-slate-500">
-              Company-approved and delivered appointments only
-            </p>
-          </div>
-          <button
-            disabled
-            title="Configure a Google Sheets connection in ReadyOps Admin"
-            className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
-          >
-            <FileSpreadsheet
-              size={14}
-              className="mr-1 inline text-emerald-600"
-            />{" "}
-            Sync Google Sheets
-          </button>
-          <button
-            disabled
-            title="Configure an Excel connection in ReadyOps Admin"
-            className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
-          >
-            <FileSpreadsheet
-              size={14}
-              className="mr-1 inline text-emerald-600"
-            />{" "}
-            Sync Excel
-          </button>
-          <button
-            onClick={() => downloadAppointments(delivered, "csv")}
-            className="rounded-lg border px-3 py-2 text-xs font-bold"
-          >
-            <Download size={14} className="mr-1 inline" /> Download CSV
-          </button>
-          <button
-            onClick={() => downloadAppointments(delivered, "excel")}
-            className="rounded-lg border px-3 py-2 text-xs font-bold"
-          >
-            <FileSpreadsheet
-              size={14}
-              className="mr-1 inline text-emerald-600"
-            />{" "}
-            Download Excel
-          </button>
-          <span className="ml-2 text-[10px] font-semibold text-slate-500">
-            Last updated:{" "}
-            {dashboard?.last_updated_at
-              ? new Date(dashboard.last_updated_at).toLocaleString()
-              : "Live"}
-          </span>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border bg-white p-3 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-bold text-slate-600">
-              Select a day to view its leads
-            </p>
-            <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-              {visibleWeekStart.toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}{" "}
-              –{" "}
-              {visibleWeekEnd.toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => moveWeek(-1)}
-              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
-            >
-              <ChevronLeft size={14} /> Previous Week
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDay(localDate(new Date()))}
-              className="rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => moveWeek(1)}
-              className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold hover:border-blue-300 hover:bg-blue-50"
-            >
-              Next Week <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
-          {days.map((day) => {
-            const date = new Date(`${day}T12:00:00`);
-            const count = delivered.filter(
-              (appointment) => appointment.appointment_date === day,
-            ).length;
-            const active = day === selectedDay;
-            return (
-              <button
-                key={day}
-                onClick={() => setSelectedDay(day)}
-                className={`rounded-xl border p-3 text-left transition ${active ? "border-blue-600 bg-blue-600 text-white shadow-md" : "bg-white hover:border-blue-300"}`}
-              >
-                <span className="text-xs font-bold">
-                  {date.toLocaleDateString(undefined, { weekday: "long" })}
-                </span>
-                <span className="float-right text-[10px]">
-                  {date.toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </span>
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span>
-                    {count} Lead{count === 1 ? "" : "s"}
-                  </span>
-                  <CalendarDays size={14} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-black">
-          {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
-            weekday: "long",
-          })}{" "}
-          Leads
-        </h2>
-        <span className="text-xs font-bold">
-          {selectedAppointments.length} total leads
-        </span>
-      </div>
-      {selectedAppointments.length === 0 ? (
-        <Empty text="No approved appointments were sent for this date." />
-      ) : (
-        selectedAppointments.map((appointment) => (
-          <CompanyAppointmentRow
-            key={appointment.id}
-            appointment={appointment}
-            representatives={data.representatives}
-            busy={busy}
-            openLead={openLead}
-            assignRep={assignRep}
-            updateAppointmentStatus={updateAppointmentStatus}
-            updateLeadOutcome={updateLeadOutcome}
-            confirmLeadReceipt={confirmLeadReceipt}
-          />
-        ))
-      )}
-    </section>
-  );
-}
-
-function CompanyAppointmentRow({
-  appointment,
-  representatives,
-  busy,
-  openLead,
-  assignRep,
-  updateAppointmentStatus,
-  updateLeadOutcome,
-  confirmLeadReceipt,
-}: {
-  appointment: Appointment;
-  representatives: Representative[];
-  busy: boolean;
-  openLead: (appointment: Appointment) => void;
-  assignRep: (appointmentId: string, repId: string) => Promise<void>;
-  updateAppointmentStatus: (
-    appointmentId: string,
-    status: string,
-  ) => Promise<void>;
-  updateLeadOutcome: (
-    appointment: Appointment,
-    clientStatus: string,
-    notes?: string,
-  ) => Promise<void>;
-  confirmLeadReceipt: (appointment: Appointment) => Promise<void>;
-}) {
-  const canonical =
-    appointment.canonical_status ||
-    appointment.client_status ||
-    appointment.status;
-  const form = appointment.lead.form_data || {};
-  const qualification = [
-    form.roof_age && `Roof ${formatRoofAge(form.roof_age)}`,
-    form.roof_type,
-    form.insurance_name || form.insurance,
-    form.visible_damage && `Damage: ${form.visible_damage}`,
-  ]
-    .filter(Boolean)
-    .join(" • ");
-  return (
-    <article className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr_1fr_1fr]">
-        <button onClick={() => openLead(appointment)} className="text-left">
-          <p className="text-xs font-bold text-blue-600">
-            {formatDateLong(appointment.appointment_date)} •{" "}
-            {formatTime(appointment.start_time)}
-          </p>
-          <h3 className="mt-1 font-black">{appointment.lead.full_name}</h3>
-          <p className="text-xs text-slate-600">
-            {appointment.lead.phone_number} •{" "}
-            {formatLeadAddress(appointment.lead)}
-          </p>
-          <p className="mt-1 text-[10px] text-slate-500">
-            {qualification ||
-              "Open the lead for full property and qualification details."}
-          </p>
-        </button>
-        <div className="border-l pl-4">
-          <p className="text-[10px] font-bold text-slate-500">
-            Inspector / Lead Status
-          </p>
-          <button onClick={() => openLead(appointment)} className="mt-2">
-            <StatusChip status={appointment.company_action || canonical} />
-          </button>
-          <p className="mt-2 text-[10px] text-slate-400">
-            {appointment.location_label || "Company-wide"} •{" "}
-            {appointment.lead.qualification_status.replace(/_/g, " ")}
-          </p>
-        </div>
-        <div className="hidden space-y-2 border-l pl-4 sm:block">
-          <p className="text-[10px] font-bold text-slate-500">
-            Inspector Assignment
-          </p>
-          <select
-            aria-label={`Assign inspector for ${appointment.lead.full_name}`}
-            value={appointment.representative_id || ""}
-            onChange={(event) =>
-              void assignRep(appointment.id, event.target.value)
-            }
-            disabled={busy}
-            className="w-full rounded-lg border border-blue-300 bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900"
-          >
-            <option value="">Unassigned</option>
-            {representatives
-              .filter(
-                (rep) =>
-                  rep.active || rep.id === appointment.representative_id,
-              )
-              .map((rep) => (
-                <option key={rep.id} value={rep.id}>
-                  {rep.name}
-                  {rep.active ? "" : " (Inactive)"}
-                </option>
-              ))}
-          </select>
-          <p className="text-[10px] font-bold text-slate-500">
-            Latest company action
-          </p>
-          <StatusChip status={appointment.company_action || "pending"} />
-        </div>
-        <div className="hidden border-l pl-4 sm:block">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold text-slate-500">Appointment</p>
-            <AppointmentWeatherBadge
-              date={appointment.appointment_date}
-              city={appointment.lead.city}
-              state={appointment.lead.state}
-              zip={appointment.lead.zip_code}
-            />
-          </div>
-          <select
-            value={appointment.status}
-            onChange={(event) =>
-              void updateAppointmentStatus(appointment.id, event.target.value)
-            }
-            disabled={busy}
-            className="mt-2 w-full rounded-lg border px-3 py-2 text-xs"
-          >
-            <option value="confirmed">Confirmed</option>
-            <option value="assigned">Assigned</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => openLead(appointment)}
-        className="mt-4 min-h-12 w-full rounded-xl bg-blue-600 px-4 text-sm font-black text-white sm:hidden"
+      <CollapsibleSection
+        title="Search & Filters"
+        aside={filtersActive ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Active</span> : undefined}
       >
-        Assign representative or update status
-      </button>
-      <div className="mt-4 hidden border-t pt-3 sm:block">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-            Quick update
-          </span>
-          <LeadReceivedIndicator
-            received={Boolean(appointment.client_received)}
-          />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end">
+          <label className="block text-xs text-slate-500">
+            Search
+            <span className="relative block">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 mt-0.5 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, phone, address, or lead ID"
+                className={`${filterFieldClass} pl-9`}
+              />
+            </span>
+          </label>
+          <label className="block text-xs text-slate-500">
+            Lead outcome
+            <select value={outcomeFilter} onChange={(event) => setOutcomeFilter(event.target.value)} className={filterFieldClass}>
+              <option value="">All outcomes</option>
+              {COMPANY_PORTAL_DISPOSITIONS.map((value) => (
+                <option key={value} value={value}>{clientLeadStatusLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-slate-500">
+            Inspector
+            <select value={inspectorFilter} onChange={(event) => setInspectorFilter(event.target.value)} className={filterFieldClass}>
+              <option value="">All inspectors</option>
+              <option value="unassigned">Unassigned</option>
+              {data.representatives.map((rep) => (
+                <option key={rep.id} value={rep.id}>{rep.name}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={!filtersActive}
+            onClick={() => {
+              setSearch("");
+              setOutcomeFilter("");
+              setInspectorFilter("");
+            }}
+            className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+          >
+            Clear
+          </button>
         </div>
-        <ClientStatusActions
-          currentStatus={appointment.company_action || canonical}
-          received={Boolean(appointment.client_received)}
-          disabled={busy}
-          includePending
-          compact
-          onConfirm={() => void confirmLeadReceipt(appointment)}
-          onDisposition={(status) =>
-            void updateLeadOutcome(appointment, status, "")
-          }
+      </CollapsibleSection>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+        <h2 className="text-lg font-bold text-slate-900">Daily Appointments · {weekRange}</h2>
+        <span className="text-xs text-slate-500">Appointment dates · Company local time</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-label="Previous week"
+          title="Previous week"
+          onClick={() => moveWeek(-1)}
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {days.map((day) => {
+          const date = new Date(`${day}T12:00:00`);
+          const count = filtered.filter((appointment) => appointment.appointment_date === day).length;
+          const active = day === selectedDay;
+          return (
+            <button
+              key={day}
+              type="button"
+              title={`${count} appointment${count === 1 ? "" : "s"}`}
+              onClick={() => setSelectedDay(day)}
+              className={`relative min-h-10 rounded-lg border px-4 text-sm font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white shadow-md" : "border-slate-300 bg-white text-slate-800 hover:border-blue-300 hover:bg-blue-50"}`}
+            >
+              {date.toLocaleDateString(undefined, { weekday: "short" })} {date.getDate()}
+              {count > 0 && (
+                <span className={`absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] ${active ? "bg-white text-blue-700" : "bg-blue-600 text-white"}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-label="Next week"
+          title="Next week"
+          onClick={() => moveWeek(1)}
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
+        >
+          <ChevronRight size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedDay(localDate(new Date()))}
+          className="min-h-10 rounded-lg px-3 text-sm font-bold text-blue-600 transition hover:bg-blue-50"
+        >
+          Today
+        </button>
+      </div>
+      <div className="pt-2">
+        <CompanyDailyAppointments
+          appointments={selectedAppointments}
+          representatives={data.representatives}
+          busy={busy}
+          openLead={openLead}
+          assignRep={assignRep}
+          updateAppointmentStatus={updateAppointmentStatus}
+          updateLeadOutcome={updateLeadOutcome}
+          confirmLeadReceipt={confirmLeadReceipt}
         />
       </div>
-    </article>
+    </section>
   );
 }
 
