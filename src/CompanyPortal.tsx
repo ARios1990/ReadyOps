@@ -2876,26 +2876,7 @@ function CompanyLeadsSpreadsheet({
           <span className="text-slate-400">(not yet delivered records)</span>
         </div>
       </div>
-      <div className="grid gap-3 rounded-xl border bg-white p-3 md:grid-cols-2 xl:grid-cols-4">
-          <form
-            className="relative w-full min-w-0 self-end"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setOffset(0);
-              setSearch(searchInput.trim());
-            }}
-          >
-            <Search
-              size={14}
-              className="absolute left-3 top-3 text-slate-400"
-            />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search homeowner, phone, address, service…"
-              className="h-11 w-full rounded-lg border pl-9 pr-3 text-sm sm:h-10 sm:text-xs"
-            />
-          </form>
+      <div className="grid gap-3 rounded-xl border bg-white p-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_180px_auto]">
         <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
           <span className="flex items-center gap-1">
             <MapPin size={13} className="text-blue-600" /> Location
@@ -2938,12 +2919,6 @@ function CompanyLeadsSpreadsheet({
             ))}
           </select>
         </label>
-        <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">Lead Status
-          <select value={filter} onChange={event => chooseFilter(event.target.value)} className="min-h-11 w-full rounded-lg border px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800 sm:min-h-0 sm:text-xs">
-            <option value="all">All lead statuses</option>
-            {filterCards.filter(card => card.key !== 'all').map(card => <option key={card.key} value={card.key}>{card.label}</option>)}
-          </select>
-        </label>
         <label className="space-y-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
           Start Date
           <input
@@ -2973,10 +2948,9 @@ function CompanyLeadsSpreadsheet({
         </label>
         <button
           type="button"
-          disabled={!locationId && !representativeId && !startDate && !endDate && !searchInput && !search && filter === "all"}
+          disabled={!locationId && !representativeId && !startDate && !endDate}
           onClick={() => {
             setOffset(0);
-            setSearchInput(""); setSearch(""); setFilter("all");
             setLocationId("");
             setRepresentativeId("");
             setStartDate("");
@@ -3011,7 +2985,25 @@ function CompanyLeadsSpreadsheet({
       </div>
       <section className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-wrap items-stretch justify-between gap-3 border-b p-3 sm:items-center">
-
+          <form
+            className="relative w-full min-w-0 sm:flex-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setOffset(0);
+              setSearch(searchInput.trim());
+            }}
+          >
+            <Search
+              size={14}
+              className="absolute left-3 top-3 text-slate-400"
+            />
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search homeowner, phone, address, service…"
+              className="h-11 w-full rounded-lg border pl-9 pr-3 text-sm sm:h-10 sm:text-xs"
+            />
+          </form>
           <button
             onClick={() => void load()}
             className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-bold sm:min-h-0"
@@ -3167,14 +3159,14 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
               })}
             </div>
 
-            <ConfigurableLeadTable key={companyId} storageKey={`readyops-company-lead-columns-${companyId}`} toolbarRight={<div className="flex items-center gap-2 text-xs font-bold"><button type="button" aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset(value => Math.max(0, value - 100))} className="rounded-lg border px-3 py-2 disabled:opacity-40">‹</button><span>Page {page} of {pages}</span><button type="button" aria-label="Next page" disabled={page >= pages || loading} onClick={() => setOffset(value => value + 100)} className="rounded-lg border px-3 py-2 disabled:opacity-40">›</button></div>} columns={[
+            <ConfigurableLeadTable key={companyId} storageKey={`readyops-company-lead-columns-${companyId}`} columns={[
  {key:'inspector',label:'Inspector Assignment',width:150}, {key:'homeowner',label:'Homeowner',width:175},
  {key:'appointment',label:'Appointment Date & Time',width:150}, {key:'address',label:'Full Address',width:240},
  {key:'service',label:'Service',width:120}, {key:'roofAge',label:'Roof Age',width:85},
  {key:'roofType',label:'Roof Type',width:90}, {key:'homeType',label:'Home Type',width:110},
  {key:'stories',label:'Stories',width:75}, {key:'insurance',label:'Insurance',width:85},
  {key:'carrier',label:'Carrier',width:110}, {key:'damage',label:'Damage / Hail',width:115},
- {key:'action',label:'Action',width:110}, {key:'status',label:'Lead Status',width:150,pinRight:true},
+ {key:'action',label:'Action',width:110}, {key:'status',label:'Lead Status',width:150},
 ]}>
                 <tbody>
                   {data.rows.map((appointment) => {
