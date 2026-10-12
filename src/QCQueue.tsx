@@ -1717,6 +1717,7 @@ function ReviewDialog(props: DialogProps) {
               appointment={props.row.appointment}
               showLabel={false}
               showCopySection
+              recordingNotesOnly
               editValues={props.values}
               onChange={props.change}
               onSave={props.save}
@@ -1774,6 +1775,7 @@ function ReviewDialog(props: DialogProps) {
             <div className="order-1 min-w-0 md:col-span-2">
               <QCRecordingUpload
                 leadId={props.row.lead.id}
+                onRecordingNotesChange={(value) => props.change('recording_notes', value)}
                 value={String(props.values.recording_url || "")}
                 shared={Boolean(props.values.share_recording_with_company)}
                 onChange={(value) => props.change("recording_url", value)}

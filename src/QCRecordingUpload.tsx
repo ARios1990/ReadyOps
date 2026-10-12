@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { getLane } from './leadTypes';
 import { buildInspectorNote } from './inspectorNote';
+import { recordingNotes } from './recordingImport';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -182,48 +183,8 @@ function speechLanguage(language?: string | null): string {
   return 'en-US';
 }
 
-function cleanSentence(value: string): string {
-  const clean = value.replace(/\s+/g, ' ').trim();
-  return clean.length > 240 ? `${clean.slice(0, 237)}...` : clean;
-}
-
-function transcriptSentences(transcript: string): string[] {
-  const normalized = transcript.replace(/\s+/g, ' ').trim();
-  if (!normalized) return [];
-  const chunks = normalized.match(/[^.!?]+[.!?]?/g)?.map(cleanSentence).filter(Boolean) || [];
-  if (chunks.length > 1) return chunks;
-  const softChunks = normalized
-    .split(/\b(?:okay|alright|so|and then|also|by the way)\b/gi)
-    .map(cleanSentence)
-    .filter(part => part.length >= 12);
-  return softChunks.length > 1 ? softChunks : chunks;
-}
-
-function firstMatchingSentence(sentences: string[], pattern: RegExp): string {
-  return sentences.find(sentence => pattern.test(sentence)) || '';
-}
-
 function buildRuleBasedSummary(transcript: string): string {
-  const sentences = transcriptSentences(transcript);
-  if (!sentences.length) return '';
-
-  const appointment = firstMatchingSentence(sentences, /\b(appointment|schedule|scheduled|available|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b/i);
-  const roof = firstMatchingSentence(sentences, /\b(roof|shingle|shingles|tile|metal|flat roof|slate|years? old)\b/i);
-  const damage = firstMatchingSentence(sentences, /\b(damage|damaged|hail|wind|leak|leaking|missing shingle|missing shingles|storm|dent|dented)\b/i);
-  const insurance = firstMatchingSentence(sentences, /\b(insurance|insured|claim|adjuster|deductible)\b/i);
-  const intent = firstMatchingSentence(sentences, /\b(estimate|inspection|second opinion|reroof|re-roof|replace|replacement|interested|check the roof|look at the roof|wants? to)\b/i);
-
-  const lines: string[] = [];
-  if (appointment) lines.push(`Appointment: ${appointment}`);
-  if (roof) lines.push(`Roof: ${roof}`);
-  if (damage) lines.push(`Damage/Storm: ${damage}`);
-  if (insurance) lines.push(`Insurance/Claim: ${insurance}`);
-  if (intent) lines.push(`Homeowner Intent: ${intent}`);
-
-  if (!lines.length) {
-    return `Call Notes: ${sentences.slice(0, 2).join(' ')}`;
-  }
-  return lines.join('\n');
+  return recordingNotes(transcript);
 }
 
 async function waitForAudio(audio: HTMLAudioElement): Promise<void> {
@@ -257,6 +218,7 @@ export function QCRecordingUpload({
   homeownerName,
   leadType,
   leadForm,
+  onRecordingNotesChange,
 }: {
   leadId: string;
   value: string;
@@ -273,6 +235,7 @@ export function QCRecordingUpload({
   homeownerName?: string | null;
   leadType?: string | null;
   leadForm?: Record<string, unknown>;
+  onRecordingNotesChange?: (value: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -325,7 +288,8 @@ export function QCRecordingUpload({
       }
       const row = data as TranscriptRow | null;
       setTranscript(row?.transcript || '');
-      setSummary(row?.summary || '');
+      const savedNotes = row?.method === 'booking-local-whisper' || row?.method === 'manual' ? row.summary : '';
+      setSummary(String(leadForm?.recording_notes || savedNotes || recordingNotes(row?.transcript || '')));
       setAssessment(row?.assessment || null);
       setTranscriptStatus(row?.transcript ? `Saved transcript • ${row.method || 'manual'}` : '');
     }
@@ -365,7 +329,7 @@ export function QCRecordingUpload({
       updated_at: new Date().toISOString(),
     }, { onConflict: 'lead_id' });
     if (saveError) setTranscriptStatus(`Could not save transcript: ${saveError.message}`);
-    else setTranscriptStatus('Transcript and summary saved to QC.');
+    else { setTranscriptStatus('Transcript and recording notes saved to QC.'); onRecordingNotesChange?.(nextSummary.trim()); }
     setSavingTranscript(false);
   }
 
@@ -512,7 +476,7 @@ export function QCRecordingUpload({
       if (!response) throw new Error('The AI function returned an empty response.');
       const result = normalizeQualifyResult(response);
       if (result.transcript) setTranscript(result.transcript);
-      if (result.summary) setSummary(result.summary);
+      if (result.transcript) setSummary(recordingNotes(result.transcript));
       setAiResult(result);
       setAssessment(response.assessment || null);
     } catch (qualifyError) {
@@ -525,7 +489,7 @@ export function QCRecordingUpload({
   function rebuildSummary() {
     const nextSummary = buildRuleBasedSummary(transcript);
     setSummary(nextSummary);
-    setTranscriptStatus(nextSummary ? 'Rule-based summary rebuilt. Click Save Transcript.' : 'Add transcript text before building a summary.');
+    setTranscriptStatus(nextSummary ? 'Recording passages selected. Click Save Transcript.' : 'Add transcript text before building a summary.');
   }
 
   return (
@@ -636,13 +600,13 @@ export function QCRecordingUpload({
         <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify reuses the transcript when available, otherwise uses secured OpenAI transcription, then evaluates the call against company requirements.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Build Rule Summary</button>
+          <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Use recording passages</button>
           <button type="button" disabled={savingTranscript} onClick={() => void saveTranscript()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{savingTranscript ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Save Transcript</button>
           <button type="button" disabled={!transcript} onClick={() => void navigator.clipboard.writeText(transcript)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Transcript</button>
         </div>
 
-        <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">Rule-Based Call Summary — No LLM</label>
-        <textarea value={summary} onChange={event => setSummary(event.target.value)} placeholder="Appointment, roof, damage, insurance/claim, and homeowner intent are extracted from the transcript using fixed rules." className="mt-1 min-h-28 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800"/>
+        <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">Notes from the recording</label>
+        <textarea value={summary} onChange={event => setSummary(event.target.value)} placeholder="Passages quoted from the transcript. Listen to the recording and edit these notes as needed." className="mt-1 min-h-28 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <button type="button" disabled={!summary} onClick={() => void navigator.clipboard.writeText(summary)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Summary</button>
           {transcriptStatus && <span className="text-[11px] font-semibold text-slate-500">{transcriptStatus}</span>}
@@ -651,9 +615,8 @@ export function QCRecordingUpload({
 
       <label className="mt-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-white p-3 text-xs font-semibold text-slate-700">
         <input type="checkbox" checked={shared} onChange={event => onShareChange(event.target.checked)} className="mt-0.5"/>
-        <span>Share recording with company after QC approval.<span className="mt-1 block font-normal text-slate-500">Off by default. If unchecked, the company and representative cannot see the audio. The QC transcript and rule summary remain internal.</span></span>
+        <span>Share recording with company after QC approval.<span className="mt-1 block font-normal text-slate-500">Off by default. If unchecked, the company and representative cannot see the audio. The full QC transcript remains internal.</span></span>
       </label>
     </div>
   );
 }
-

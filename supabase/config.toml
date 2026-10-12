@@ -23,6 +23,10 @@ verify_jwt = false
 [functions.agent-recording-upload-token]
 verify_jwt = false
 
+# Checks the existing booking manage token AND its originating session itself.
+[functions.save-booking-transcript]
+verify_jwt = false
+
 [functions.transcribe-and-qualify]
 verify_jwt = true
 

@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source = fs.readFileSync(new URL('../supabase/functions/save-booking-transcript/index.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
+const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const token = '00000000-0000-4000-8000-000000000001';
+const session = '00000000-0000-4000-8000-000000000002';
+let handler, writes, fixtures;
+const admin = { from(table) {
+  const query = { select() { return query; }, eq(key, value) { query[key] = value; return query; }, async maybeSingle() {
+    if (table === 'portal_appointments') return { data: query.manage_token === token ? fixtures.appointment : null };
+    if (table === 'portal_leads') return { data: query.session_id === session && query.id === fixtures.appointment?.lead_id ? fixtures.lead : null };
+    return { data: fixtures.existing };
+  }, async upsert(data) { writes.push(data); return { error: null }; } };
+  return query;
+} };
+new Function('Deno', 'createClient', code)({ serve(fn) { handler = fn; }, env: { get() { return 'server-only-test-value'; } } }, () => admin);
+const reset = () => { writes = []; fixtures = { appointment: { lead_id: 'derived-lead', created_at: new Date().toISOString() }, lead: { id: 'derived-lead', qc_status: 'pending' }, existing: null }; };
+const body = { manage_token: token, session_id: session, transcript: 'Actual recorded speech.', recording_notes: 'Actual recorded speech.', lead_id: 'attacker-chosen-lead' };
+const request = async patch => handler(new Request('https://test.invalid', { method: 'POST', body: JSON.stringify({ ...body, ...patch }) }));
+reset(); assert.equal((await request({ manage_token: '' })).status, 401); assert.equal(writes.length, 0);
+reset(); assert.equal((await request({ session_id: token })).status, 403); assert.equal(writes.length, 0);
+reset(); fixtures.lead.qc_status = 'approved'; assert.equal((await request({})).status, 403); assert.equal(writes.length, 0);
+reset(); fixtures.appointment.created_at = '2020-01-01T00:00:00Z'; assert.equal((await request({})).status, 403);
+reset(); fixtures.existing = { method: 'manual' }; assert.equal((await request({})).status, 409); assert.equal(writes.length, 0);
+reset(); assert.equal((await request({ transcript: '' })).status, 400);
+reset(); assert.equal((await request({ transcript: 'x'.repeat(500001) })).status, 400);
+reset(); assert.equal((await request({})).status, 200); assert.equal(writes[0].lead_id, 'derived-lead'); assert.equal(writes[0].method, 'booking-local-whisper');
+assert.equal((await handler(new Request('https://test.invalid', { method: 'GET' }))).status, 405);
+console.log('PASS transcript capability authentication, booking scope, recent pending status, reviewer protection and size limits');

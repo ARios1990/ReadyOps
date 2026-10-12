@@ -216,6 +216,7 @@ export function ClientLeadTemplate({
   onChange,
   onSave,
   saving = false,
+  recordingNotesOnly = false,
 }: {
   lead: LeadLike;
   appointment: AppointmentLike;
@@ -225,6 +226,7 @@ export function ClientLeadTemplate({
   onChange?: (key: string, value: string) => void;
   onSave?: () => void | Promise<void>;
   saving?: boolean;
+  recordingNotesOnly?: boolean;
 }) {
   const serviceNeeded = leadValue(lead, 'service_needed', 'service_needed', 'services_needed', 'services_need');
   const rawHomeValue = leadValue(lead, 'home_value', 'home_value');
@@ -313,7 +315,8 @@ export function ClientLeadTemplate({
     `Add. Properties: ${copyValue(formValue(copyLead, 'additional_properties', 'add_properties'))}`,
     `2nd Address: ${copyValue(formValue(copyLead, 'second_address', 'other_address'))}`,
   ].join('\n');
-  const copyText = serviceSnapshot?.form_schema ? buildUniversalLeadTemplate(serviceSnapshot, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) : legacyCopyText;
+  const generatedCopyText = serviceSnapshot?.form_schema ? buildUniversalLeadTemplate(serviceSnapshot, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) : legacyCopyText;
+  const copyText = recordingNotesOnly ? generatedCopyText.split('\n').filter(line => !/^Notes:/.test(line)).join('\n') + `\nNotes from the recording: ${String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')}` : generatedCopyText;
 
   async function copyLeadTemplate() {
     await navigator.clipboard.writeText(copyText);
@@ -342,15 +345,15 @@ export function ClientLeadTemplate({
             {(isRoofing ? matchedRoofingSchema : serviceSnapshot.form_schema).map(section => {
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
               const roofingSummary = isRoofing;
-              const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
-              return fields.length || (isLighting && section.id === 'additional') ? <Section key={section.id} title={section.title} columns>{isLighting && section.id === 'customer' && <Row label="Appointment Date & Time:" value={String(data.appointment_display)} />}{isLighting && section.id === 'additional' && <Row label="Notes:" field="summary_notes" value={answer(data, 'summary_notes') || answer(data, 'notes') || (answer(data, 'full_name') ? `Spoke with ${answer(data, 'full_name')}.` : '')} multiline onChange={onChange} />}{fields.map(f => {
+              const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && !(recordingNotesOnly && f.key === 'summary_display') && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
+              return fields.length || (isLighting && section.id === 'additional') ? <Section key={section.id} title={section.title} columns>{isLighting && section.id === 'customer' && <Row label="Appointment Date & Time:" value={String(data.appointment_display)} />}{!recordingNotesOnly && isLighting && section.id === 'additional' && <Row label="Notes:" field="summary_notes" value={answer(data, 'summary_notes') || answer(data, 'notes') || (answer(data, 'full_name') ? `Spoke with ${answer(data, 'full_name')}.` : '')} multiline onChange={onChange} />}{fields.map(f => {
                 const fieldKey = f.key === 'summary_display' ? 'summary_notes' : f.key;
                 const value = !editable && f.key === 'address' ? formatAddress(copyLead) : answer(data, f.key);
                 const rawValue = f.key === 'summary_display' ? String(data.summary_notes ?? data.summary_display ?? '') : String(data[f.key] ?? '');
                 return <div key={f.key}><Row label={`${f.label}:`} field={f.key === 'appointment_display' ? undefined : fieldKey} value={value} editValue={rawValue} options={f.options} multiline={f.type === 'textarea' || f.key === 'summary_display'} onChange={onChange} />{editable && f.allowOther && data[f.key] === 'Other' && <Row label={`Other ${f.label}:`} field={`${f.key}_other`} value={String(data[`${f.key}_other`] ?? '')} onChange={onChange} />}</div>;
               })}</Section> : null;
             })}
-            {!isRoofing && !isLighting && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
+            {!recordingNotesOnly && !isRoofing && !isLighting && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
           </div> : <><Section title="Customer Information">
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
@@ -390,6 +393,7 @@ export function ClientLeadTemplate({
           </>}
         </div>
 
+        {recordingNotesOnly && <div className="px-3 pb-3"><Section title="Recording notes"><Row label="Notes from the recording:" field="recording_notes" multiline value={String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')} onChange={onChange} /><p className="mt-2 text-xs text-slate-500">Use the recording transcript to capture what was actually said. Blank means recording notes have not been saved.</p></Section></div>}
         {editable && (
           <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-3">
             <button

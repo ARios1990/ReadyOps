@@ -110,7 +110,7 @@ interface ScheduleException {
   end_time: string | null;
   note: string | null;
 }
-interface Representative {
+export interface Representative {
   id: string;
   name: string;
   phone: string | null;
@@ -137,7 +137,7 @@ interface LeadRecord {
   recording_url: string | null;
   recording_shared?: boolean;
 }
-interface Appointment {
+export interface Appointment {
   id: string;
   appointment_date: string;
   start_time: string;
