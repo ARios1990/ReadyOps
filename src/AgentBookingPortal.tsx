@@ -869,7 +869,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           </div>
         </section>
 
-        <RecordingCallLogImport disabled={busy || Boolean(reservation) || transcriptRetry} submittedPhone={confirmation ? String(confirmation.form_data?.phone_number || '') : undefined} onApply={applyImport} />
+        <RecordingCallLogImport key="recording-call-log-import" disabled={busy || Boolean(reservation) || transcriptRetry} submittedPhone={confirmation ? String(confirmation.form_data?.phone_number || '') : undefined} onApply={applyImport} />
         {importMessage && <div role="status" className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">{importMessage}{transcriptRetry && confirmation && importDraft && <button disabled={busy} onClick={async () => { setBusy(true); try { await saveImportedTranscript(confirmation, importDraft); } finally { setBusy(false); } }} className="ml-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Retry saving transcript</button>}</div>}
         {importDraft && !confirmation && <p className="text-sm text-slate-600">Requested appointment: {importDraft.requestedDate || 'Choose date'} · {importDraft.requestedTime || importDraft.timeRange || 'Choose time'}. Select an available slot below; blocked times cannot be booked.</p>}
         {selectedTemplate && !confirmation && <a href="#service-questions" className="block rounded-xl border border-blue-200 bg-blue-50 p-3 text-center text-sm font-semibold text-blue-700">Open {selectedTemplate.name} questions</a>}

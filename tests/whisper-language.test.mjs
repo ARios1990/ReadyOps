@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source = fs.readFileSync(new URL('../src/localWhisperWorker.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
+const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const calls = [];
+const worker = { navigator: {}, postMessage() {} };
+const factory = async (task, model) => async (audio, options) => { calls.push({ model, options }); return { text: 'Recorded words.' }; };
+new Function('exports', 'self', 'pipeline', code)({}, worker, factory);
+await worker.onmessage({ data: { type: 'transcribe', audio: new Float32Array(16000), language: 'es' } });
+assert.equal(calls[0].model, 'onnx-community/whisper-tiny');
+assert.equal(calls[0].options.language, 'es');
+assert.equal(calls[0].options.task, 'transcribe');
+await worker.onmessage({ data: { type: 'transcribe', audio: new Float32Array(16000), language: 'English' } });
+assert.equal(calls[1].model, 'onnx-community/whisper-tiny.en');
+assert.equal(calls[1].options.language, undefined);
+assert.equal(calls[1].options.task, undefined);
+console.log('PASS Spanish transcription receives its language and English-only model receives compatible options');

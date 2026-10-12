@@ -19,7 +19,7 @@ type ProgressPayload = {
 type WhisperOutput = { text?: string };
 type WhisperTranscriber = ((
   audio: Float32Array,
-  options: { chunk_length_s: number; stride_length_s: number; return_timestamps: boolean },
+  options: { chunk_length_s: number; stride_length_s: number; return_timestamps: boolean; language?: string; task?: 'transcribe' },
 ) => Promise<WhisperOutput | WhisperOutput[]>) & {
   dispose?: () => void | Promise<void>;
 };
@@ -130,11 +130,14 @@ function getTranscriber(model: string) {
   return transcriberPromise;
 }
 
-function runTranscription(transcriber: WhisperTranscriber, audio: Float32Array) {
+function runTranscription(transcriber: WhisperTranscriber, audio: Float32Array, language?: string | null) {
+  const normalized = (language || '').trim().toLowerCase();
+  const multilingual = whisperModel(language) !== 'onnx-community/whisper-tiny.en';
   return transcriber(audio, {
     chunk_length_s: 30,
     stride_length_s: 5,
     return_timestamps: true,
+    ...(multilingual ? { language: normalized.startsWith('es') || normalized.includes('spanish') ? 'es' : normalized, task: 'transcribe' as const } : {}),
   });
 }
 
@@ -146,7 +149,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     post('progress', { message: 'Transcribing call locally — no paid API…' });
     let output: WhisperOutput | WhisperOutput[];
     try {
-      output = await runTranscription(transcriber, event.data.audio);
+      output = await runTranscription(transcriber, event.data.audio, event.data.language);
     } catch (error) {
       if (activeDevice !== 'webgpu') throw error;
       post('progress', { message: 'WebGPU transcription failed. Retrying with browser CPU…' });
@@ -156,7 +159,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       transcriberPromise = null;
       await transcriber.dispose?.();
       transcriber = await getTranscriber(model);
-      output = await runTranscription(transcriber, event.data.audio);
+      output = await runTranscription(transcriber, event.data.audio, event.data.language);
     }
     const text = String(Array.isArray(output) ? output[0]?.text || '' : output?.text || '').replace(/\s+/g, ' ').trim();
     if (!text) throw new Error('Whisper did not detect speech in this recording.');
