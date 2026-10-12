@@ -25,9 +25,12 @@ import {
   localDate,
   rpcError,
   startOfWeek,
+  calendarWeekStart,
 } from "./portalUtils";
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { AgentWeatherPreview, useWeeklyWeather } from "./AgentWeatherPreview";
+import { RecordingCallLogImport } from './RecordingCallLogImport';
+import { fullAddress, type ImportDraft } from './recordingImport';
 
 interface Slot {
   start: string;
@@ -339,6 +342,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [serviceTemplates, setServiceTemplates] = useState<ServiceTemplate[]>([]);
+  const [importDraft, setImportDraft] = useState<ImportDraft | null>(null);
+  const [importMessage, setImportMessage] = useState('');
+  const [transcriptRetry, setTranscriptRetry] = useState(false);
   const [templatesError, setTemplatesError] = useState('');
   const selectedTemplate = serviceTemplates.find(s => s.id === formValues.service_type);
   useEffect(() => {
@@ -586,12 +592,16 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   async function submitAppointment() {
     if (!reservation) return;
     if (!selectedTemplate || templatesError) { setError('Service configuration is unavailable. Refresh or contact an Admin.'); return; }
+    if (importDraft && (['address', 'city', 'state', 'zip_code'].some(key => !String(formValues[key] || '').trim()) || String(formValues.address || '').trim() === fullAddress('', String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')))) {
+      setError('Complete the street address, city, state, and ZIP code before submitting this imported appointment.'); return;
+    }
     const requiredMissing = visibleTemplateFields(selectedTemplate.form_schema, formValues).find(f => (f.mode === 'required' || (!f.mode && f.required)) && (formValues[f.key] == null || !String(formValues[f.key]).trim() || (Array.isArray(formValues[f.key]) && !(formValues[f.key] as unknown[]).length)));
     if (requiredMissing) { setError(`${requiredMissing.label} is required.`); return; }
     setBusy(true);
     setError("");
     const basePayload = {
       ...formValues,
+      address: fullAddress(String(formValues.address || ''), String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')),
       appointment_date: reservation.appointment_date,
       appointment_time: reservation.start_time,
       timezone: portal?.company.settings.timezone,
@@ -612,11 +622,36 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     );
     if (rpcErr) setError(rpcError(rpcErr));
     else {
-      setConfirmation(data as Confirmation);
+      const result = data as Confirmation;
+      setConfirmation(result);
       setReservation(null);
+      if (importDraft?.transcript) await saveImportedTranscript(result, importDraft);
       await loadPortal();
     }
     setBusy(false);
+  }
+
+  async function saveImportedTranscript(result: Confirmation, draft: ImportDraft) {
+    setTranscriptRetry(true);
+    try {
+    const { error: saveError } = await supabase.functions.invoke('save-booking-transcript', {
+      body: { manage_token: result.manage_token, session_id: sessionId, transcript: draft.transcript, recording_notes: String(draft.values.recording_notes || '') },
+    });
+    if (saveError) setImportMessage('Appointment submitted. The transcript could not be saved to QC. Keep this tab open and retry below.');
+    else { setTranscriptRetry(false); setImportMessage('Appointment and recording transcript saved to QC.'); }
+    } catch {
+      setImportMessage('Appointment submitted. The transcript could not be saved to QC. Keep this tab open and retry below.');
+    }
+  }
+
+  function applyImport(draft: ImportDraft, filename: string) {
+    if (reservation || busy) return;
+    const template = selectedTemplate || serviceTemplates.find(t => t.id === 'roofing') || serviceTemplates[0];
+    setFormValues({ ...draft.values, service_type: template?.id || 'roofing', service_needed: template?.name || 'Roofing', agent_token: queryPrefill.values.agent_token || '', _service_template: template });
+    setConfirmation(null); setImportDraft(draft); setImportMessage(`Filled from ${filename}. Review the questions below and select the appointment time.`); setError('');
+    const nearestId = pickNearestLocation(portal!.company.locations, { city: String(draft.values.city || ''), state: String(draft.values.state || ''), zip: String(draft.values.zip_code || '') });
+    setLocationId(nearestId || null); setAutoSelectedLocation(Boolean(nearestId));
+    if (draft.requestedDate) { setWeekStart(calendarWeekStart(new Date(draft.requestedDate + 'T12:00:00'))); setExpandedDate(draft.requestedDate); }
   }
 
   if (loading && !portal)
@@ -834,6 +869,9 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           </div>
         </section>
 
+        <RecordingCallLogImport disabled={busy || Boolean(reservation) || transcriptRetry} submittedPhone={confirmation ? String(confirmation.form_data?.phone_number || '') : undefined} onApply={applyImport} />
+        {importMessage && <div role="status" className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">{importMessage}{transcriptRetry && confirmation && importDraft && <button disabled={busy} onClick={async () => { setBusy(true); try { await saveImportedTranscript(confirmation, importDraft); } finally { setBusy(false); } }} className="ml-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Retry saving transcript</button>}</div>}
+        {importDraft && !confirmation && <p className="text-sm text-slate-600">Requested appointment: {importDraft.requestedDate || 'Choose date'} · {importDraft.requestedTime || importDraft.timeRange || 'Choose time'}. Select an available slot below; blocked times cannot be booked.</p>}
         {selectedTemplate && !confirmation && <a href="#service-questions" className="block rounded-xl border border-blue-200 bg-blue-50 p-3 text-center text-sm font-semibold text-blue-700">Open {selectedTemplate.name} questions</a>}
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">

@@ -184,7 +184,6 @@ function AppointmentDetailPanel({
           appointment={appointment}
           showLabel={false}
           showCopySection={false}
-          collapsibleSections
         />
       </div>
 

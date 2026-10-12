@@ -75,6 +75,7 @@ for (const file of [
   "20261003230718_inline_agent_staff_rows.sql",
   "20261009123458_approved_portal_contact_editing.sql",
   "20261009124839_preserve_portal_optional_answers.sql",
+  "20261012035000_preserve_recording_notes.sql",
 ]) {
   const sql = fs
     .readFileSync(
@@ -301,9 +302,9 @@ await test("company service qualifiers and hidden fields validated server-side",
 await test("approved roofing qualifiers and edited notes survive the server save filter", async () => {
   await asUser(null, "postgres");
   await db.exec(fs.readFileSync(new URL('../docs/qualifier-save-schema-repair.sql', import.meta.url), 'utf8'));
-  const payload = { _universal_template: true, service_type: 'roofing', full_name: 'Test Contact', phone_number: '555', address: 'Test Address', service_needed: 'Inspection', meeting_name: 'Vincent De La Cruz', visitor_authority: 'Authorized decision-maker', access_instructions: 'Call before arrival', insurance: 'Yes', insurance_name: 'Other', insurance_name_other: 'Local Mutual Insurance', claim_filed: 'Yes', claim_status: 'Awaiting inspection', summary_notes: 'Saved custom notes with multiple words.', forged_unrelated_field: 'must drop' };
+  const payload = { _universal_template: true, service_type: 'roofing', full_name: 'Test Contact', phone_number: '555', address: 'Test Address', service_needed: 'Inspection', meeting_name: 'Vincent De La Cruz', visitor_authority: 'Authorized decision-maker', access_instructions: 'Call before arrival', insurance: 'Yes', insurance_name: 'Other', insurance_name_other: 'Local Mutual Insurance', claim_filed: 'Yes', claim_status: 'Awaiting inspection', summary_notes: 'Saved custom notes with multiple words.', recording_notes: 'My roof is seven years old.', forged_unrelated_field: 'must drop' };
   const row = (await db.query('insert into public.portal_leads(company_id,agent_id,form_data) values($1,$2,$3) returning form_data', [uid(21),uid(11),JSON.stringify(payload)])).rows[0];
-  for (const key of ['meeting_name','visitor_authority','access_instructions','insurance','insurance_name_other','claim_filed','claim_status','summary_notes']) assert.equal(row.form_data[key], payload[key]);
+  for (const key of ['meeting_name','visitor_authority','access_instructions','insurance','insurance_name_other','claim_filed','claim_status','summary_notes','recording_notes']) assert.equal(row.form_data[key], payload[key]);
   assert.equal(row.form_data.forged_unrelated_field, undefined);
 });
 await test("automatic release deduplicates and uses profile email list", async () => {
