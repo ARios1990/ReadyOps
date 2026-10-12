@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileAudio, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Eye, EyeOff, FileAudio, Loader2, Sparkles } from 'lucide-react';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { cell, matchCallLog, normalizePhone, prepareDraft, type CallLogRow, type ImportDraft } from './recordingImport';
 
@@ -14,6 +14,7 @@ export function RecordingCallLogImport({ disabled, submittedPhone, onApply }: Pr
   const [error, setError] = useState('');
   const [language, setLanguage] = useState('');
   const [appliedId, setAppliedId] = useState('');
+  const [collapsed, setCollapsed] = useState(true);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
@@ -68,7 +69,8 @@ export function RecordingCallLogImport({ disabled, submittedPhone, onApply }: Pr
   const readyCount = items.filter(item => item.draft && !item.submitted).length;
   const locked = processing || disabled;
   return <section className="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-slate-950"><Sparkles className="text-indigo-600" size={20} /> Recording + call log</h2><p className="mt-1 text-sm text-slate-600">Upload once. Match calls, prepare forms, and review each appointment.</p></div><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{readyCount} ready to review</span></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-slate-950"><Sparkles className="text-indigo-600" size={20} /> Recording + call log</h2><p className="mt-1 text-sm text-slate-600">Upload once. Match calls, prepare forms, and review each appointment.</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{readyCount} ready to review</span><button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-controls="recording-call-log-panel" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{collapsed ? <Eye size={13} /> : <EyeOff size={13} />}{collapsed ? 'Show' : 'Hide'}{collapsed ? <ChevronDown size={13} className="opacity-60" /> : <ChevronUp size={13} className="opacity-60" />}</button></div></div>
+    <div id="recording-call-log-panel" hidden={collapsed}>
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
       <label className="rounded-xl border border-dashed border-slate-300 p-4 text-sm font-semibold text-slate-700">1. ReadyMode call log (.csv)<input aria-label="Upload call log CSV" type="file" accept=".csv" disabled={locked} onChange={e => { const f = e.target.files?.[0]; if (f) void loadCsv(f); }} className="mt-3 block w-full text-xs" />{csvName && <span className="mt-2 block text-xs font-normal text-emerald-700">{csvName} · {rows.length} rows</span>}</label>
       <label className="rounded-xl border border-dashed border-slate-300 p-4 text-sm font-semibold text-slate-700">2. Call recordings<input aria-label="Upload call recordings" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.txt" multiple disabled={locked} onChange={e => { if (e.target.files) addFiles(e.target.files); }} className="mt-3 block w-full text-xs" /><span className="mt-2 block text-xs font-normal text-slate-500">Up to 20 files. Names containing the phone number match automatically. A .txt transcript also works.</span></label>
@@ -82,5 +84,6 @@ export function RecordingCallLogImport({ disabled, submittedPhone, onApply }: Pr
       {item.error && <p role="alert" className="mt-2 text-xs text-red-700">{item.error}</p>}
       {item.draft && <><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><p><strong>{String(item.draft.values.full_name || 'Missing name')}</strong><br />{String(item.draft.values.phone_number || '')}</p><p>{String(item.draft.values.address || 'Missing address')}<br />Requested: {item.draft.requestedDate || 'Choose date'} · {item.draft.requestedTime || item.draft.timeRange || 'Choose time'}</p></div>{item.draft.warnings.length > 0 && <ul className="mt-3 list-disc space-y-1 rounded-lg bg-amber-50 p-3 pl-7 text-xs text-amber-900">{item.draft.warnings.map(w => <li key={w}>{w}</li>)}</ul>}<details className="mt-3 text-xs"><summary className="cursor-pointer font-semibold text-indigo-700">Recording notes and field sources</summary><pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3">{String(item.draft.values.recording_notes || 'No recording transcript available.')}</pre><p className="mt-2 text-slate-600">{Object.entries(item.draft.sources).map(([key, source]) => `${key.replace(/_/g, ' ')}: ${source}`).join(' · ')}</p></details><button type="button" disabled={locked || item.submitted} onClick={() => { setAppliedId(item.id); onApply(item.draft!, item.file.name); }} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{item.submitted ? 'Submitted to QC' : appliedId === item.id ? 'Refill this booking form' : 'Fill booking form'}</button></>}
     </article>)}</div>
+    </div>
   </section>;
 }
