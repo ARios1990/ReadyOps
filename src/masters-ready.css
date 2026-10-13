@@ -1,0 +1,41 @@
+.masters-module { color:var(--readyops-text,#082750); }
+.masters-hero { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:18px; padding:20px; border:1px solid #cce2fa; border-radius:16px; background:linear-gradient(115deg,#edf7ff,#fff 65%,#f1f8ff); }
+.masters-heading { display:flex; align-items:center; gap:14px; }
+.masters-heading h2,.masters-section h3,.masters-metric h3 { font-family:'UnifrakturCook',Georgia,serif; font-weight:700; }
+.masters-heading h2 { font-size:32px; line-height:1.15; }
+.masters-heading p,.masters-section header p { margin-top:4px; font-size:12px; color:#1956a6; }
+.masters-icon { display:grid; place-items:center; padding:12px; border-radius:12px; background:linear-gradient(#1697ff,#0657df); color:white; box-shadow:0 5px 12px #0b64e526; }
+.masters-mark { width:210px; flex-shrink:0; }
+.masters-mark.is-large { width:270px; max-width:100%; margin:auto; }
+.masters-hero-actions,.masters-section-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.masters-section { overflow:hidden; border:1px solid #cbe1fb; border-radius:14px; background:var(--readyops-surface,#fff); box-shadow:0 4px 15px #0a56a908; }
+.masters-section>header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:linear-gradient(90deg,#eef7ff,#fff); border-bottom:1px solid #dceafd; }
+.masters-section h3 { font-size:25px; line-height:1.15; }
+.masters-section-body:not([hidden]) { animation:masters-reveal 160ms ease; }
+.masters-section-body[hidden] { display:none; }
+.masters-section-actions button,.masters-module .masters-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #bfdbfe; background:#f2f8ff; color:#075ddb; border-radius:8px; padding:8px 12px; font-size:12px; font-weight:700; transition:background 150ms; }
+.masters-module .masters-button.is-primary { background:#0868eb; color:#fff; border-color:#0868eb; }
+.masters-button:disabled { opacity:.4; cursor:not-allowed; }
+.masters-metric { display:flex; align-items:center; gap:14px; padding:17px; border:1px solid #bfdbfe; border-radius:12px; background:#eff7ff; }
+.masters-metric-symbol { display:grid; place-items:center; flex-shrink:0; width:45px; height:45px; border-radius:50%; background:#d6eaff; color:#0968ec; }
+.masters-metric h3 { font-size:22px; }
+.masters-metric strong { display:block; margin-top:3px; font-size:27px; }
+.masters-metric p { margin-top:5px; font-size:11px; color:#1856a0; }
+.masters-metric.tone-green { background:#ecfdf7; border-color:#a4eadb; }.masters-metric.tone-green .masters-metric-symbol { background:#b8f2df;color:#087c63; }
+.masters-metric.tone-red { background:#fff3f5; border-color:#ffc8d3; }.masters-metric.tone-red .masters-metric-symbol { background:#ffd4dd;color:#e41e4d; }
+.masters-metric.tone-purple { background:#f6f1ff;border-color:#ded0ff; }.masters-metric.tone-purple .masters-metric-symbol { background:#e6dcff;color:#7440db; }
+.masters-section.tone-green>header { background:linear-gradient(90deg,#e7fff5,#fff); }.masters-section.tone-red>header { background:linear-gradient(90deg,#fff0f3,#fff); }
+.masters-table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+.masters-table th { text-align:left; font-size:11px; font-weight:800; background:#eef7ff; color:#084cab; }.masters-table th,.masters-table td { padding:10px 12px; border-bottom:1px solid #e2edfa; }
+.masters-table tbody tr:nth-child(even) { background:#f8fbff; }.masters-table tfoot { background:#edfff7;font-weight:800; }
+.masters-notes { white-space:normal; max-width:360px; min-width:180px; line-height:1.4; color:#39658a; }
+.masters-badge { display:inline-flex; border-radius:7px; padding:4px 9px; font-size:11px; font-weight:800; background:#edf4fc; color:#265187; }.masters-badge.is-good { background:#cef7e7;color:#087557; }.masters-badge.is-bad { background:#ffe0e7;color:#c82648; }
+.masters-paid-stamp { display:inline-block; border:4px double #118052; border-radius:8px; padding:5px 18px; color:#118052; font-size:28px; font-weight:900; letter-spacing:3px; transform:rotate(-9deg); }
+.masters-paystub { display:grid; gap:18px; padding:20px; grid-template-columns:220px minmax(0,1fr); }.masters-paystub-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }.masters-paystub-card { padding:15px;border:1px solid #dce8f8;border-radius:10px;background:#f4f9ff; }.masters-paystub-card strong { display:block;font-size:24px;margin-top:12px; }.masters-paystub-card dl { display:grid; grid-template-columns:1fr auto; gap:9px; font-size:12px;margin-top:12px; }
+.masters-filter-row { display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));padding:15px;border:1px solid #cde1fa;border-radius:12px;background:#fff; }.masters-filter-row label { font-size:11px;font-weight:800; }.masters-filter-row input,.masters-filter-row select { display:block;width:100%;margin-top:5px;min-height:36px;border:1px solid #cde1fa;border-radius:7px;padding:7px 9px;font-size:12px;font-weight:400; }
+@keyframes masters-reveal { from {opacity:.4;transform:translateY(-3px)} to {opacity:1;transform:none} }
+@media(max-width:900px) {.masters-paystub{grid-template-columns:1fr}.masters-heading h2{font-size:27px}.masters-mark{width:175px}.masters-paystub-cards{grid-template-columns:1fr}.masters-section h3{font-size:22px}}
+@media(prefers-reduced-motion:reduce) {.masters-section-body:not([hidden]){animation:none}}
+html[data-theme='dark'] .masters-hero,html[data-theme='dark'] .masters-section>header,html[data-theme='dark'] .masters-filter-row {background:#10243c;border-color:#315478;color:#eaf2fb}
+html[data-theme='dark'] .masters-metric,html[data-theme='dark'] .masters-paystub-card,html[data-theme='dark'] .masters-table th,html[data-theme='dark'] .masters-table tbody tr:nth-child(even) {background:#142d48;color:#eaf2fb;border-color:#315478}
+html[data-theme='dark'] .masters-table td {border-color:#315478}html[data-theme='dark'] .masters-heading p,html[data-theme='dark'] .masters-section header p,html[data-theme='dark'] .masters-metric p {color:#9cc9ff}

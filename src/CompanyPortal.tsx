@@ -58,6 +58,8 @@ import {
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import { SharedRecordingPlayer } from "./SharedRecordingPlayer";
+import { CompanyRecordingCell } from './CompanyRecordingCell';
+import { cleanProfileValue } from './bookingDefaults';
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { useCompanyPortalPresence } from "./useCompanyPortalPresence";
 import {
@@ -3228,6 +3230,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
  {key:'inspector',label:'Inspector Assignment',width:150}, {key:'homeowner',label:'Homeowner',width:175},
  {key:'appointment',label:'Appointment Date & Time',width:150}, {key:'address',label:'Full Address',width:240},
  {key:'service',label:'Service',width:120}, {key:'roofAge',label:'Roof Age',width:85},
+ {key:'recording',label:'Recording',width:290},
  {key:'roofType',label:'Roof Type',width:90}, {key:'homeType',label:'Home Type',width:110},
  {key:'stories',label:'Stories',width:75}, {key:'insurance',label:'Insurance',width:85},
  {key:'carrier',label:'Carrier',width:110}, {key:'damage',label:'Damage / Hail',width:115},
@@ -3299,11 +3302,12 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                           {fullAddress || "—"}
                         </td>
                         <td className="min-w-[95px] border-b border-r border-slate-200 px-2.5 py-3">
-                          {appointment.lead.service_needed || "—"}
+                          {cleanProfileValue(appointment.lead.service_needed) || "—"}
                         </td>
                         <td className="min-w-[68px] border-b border-r border-slate-200 px-2.5 py-3">
                           {formatRoofAge(form.roof_age)}
                         </td>
+                        <td className="border-b border-r border-slate-200 px-2.5 py-3" onClick={event => event.stopPropagation()}><CompanyRecordingCell companyId={companyId} token={token} lead={appointment.lead} /></td>
                         <td className="min-w-[72px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.roof_type || "—")}
                         </td>

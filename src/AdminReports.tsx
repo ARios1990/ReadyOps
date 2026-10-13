@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase";
 import { defaultReportDateRange, isLeadOutcome } from "./leadOutcome";
+import { MastersHero, MastersSection, MastersMetric } from './MastersReady';
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { leadStatusExportValue } from "./leadStatusPresentation";
 import { LeadStatusBadge } from "./LeadStatusControls";
@@ -41,6 +42,10 @@ export function AdminReports({
   const [endDate, setEndDate] = useState(defaultRange.endDate);
   const [companyId, setCompanyId] = useState("all");
   const [agentId, setAgentId] = useState("all");
+  const [teamId, setTeamId] = useState('all');
+  const [serviceType, setServiceType] = useState('all');
+  const [search, setSearch] = useState('');
+  const loadRevision = useRef(0);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
@@ -54,6 +59,8 @@ export function AdminReports({
   const [payrollEntries, setPayrollEntries] = useState<Obj[]>([]);
 
   async function load() {
+    const revision = ++loadRevision.current;
+    if (!startDate || !endDate || startDate > endDate) { setError('Choose a valid From and Through date range.'); setLoading(false); return; }
     setLoading(true);
     setError("");
     const [c, a, t, l, ap, inv, pay] = await Promise.all([
@@ -63,7 +70,7 @@ export function AdminReports({
       supabase
         .from("portal_leads")
         .select(
-          "id,lead_code,company_id,agent_id,agent_name,qc_status,qualification_status,created_at",
+          "id,lead_code,company_id,agent_id,agent_name,full_name,phone_number,service_needed,form_data,qc_status,qualification_status,created_at",
         ),
       supabase
         .from("portal_appointments")
@@ -85,6 +92,9 @@ export function AdminReports({
         .lte("payroll_periods.week_start", endDate)
         .gte("payroll_periods.week_end", startDate),
     ]);
+    const periodIds = [...new Set(((pay.data || []) as Obj[]).map(row => String(row.payroll_period_id)))];
+    const payrollResults = await Promise.all(periodIds.map(id => supabase.rpc('get_readyops_payroll_entries', { p_period_id: id })));
+    if (revision !== loadRevision.current) return;
     const firstError =
       c.error ||
       a.error ||
@@ -92,7 +102,7 @@ export function AdminReports({
       l.error ||
       ap.error ||
       inv.error ||
-      pay.error;
+      pay.error || payrollResults.find(result => result.error)?.error;
     if (firstError) setError(firstError.message);
     setCompanies((c.data || []) as Obj[]);
     setAgents((a.data || []) as Obj[]);
@@ -100,7 +110,7 @@ export function AdminReports({
     setLeads((l.data || []) as Obj[]);
     setAppointments((ap.data || []) as Obj[]);
     setInvoices((inv.data || []) as Obj[]);
-    setPayrollEntries((pay.data || []) as Obj[]);
+    setPayrollEntries(payrollResults.flatMap(result => (result.data || []) as Obj[]));
     setLoading(false);
   }
 
@@ -123,6 +133,9 @@ export function AdminReports({
       joined.filter((row) => {
         if (companyId !== "all" && row.company_id !== companyId) return false;
         if (agentId !== "all" && row.lead?.agent_id !== agentId) return false;
+        if (teamId !== 'all' && agents.find(agent => agent.id === row.lead?.agent_id)?.team_id !== teamId) return false;
+        if (serviceType !== 'all' && (row.lead?.form_data?.service_type || 'roofing') !== serviceType) return false;
+        if (search && ![row.lead?.full_name,row.lead?.phone_number,row.lead?.agent_name,companies.find(company => company.id === row.company_id)?.name].join(' ').toLowerCase().includes(search.toLowerCase())) return false;
         if (statusFilter === "approved" && row.lead?.qc_status !== "approved")
           return false;
         if (statusFilter === "denied" && row.lead?.qc_status !== "denied")
@@ -135,7 +148,7 @@ export function AdminReports({
         if (statusFilter === "pending" && !isPending(row)) return false;
         return true;
       }),
-    [joined, companyId, agentId, statusFilter],
+    [joined, companyId, agentId, statusFilter, teamId, serviceType, search, agents, companies],
   );
 
   const metrics = useMemo(
@@ -159,12 +172,12 @@ export function AdminReports({
             (companyId === "all" || i.company_id === companyId),
         )
         .reduce((sum, i) => sum + Number(i.total || 0), 0),
-      payroll: payrollEntries.reduce(
+      payroll: payrollEntries.filter(entry => (teamId === 'all' || entry.team_id === teamId) && (agentId === 'all' || entry.agent_id === agentId)).reduce(
         (sum, p) => sum + Number(p.total_pay || 0),
         0,
       ),
     }),
-    [filtered, invoices, payrollEntries, companyId],
+    [filtered, invoices, payrollEntries, companyId, teamId, agentId],
   );
 
   const companyRows = useMemo(
@@ -270,25 +283,10 @@ export function AdminReports({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="readyops-ref-page-header">
-        <div className="readyops-ref-title-row">
-          <h2>Reports</h2>
-          <span>Operational + Financial Performance</span>
-        </div>
-        <div className="readyops-ref-page-actions">
-          <button
-            className="readyops-ref-secondary"
-            onClick={() => void load()}
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button className="readyops-ref-primary" onClick={exportCsv}>
-            <Download size={14} /> Export CSV
-          </button>
-        </div>
-      </div>
+    <div className="masters-module space-y-4">
+      <MastersHero title="Reports" subtitle="Operational and financial performance" actions={<><button className="masters-button" onClick={() => void load()}><RefreshCw size={14}/>Refresh</button><button className="masters-button is-primary" onClick={exportCsv}><Download size={14}/>Export CSV</button></>} />
 
+      <MastersSection title="Search & Filters" storageKey="masters-reports-filters">
       <section className="readyops-ref-card p-4">
         <div className="grid gap-3 md:grid-cols-5">
           <label className="text-xs font-bold">
@@ -339,6 +337,9 @@ export function AdminReports({
               ))}
             </select>
           </label>
+          <label className="text-xs font-bold">Team<select aria-label="Report team" value={teamId} onChange={event=>setTeamId(event.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Teams</option>{teams.map(team=><option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
+          <label className="text-xs font-bold">Service Type<select aria-label="Report service" value={serviceType} onChange={event=>setServiceType(event.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="all">All Services</option>{[...new Set(leads.map(lead=>String(lead.form_data?.service_type || 'roofing')))].sort().map(service=><option key={service} value={service}>{service.replace(/_/g,' ').replace(/\b\w/g,char=>char.toUpperCase())}</option>)}</select></label>
+          <label className="text-xs font-bold">Search<input aria-label="Search report leads" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Homeowner, phone, company, agent…" className="mt-1 w-full rounded-lg border p-2"/></label>
           <label className="text-xs font-bold">
             Status
             <select
@@ -360,11 +361,14 @@ export function AdminReports({
         </div>
       </section>
 
+      <p className="px-4 pb-3 text-xs text-slate-500">Lead filters apply to lead tables. Revenue follows company and date; payroll follows team, agent, and whole generated pay periods overlapping the date range.</p>
+      </MastersSection>
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
+      <MastersSection title="Performance Summary" storageKey="masters-reports-summary">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-12">
         <Kpi label="Total Leads" value={metrics.total} />
         <Kpi label="QC Approved" value={metrics.approved} />
@@ -380,6 +384,8 @@ export function AdminReports({
         <Kpi label="Payroll Cost" value={money(metrics.payroll)} />
       </section>
 
+      </MastersSection>
+      <MastersSection title="Report Details" subtitle="Company, agent, appointment, and financial breakdowns" storageKey="masters-reports-details">
       <section className="readyops-ref-card readyops-reports-results">
         <div className="readyops-ref-tabs readyops-reports-tabs">
           {(
@@ -422,17 +428,13 @@ export function AdminReports({
           )}
         </div>
       </section>
+      </MastersSection>
     </div>
   );
 }
 
 function Kpi({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="readyops-ref-card p-4">
-      <p className="text-[10px] font-extrabold uppercase opacity-60">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
-    </div>
-  );
+  return <MastersMetric label={label} value={value} tone={/bad|denied|no shows/i.test(label)?'red':/good|approved|completed/i.test(label)?'green':'blue'} />;
 }
 function money(v: number) {
   return new Intl.NumberFormat("en-US", {

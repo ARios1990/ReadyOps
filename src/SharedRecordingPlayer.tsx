@@ -34,7 +34,8 @@ export function SharedRecordingPlayer({
       if (!shared || !recordingUrl) return;
 
       if (!isStoredRecording(recordingUrl)) {
-        setPlaybackUrl(recordingUrl);
+        try { const url=new URL(recordingUrl); if(!['http:','https:'].includes(url.protocol)) throw new Error('Invalid audio link'); setPlaybackUrl(url.href); }
+        catch { setError('This recording link is unavailable.'); }
         return;
       }
 

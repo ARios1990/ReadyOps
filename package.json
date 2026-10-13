@@ -9,12 +9,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs"
+    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs && node tests/payroll-presentation.test.mjs && node tests/paystub.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.344.0",
+    "pdf-lib": "1.17.1",
     "pdfjs-dist": "^6.3.289",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
