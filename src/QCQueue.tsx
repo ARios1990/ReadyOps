@@ -18,6 +18,8 @@ import {
   Clock3,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   Headphones,
   Loader2,
   RefreshCw,
@@ -37,6 +39,9 @@ import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
+import { RecordingCallLogImport } from './RecordingCallLogImport';
+import { normalizePhone, type ImportDraft } from './recordingImport';
+import './qc-layout.css';
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
 import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, switchServiceValues, type ServiceTemplate } from './serviceTemplates';
 import { LeadEmailHistory } from './LeadEmailHistory';
@@ -171,6 +176,10 @@ export function QCQueue() {
   >("all_history");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Obj | null>(null);
+  const [progressVisible, setProgressVisible] = useState(true);
+  const [calendarVisible, setCalendarVisible] = useState(true);
+  const [importTranscript, setImportTranscript] = useState('');
+  const [importMatch, setImportMatch] = useState<{ draft: ImportDraft; filename: string; rows: Obj[] } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [values, setValues] = useState<Obj>({});
   const [targetCompany, setTargetCompany] = useState("");
@@ -436,6 +445,7 @@ export function QCQueue() {
   }
 
   async function openReview(row: Obj, startReview = false) {
+    setImportTranscript('');
     setBusy(true);
     setError("");
     setMessage("");
@@ -466,6 +476,32 @@ export function QCQueue() {
     setDecisionNotes(row.qc_review?.notes || row.lead.qc_notes || "");
     setScheduleOverrideReason("");
     setBusy(false);
+  }
+  async function matchImportedLead(draft: ImportDraft, filename: string) {
+    const phone = normalizePhone(String(draft.values.phone_number || ''));
+    if (!phone) { setError('The imported call needs a valid phone number to match a QC lead.'); return; }
+    setBusy(true); setError(''); setImportMatch(null);
+    try {
+      const { data, error: matchError } = await supabase.rpc('search_qc_leads_global', {
+        p_search: phone, p_company_id: companyId || null, p_location_id: null,
+        p_team_id: null, p_agent_id: null, p_qc_status: null,
+        p_appointment_status: null, p_state: null, p_service_area: null, p_limit: 100,
+      });
+      if (matchError) throw matchError;
+      const matches = ((data as QueueData | null)?.rows || []).filter(row => normalizePhone(String(row.lead.phone_number || '')) === phone);
+      if (!matches.length) setError('No accessible QC lead matches this phone. Check the company filter or book the appointment first, then import it here.');
+      else setImportMatch({ draft, filename, rows: matches });
+    } catch (matchError) { setError(rpcError(matchError)); }
+    finally { setBusy(false); }
+  }
+  async function applyToQC(row: Obj) {
+    if (!importMatch) return;
+    const { draft, filename } = importMatch;
+    await openReview(row);
+    setValues(current => ({ ...current, ...Object.fromEntries(Object.entries(draft.values).filter(([, value]) => value !== '' && value != null)) }));
+    setImportTranscript(draft.transcript);
+    setMessage(`Filled from ${filename}. Review the imported fields and save lead information. Save the transcript separately in Appointment Recording. The existing appointment time is preserved.`);
+    setImportMatch(null);
   }
   async function saveEdits() {
     if (!selected) return;
@@ -968,6 +1004,8 @@ export function QCQueue() {
 
   const actions = (
     <>
+      <button className="readyops-ref-secondary" aria-expanded={progressVisible} aria-controls="qc-progress" onClick={() => setProgressVisible(value => !value)}>{progressVisible ? <EyeOff size={14} /> : <Eye size={14} />}{progressVisible ? 'Hide progress' : 'Show progress'}</button>
+      <button className="readyops-ref-secondary" aria-expanded={calendarVisible} aria-controls="qc-calendar" onClick={() => setCalendarVisible(value => !value)}>{calendarVisible ? <EyeOff size={14} /> : <Eye size={14} />}{calendarVisible ? 'Hide calendar' : 'Show calendar'}</button>
       <button className="readyops-ref-secondary" onClick={goToday}>
         Today
       </button>
@@ -1020,7 +1058,8 @@ export function QCQueue() {
             ? "Admin QC mode: Approve keeps the lead internal. Use Send Lead only after QC is complete."
             : "Final QC mode: Approve keeps the lead internal. An Admin must press Send Lead before the client can see it."}
       </div>
-      <section className="readyops-ref-metrics">
+      <div className={`qc-progress-import-grid ${progressVisible ? '' : 'is-progress-hidden'}`}>
+      <section id="qc-progress" className="readyops-ref-metrics" hidden={!progressVisible}>
         <Metric
           icon={<Building2 />}
           tone="blue"
@@ -1070,6 +1109,9 @@ export function QCQueue() {
           value={`${completion}%`}
         />
       </section>
+      <div className="qc-import-placement"><RecordingCallLogImport mode="qc" disabled={busy} onApply={(draft, filename) => void matchImportedLead(draft, filename)} /></div>
+      </div>
+      {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {row.appointment.appointment_date} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
       <section className="mb-4 rounded-2xl border bg-white/95 p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
           <Select
@@ -1207,7 +1249,7 @@ export function QCQueue() {
           </div>
         </div>
       </section>
-      <section className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+      <section id="qc-calendar" hidden={!calendarVisible} className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
         {queue.days.map((day) => {
           const date = new Date(`${day.date}T12:00:00`);
           const active = day.date === selectedDate;
@@ -1365,6 +1407,7 @@ export function QCQueue() {
           duplicateMatches={duplicates[String(selected.lead.id)] || []}
           send={() => sendLead(selected)}
           selectedAgentId={selectedAgentId}
+          importedTranscript={importTranscript}
           setSelectedAgentId={setSelectedAgentId}
           reassignAgent={reassignAgent}
           deleteLead={deleteLead}
@@ -1637,6 +1680,7 @@ type DialogProps = {
   duplicateMatches: LeadDuplicateMatch[];
   send: () => Promise<void>;
   selectedAgentId: string;
+  importedTranscript: string;
   setSelectedAgentId: (value: string) => void;
   reassignAgent: () => Promise<void>;
   deleteLead: () => Promise<void>;
@@ -1812,6 +1856,7 @@ function ReviewDialog(props: DialogProps) {
               <QCRecordingUpload
                 leadId={props.row.lead.id}
                 onRecordingNotesChange={(value) => props.change('recording_notes', value)}
+                importedTranscript={props.importedTranscript}
                 value={String(props.values.recording_url || "")}
                 shared={Boolean(props.values.share_recording_with_company)}
                 onChange={(value) => props.change("recording_url", value)}

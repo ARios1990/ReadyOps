@@ -1,19 +1,17 @@
-# Recording and call-log import
+# Recording and call-log import in QC
 
-In the existing agent booking page, use **Recording + call log**:
+Open **QC Queue** and select **Show** on **Recording + call log**, beside the progress cards.
 
-1. Upload the ReadyMode CSV call log.
-2. Upload up to 20 recordings. Include the customer's phone number in each filename so it matches automatically. If a phone has several calls, select the correct call-log row.
-3. Select the recording language (English or Spanish) for this batch, then select **Prepare forms automatically**.
-4. Review the complete address, requested appointment, source fields, and warnings. Select **Fill booking form**, review the service questions, choose a live appointment slot, and submit.
-5. Repeat for the next prepared customer. Submitted items are marked in the upload list.
+1. Upload the ReadyMode CSV call log and up to 20 recordings (or `.txt` transcripts). Phone numbers in filenames match log rows automatically; choose the row when multiple calls match.
+2. Choose English or Spanish, then **Prepare forms automatically**.
+3. Review addresses, recording passages, requested dates, and conflict warnings.
+4. Select **Find QC lead to fill**. Choose the existing lead from matching phone-number results; results respect the signed-in reviewer's access and the selected company filter.
+5. Review the populated QC form, then **Save Lead Information**. In Appointment Recording, review the imported transcript and select **Save Transcript** separately.
 
-The full Address field includes street, city, state, and ZIP. Imported bookings require all four components before submission. Conflicting dates, time windows, and contradictory recording/log statements require review. Unanswered questions remain blank.
+Imported addresses include street, city, state, and ZIP. Empty imported answers leave existing answers intact. Importing does not create, reschedule, approve, or send appointments. If no accessible lead matches, book the appointment through its company page first, then import it in QC.
 
-Audio transcription runs in the browser using the existing Whisper worker. The first run downloads the model; long recordings can take several minutes. MP3, WAV, M4A, OGG, and WebM work when supported by the browser. An existing `.txt` transcript can be uploaded instead. If transcription fails, call-log details can still be reviewed and used.
+Audio transcription runs in the browser using Whisper; the first run downloads a model. Long recordings may take several minutes. Recordings are not automatically uploaded by the importer. Full transcripts remain in the private QC transcript table under existing access policies.
 
-Recordings are not uploaded by this import workflow. Reviewed notes are included with the booking; the complete transcript is saved to the internal QC transcript table after successful submission. If that save fails, keep the tab open and use **Retry saving transcript**. The endpoint requires both the appointment's management token and the browser session that submitted it, accepts only recent pending bookings, and does not overwrite transcripts saved by QC reviewers.
+The QC Calendar header remains visible during scrolling. **Show/Hide calendar** toggles the week cards, and **Show/Hide progress** toggles the summary metrics. The importer remains available and keeps its uploaded files when either section is hidden.
 
-QC displays **Notes from the recording** in place of the automatic template note. Reviewers can select quoted passages, edit the notes after listening, save the transcript, and save lead changes. The full transcript remains internal.
-
-Deployment requires the `preserve_recording_notes` migration, `save-booking-transcript` Edge Function, and the frontend build together. The Edge Function uses custom booking/session authentication, so its platform `verify_jwt` setting is false. Server credentials stay in Supabase environment variables.
+The importer is no longer displayed on public agent booking pages. The existing booking-transcript endpoint remains deployed for compatibility with older open booking sessions.
