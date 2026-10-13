@@ -3124,7 +3124,7 @@ function CompanyLeadsSpreadsheet({
                           {formatTime(appointment.start_time)}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {appointment.lead.service_needed || "Service not listed"}
+                          {cleanProfileValue(appointment.lead.service_needed) || "Service not listed"}
                           {" • "}
                           {appointment.location_label || "Company-wide"}
                         </p>
@@ -3157,6 +3157,11 @@ function CompanyLeadsSpreadsheet({
                       >
                         Assign & update
                       </button>
+                    </div>
+
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+                      <p className="mb-2 text-xs font-bold text-blue-950">Recording</p>
+                      <CompanyRecordingCell companyId={companyId} token={token} lead={appointment.lead}/>
                     </div>
 
                     <div className="hidden gap-3 sm:grid">
