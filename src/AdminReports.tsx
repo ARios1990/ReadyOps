@@ -369,7 +369,7 @@ export function AdminReports({
         </div>
       )}
       <MastersSection title="Performance Summary" storageKey="masters-reports-summary">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-12">
+      <section className="masters-metric-grid">
         <Kpi label="Total Leads" value={metrics.total} />
         <Kpi label="QC Approved" value={metrics.approved} />
         <Kpi label="QC Denied" value={metrics.denied} />

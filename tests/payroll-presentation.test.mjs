@@ -41,6 +41,13 @@ assert.equal(renderer.root.findAllByType('section').find(node=>node.props.classN
 act(()=>renderer.unmount());saved.clear();await settle(()=>renderer=TestRenderer.create(React.createElement(Harness,{managerMode:true,rows:entries.map(entry=>({...entry,status:'paid',payment_date:'2026-10-12'}))})));
 assert.equal(renderer.root.findAllByType('button').some(node=>node.children.join('')==='Reopen payment'),false);
 assert.ok(renderer.root.findAllByType('span').some(node=>node.props.className==='masters-paid-stamp'));
+await act(async()=>{button('Download Paystub').props.onClick();await new Promise(resolve=>setTimeout(resolve,150));});
+const pdfLink=renderer.root.findAllByType('a').find(node=>node.props.download?.endsWith('.pdf'));
+assert.ok(pdfLink,'PDF generation exposes an explicit download link');
+assert.ok(pdfLink.props.href.startsWith('blob:'));
+assert.ok(pdfLink.props.download.includes('Alpha-Team'));
+await settle(()=>button('Individual agent').props.onClick());
+assert.equal(renderer.root.findAllByType('a').filter(node=>node.props.download).length,0,'Changing the payroll selection removes the stale download');
 act(()=>renderer.unmount());calls.length=0;
 await settle(()=>renderer=TestRenderer.create(React.createElement(CompanyRecordingCell,{companyId:'company',token:'capability',lead:{id:'lead',recording_url:'storage://qc-recordings/private.mp3',recording_shared:false}})));
 assert.equal(renderer.root.findAllByType('button').length,0);assert.equal(calls.length,0);

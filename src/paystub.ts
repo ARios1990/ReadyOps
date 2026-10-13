@@ -53,9 +53,13 @@ export async function buildPaystubPdf({ title, period, entries }: { title: strin
   return pdf.save();
 }
 
-export async function downloadPaystub(title: string, period: {week_start?: string;week_end?: string}, entries: PayrollRecord[]) {
+export async function preparePaystubDownload(title: string, period: {week_start?: string;week_end?: string}, entries: PayrollRecord[]) {
   const bytes = await buildPaystubPdf({ title,period,entries });
   const url = URL.createObjectURL(new Blob([bytes as BlobPart],{type:'application/pdf'}));
-  const link=document.createElement('a'); link.href=url; link.download=`paystub-${title.replace(/[^a-z0-9]+/gi,'-')}-${period.week_start || 'period'}.pdf`; link.click();
+  return {url,filename:`paystub-${title.replace(/[^a-z0-9]+/gi,'-')}-${period.week_start || 'period'}.pdf`};
+}
+export async function downloadPaystub(title: string, period: {week_start?: string;week_end?: string}, entries: PayrollRecord[]) {
+  const {url,filename}=await preparePaystubDownload(title,period,entries);
+  const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
