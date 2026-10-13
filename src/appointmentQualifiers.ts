@@ -1,5 +1,6 @@
 import type { PortalFormField, PortalFormSection } from './DynamicLeadForm';
 import { preparePermanentLightingSchema } from './permanentLighting';
+import { ROOFING_SERVICE_OPTIONS } from './bookingDefaults';
 export const LANGUAGE_OPTIONS = ['English', 'Spanish', 'Bilingual', 'Other'];
 
 export const HOME_TYPES = ['Single Family Home', 'Town Home', 'Multifamily Home', 'Commercial', 'Mobile Home', 'Other'];
@@ -76,6 +77,7 @@ export function updateQualifierSchema(schema: PortalFormSection[], serviceId: st
   if (serviceId === 'permanent_exterior_lighting') return preparePermanentLightingSchema(schema);
   const next = schema.map(section => ({ ...section, fields: section.fields.filter(f => f.key !== 'storm_date').map(f => choices[f.key] ? { ...f, ...qualifier(f.key, f.label) } : f) }));
   if (serviceId === 'roofing') {
+    next.forEach(section => { section.fields = section.fields.map(field => field.key === 'service_needed' ? { ...field, type: 'select', required: true, mode: 'required', options: ROOFING_SERVICE_OPTIONS, placeholder: 'Select Service', allowOther: false, defaultValue: '' } : field.key === 'contract' ? { ...field, options: ['No', 'Yes'], defaultValue: 'No' } : field); });
     const existingKeys = new Set(next.flatMap(section => section.fields.map(field => field.key)));
     const additions = [['insurance', 'Insurance'], ['insurance_name', 'Insurance Name'], ['visible_damage', 'Visible Damage'], ['claim_filed', 'Claim Filed'], ['claim_status', 'Claim Status'], ['approved_work', 'Approved Work'], ['additional_properties', 'Additional Properties'], ['second_address', '2nd Address']];
     const missing = additions.filter(([key]) => !existingKeys.has(key)).map(([key, label]) => qualifier(key, label));
