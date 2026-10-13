@@ -322,8 +322,7 @@ export function switchServiceValues(
   return {
     ...kept,
     service_type: next.id,
-    service_needed: next.id === 'roofing' ? '' : next.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : next.name,
-    contract: kept.contract || 'No',
+    service_needed: next.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : next.name,
     _universal_template: true,
   };
 }
