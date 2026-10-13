@@ -7,10 +7,11 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  WalletCards,
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
+import { PayrollPresentation } from './PayrollPresentation';
+import { MastersSection } from './MastersReady';
 
 // Payroll RPC rows include configurable fields that vary by deployed migration.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,6 +79,7 @@ function calculatedTotal(row: Obj) {
 export function AdminPayroll({ managerMode = false }: { managerMode?: boolean }) {
   const [periods, setPeriods] = useState<Obj[]>([]);
   const [entries, setEntries] = useState<Obj[]>([]);
+  const [payrollLeads, setPayrollLeads] = useState<Obj[]>([]);
   const [agents, setAgents] = useState<Obj[]>([]);
   const [teams, setTeams] = useState<Obj[]>([]);
   const [periodId, setPeriodId] = useState("");
@@ -148,11 +150,13 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
     const chosen = preferred || periodId || nextPeriods[0]?.id || "";
     setPeriodId(chosen);
     if (chosen) {
-      const e = await supabase.rpc("get_readyops_payroll_entries", { p_period_id: chosen });
+      const e = await supabase.rpc("get_readyops_payroll_presentation", { p_period_id: chosen });
       if (e.error) setError(e.error.message);
-      setEntries((e.data || []) as Obj[]);
+      setEntries((e.data?.entries || []) as Obj[]);
+      setPayrollLeads((e.data?.leads || []) as Obj[]);
     } else {
       setEntries([]);
+      setPayrollLeads([]);
     }
 
     setDrafts({});
@@ -168,11 +172,12 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
   }, [periodId]);
 
   async function loadEntries(id: string) {
-    const e = await supabase.rpc("get_readyops_payroll_entries", { p_period_id: id });
+    const e = await supabase.rpc("get_readyops_payroll_presentation", { p_period_id: id });
     if (e.error) {
       setError(e.error.message);
     } else {
-      setEntries((e.data || []) as Obj[]);
+      setEntries((e.data?.entries || []) as Obj[]);
+      setPayrollLeads((e.data?.leads || []) as Obj[]);
       setDrafts({});
     }
   }
@@ -352,7 +357,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
     <div className="readyops-payroll space-y-4">
       <div className="readyops-ref-page-header">
         <div className="readyops-ref-title-row">
-          <h2>Payroll</h2>
+          <h2>Payroll Period & Controls</h2>
           <span>Sunday → Saturday · Leads by appointment date</span>
         </div>
         <div className="readyops-ref-page-actions">
@@ -421,13 +426,6 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                   <CheckCircle2 size={14} /> Approve
                 </button>
                 <button
-                  className="readyops-ref-secondary"
-                  disabled={period.status === "locked"}
-                  onClick={() => void setStatus("paid")}
-                >
-                  <WalletCards size={14} /> Mark Paid
-                </button>
-                <button
                   className="readyops-ref-primary"
                   disabled={period.status === "locked"}
                   onClick={() => void setStatus("locked")}
@@ -440,6 +438,8 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
         </div>
       </section>
 
+      <PayrollPresentation entries={entries} leads={payrollLeads} teams={teams} period={period} managerMode={managerMode} teamFilter={teamFilter} setTeamFilter={setTeamFilter} hasUnsavedChanges={Object.keys(drafts).length>0} reload={()=>load(periodId)} />
+      <MastersSection title="Pay Rates & Payroll Controls" subtitle="Edit and save weekly rates, hours, bonuses, and deductions" storageKey="masters-payroll-controls" defaultOpen={false}>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Kpi label="Agents" value={stats.agents} />
         <Kpi label="Total Weekly Leads" value={stats.leads} />
@@ -731,7 +731,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                         {money(calculatedTotal(row))}
                       </td>
                       <td><span className={`rounded-md px-2 py-1 font-bold ${row.status === 'paid' || period?.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{row.status === 'paid' || period?.status === 'paid' ? 'Paid' : 'Unpaid'}</span></td>
-                      <td><select aria-label={`${entry.agent_name} payroll status`} value={row.status || 'pending'} disabled={isLocked} onChange={event => updateDraft(entry, 'status', event.target.value)} className="rounded-md border p-2"><option value="pending">Pending</option><option value="approved">Approved</option><option value="paid">Paid</option></select></td>
+                      <td><select aria-label={`${entry.agent_name} payroll status`} value={row.status || 'pending'} disabled={isLocked} onChange={event => updateDraft(entry, 'status', event.target.value)} className="rounded-md border p-2"><option value="pending">Pending</option><option value="approved">Approved</option><option value="paid" disabled>Paid — use Record payment</option></select></td>
                       <td><input aria-label={`${entry.agent_name} payment date`} type="date" value={row.payment_date || ''} disabled={isLocked} onChange={event => updateDraft(entry, 'payment_date', event.target.value)} className="rounded-md border p-2" /></td>
                       <td>
                         <div className="flex min-w-32 items-center gap-2">
@@ -771,6 +771,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
           </HorizontalScrollFrame>
         )}
       </section>
+      </MastersSection>
     </div>
   );
 }

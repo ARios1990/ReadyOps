@@ -779,6 +779,43 @@ await test('approval freezes payable counts and period payment marks every row p
   await db.query(`update public.payroll_periods set status='paid' where id='${payrollWeek}'`);
   assert.equal(await scalar(`select count(*)::int as value from public.payroll_entries where payroll_period_id='${payrollWeek}' and (status<>'paid' or payment_date is null)`),0);
 });
+await asUser(null,'postgres');
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261013040500_payroll_presentation_and_payments.sql',import.meta.url),'utf8'));
+let paymentEntryA,paymentEntryB;
+await test('payroll presentation keeps manager lead details inside the assigned team and matches weekly counters',async()=>{
+  await asUser(uid(1));
+  const data=await scalar(`select public.get_readyops_payroll_presentation('${payrollWeek}') as value`);
+  data.entries.forEach(entry=>assert.equal(data.leads.filter(lead=>lead.agent_id===entry.agent_id).length,entry.total_leads));
+  paymentEntryA=data.entries.find(entry=>entry.agent_id===uid(901)).id;
+  paymentEntryB=data.entries.find(entry=>entry.agent_id===uid(902)).id;
+  await asUser(uid(2));const own=await scalar(`select public.get_readyops_payroll_presentation('${payrollWeek}') as value`);
+  assert.ok(own.entries.length);assert.ok(own.entries.every(entry=>entry.team_id===uid(101)));
+  assert.ok(own.leads.every(lead=>lead.team_id===uid(101)));
+  await asUser(uid(4));await deny(`select public.get_readyops_payroll_presentation('${payrollWeek}')`);
+  await asUser(null,'anon');await deny(`select public.get_readyops_payroll_presentation('${payrollWeek}')`);
+});
+await test('payment reopen requires Admin and a reason; mixed-team payment batches fail atomically',async()=>{
+  await asUser(uid(2));await deny(`select public.reopen_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],'Correction')`);
+  await asUser(uid(1));await deny(`select public.reopen_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],'')`);
+  await db.query(`select public.reopen_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid,'${paymentEntryB}'::uuid],'Correct payment record')`);
+  await asUser(uid(2));await deny(`select public.record_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid,'${paymentEntryB}'::uuid],'2026-10-12','Bank transfer')`);
+  await asUser(uid(1));assert.equal(await scalar(`select count(*)::int as value from public.payroll_entries where id=any(array['${paymentEntryA}'::uuid,'${paymentEntryB}'::uuid]) and status='paid'`),0);
+});
+await test('team payment stores date method actor and an audit record; retry cannot rewrite paid history',async()=>{
+  await asUser(uid(2));await deny(`select public.record_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],null,'Bank transfer')`);
+  assert.equal(await scalar(`select public.record_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],'2026-10-12','Bank transfer') as value`),1);
+  assert.equal(await scalar(`select public.record_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],'2026-10-13','Cash') as value`),0);
+  const data=await scalar(`select public.get_readyops_payroll_presentation('${payrollWeek}') as value`),entry=data.entries.find(row=>row.id===paymentEntryA);
+  assert.equal(entry.status,'paid');assert.equal(entry.payment_date,'2026-10-12');assert.equal(entry.payment_method,'Bank transfer');assert.equal(entry.payment_recorded_by,uid(2));assert.equal(entry.payment_recorded_by_name,'Manager A');
+  await asUser(null,'postgres');assert.equal(await scalar(`select count(*)::int as value from public.management_audit_events where target_id='${paymentEntryA}' and event_type='payroll_payment_recorded'`),1);
+});
+await test('locked payroll and inactive accounts cannot record or reopen payment',async()=>{
+  await asUser(uid(1));await db.query(`update public.payroll_periods set status='locked' where id='${payrollWeek}'`);
+  await deny(`select public.reopen_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryA}'::uuid],'Correct payment record')`);
+  await asUser(uid(3));await deny(`select public.record_readyops_payroll_payment('${payrollWeek}',array['${paymentEntryB}'::uuid],'2026-10-12','Bank transfer')`);
+  await asUser(null,'postgres');await db.query(`update public.profiles set active=false where id='${uid(2)}'`);
+  await asUser(uid(2));await deny(`select public.get_readyops_payroll_presentation('${payrollWeek}')`);
+});
 await db.close();
 console.log(
   `${count} tests passed. No production records or external emails were used.`,

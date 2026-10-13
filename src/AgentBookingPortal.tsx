@@ -17,6 +17,7 @@ import { appointmentLabel, automaticNotes } from './appointmentQualifiers';
 import { normalizeLeadType } from "./leadTypes";
 import {
   addDays,
+  calendarWeekStart,
   copyText,
   formatDateLong,
   formatDateShort,
@@ -28,7 +29,8 @@ import {
 } from "./portalUtils";
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { AgentWeatherPreview, useWeeklyWeather } from "./AgentWeatherPreview";
-import { fullAddress } from './recordingImport';
+import { fullAddress, type ImportDraft } from './recordingImport';
+import { cleanProfileValue, contractValue, savedServiceValue } from './bookingDefaults';
 
 interface Slot {
   start: string;
@@ -312,15 +314,15 @@ interface Confirmation {
   form_data: Record<string, unknown>;
 }
 
-export function AgentBookingPortal({ slug }: { slug: string }) {
+export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBooked }: { slug: string; importedDraft?: ImportDraft; bookingAgentName?: string; onBooked?: () => void }) {
   const sessionId = useMemo(() => getPortalSessionId(), []);
-  const [weekStart, setWeekStart] = useState(() => startOfWeek());
+  const [weekStart, setWeekStart] = useState(() => importedDraft?.requestedDate ? calendarWeekStart(new Date(importedDraft.requestedDate + 'T12:00:00')) : startOfWeek());
   const [locationId, setLocationId] = useState<string | null>(null);
   const [autoSelectedLocation, setAutoSelectedLocation] = useState(false);
   const autoSelectAttempted = useRef(false);
   const [portal, setPortal] = useState<PublicPortalData | null>(null);
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
-  const queryPrefill = useMemo(() => readReadyModePrefill(), []);
+  const [expandedDate, setExpandedDate] = useState<string | null>(importedDraft?.requestedDate || null);
+  const queryPrefill = useMemo(() => importedDraft ? { agent_name: bookingAgentName || '', values: { ...importedDraft.values, service_needed: savedServiceValue(importedDraft.values.service_needed), contract: contractValue(importedDraft.values.contract) } as Record<string, unknown> } : readReadyModePrefill(), [importedDraft, bookingAgentName]);
   const [agentName, setAgentName] = useState(
     () =>
       queryPrefill.agent_name ||
@@ -339,6 +341,8 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [transcriptRetry, setTranscriptRetry] = useState(false);
+  const [transcriptMessage, setTranscriptMessage] = useState('');
   const [serviceTemplates, setServiceTemplates] = useState<ServiceTemplate[]>([]);
   const [templatesError, setTemplatesError] = useState('');
   const selectedTemplate = serviceTemplates.find(s => s.id === formValues.service_type);
@@ -352,7 +356,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       setServiceTemplates(templates);
       setFormValues(current => {
         const initial = templates.find(s => s.id === current.service_type) || templates.find(s => s.id === inferServiceType(current.service_needed)) || templates[0];
-        return initial ? { ...current, service_type: initial.id, service_needed: initial.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : current.service_needed || initial.name, _universal_template: true } : current;
+        return initial ? { ...current, service_type: initial.id, service_needed: initial.id === 'roofing' ? savedServiceValue(current.service_needed) : initial.id === 'permanent_exterior_lighting' ? 'Free Design & Estimate' : current.service_needed || initial.name, contract: contractValue(current.contract), _universal_template: true } : current;
       });
     });
     return () => { cancelled = true; };
@@ -587,12 +591,14 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   async function submitAppointment() {
     if (!reservation) return;
     if (!selectedTemplate || templatesError) { setError('Service configuration is unavailable. Refresh or contact an Admin.'); return; }
+    if (importedDraft && (['address', 'city', 'state', 'zip_code'].some(key => !String(formValues[key] || '').trim()) || String(formValues.address || '').trim() === fullAddress('', String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')))) { setError('Complete the street address, city, state, and ZIP code before confirming this imported appointment.'); return; }
     const requiredMissing = visibleTemplateFields(selectedTemplate.form_schema, formValues).find(f => (f.mode === 'required' || (!f.mode && f.required)) && (formValues[f.key] == null || !String(formValues[f.key]).trim() || (Array.isArray(formValues[f.key]) && !(formValues[f.key] as unknown[]).length)));
     if (requiredMissing) { setError(`${requiredMissing.label} is required.`); return; }
     setBusy(true);
     setError("");
     const basePayload = {
       ...formValues,
+      contract: contractValue(formValues.contract),
       address: fullAddress(String(formValues.address || ''), String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')),
       appointment_date: reservation.appointment_date,
       appointment_time: reservation.start_time,
@@ -617,9 +623,21 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       const result = data as Confirmation;
       setConfirmation(result);
       setReservation(null);
+      if (importedDraft?.transcript) await saveImportedTranscript(result);
+      onBooked?.();
       await loadPortal();
     }
     setBusy(false);
+  }
+
+  async function saveImportedTranscript(result: Confirmation) {
+    if (!importedDraft?.transcript) return;
+    setTranscriptRetry(true);
+    try {
+      const { data, error: saveError } = await supabase.functions.invoke('save-booking-transcript', { body: { manage_token: result.manage_token, session_id: sessionId, transcript: importedDraft.transcript, recording_notes: String(formValues.recording_notes || '') } });
+      if (saveError || data?.error) throw saveError || new Error(data.error);
+      setTranscriptRetry(false); setTranscriptMessage('Appointment and recording transcript saved to QC.');
+    } catch { setTranscriptMessage('Appointment submitted. Transcript saving failed; keep this form open and retry saving the transcript below.'); }
   }
 
   if (loading && !portal)
@@ -676,6 +694,8 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-5 px-4 py-5 sm:px-6">
+        {importedDraft && !confirmation && <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm"><p className="font-bold">New appointment from recording + call log</p><p>Requested: {importedDraft.requestedDate || 'Choose date'} · {importedDraft.requestedTime || importedDraft.timeRange || 'Choose time'}. Review the fields and select a live appointment slot.</p>{importedDraft.warnings.length > 0 && <ul className="mt-2 list-disc pl-5">{importedDraft.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}</section>}
+        {transcriptMessage && <div role="status" className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">{transcriptMessage}{transcriptRetry && confirmation && <button disabled={busy} onClick={() => void saveImportedTranscript(confirmation)} className="ml-3 rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white">Retry saving transcript</button>}</div>}
         {(settings.requirementsShort || settings.requirementsDetail) && (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <h2 className="text-sm font-bold text-amber-900">
@@ -800,6 +820,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
               </label>
               <input
                 value={agentName}
+                readOnly={Boolean(bookingAgentName)}
                 onChange={(e) => setAgentName(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
                 placeholder="Your name"
@@ -1020,7 +1041,7 @@ function readReadyModePrefill(): {
   const get = (...keys: string[]) => {
     for (const key of keys) {
       const value = q.get(key);
-      if (value) return value;
+      if (value && cleanProfileValue(value)) return cleanProfileValue(value);
     }
     return "";
   };
@@ -1050,7 +1071,7 @@ function readReadyModePrefill(): {
     lead_type: normalizeLeadType(
       get("lead_type", "leadType", "campaign_type", "lane"),
     ),
-    service_needed: get("service_needed", "services_needed"),
+    service_needed: savedServiceValue(get("service_needed", "services_needed", "services_need", "service_requested")),
     last_checked_on: get("last_checked_on"),
     home_type: get("home_type"),
     roof_type: get("roof_type"),
@@ -1058,7 +1079,7 @@ function readReadyModePrefill(): {
     stories: get("stories"),
     insurance: get("insurance"),
     insurance_name: get("insurance_name"),
-    contract: get("contract") || "No",
+    contract: contractValue(get("contract")),
     home_value: get("home_value"),
     sq_ft: get("sq_ft"),
     web_url: get("web_url", "web_link"),
