@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { QCCustomerInformation } from './QCCustomerInformation';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
@@ -237,6 +238,7 @@ export function ClientLeadTemplate({
   const notes = leadValue(lead, 'notes', 'notes');
   const editable = Boolean(onChange);
   const [copied, setCopied] = useState(false);
+  const qcServiceRef = useRef<HTMLSelectElement>(null);
 
   const editValue = (key: string, fallback: string): string => {
     if (editValues && Object.prototype.hasOwnProperty.call(editValues, key)) {
@@ -343,6 +345,7 @@ export function ClientLeadTemplate({
             <Row label="Type of Service:" value={serviceSnapshot.name} />
             {!isRoofing && !isLighting && <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' · ' + formatTime(appointment.start_time)} />}
             {(isRoofing ? matchedRoofingSchema : serviceSnapshot.form_schema).map(section => {
+              if (editable && recordingNotesOnly && isRoofing && section.id === 'customer') return <Section key={section.id} title="Customer Information"><QCCustomerInformation values={copyLead as Record<string, unknown>} appointment={appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at ')} onChange={onChange!} serviceRef={qcServiceRef}/></Section>;
               const data: Record<string, unknown> = { ...copyLead.form_data, ...copyLead, appointment_display: appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at '), summary_display: automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) };
               const roofingSummary = isRoofing;
               const fields = section.fields.filter(f => qualifierVisible(f, data) && !['recording','internal'].includes(f.type) && !['notes','storm_date'].includes(f.key) && !(recordingNotesOnly && f.key === 'summary_display') && (editable || ((roofingSummary || !NOTES_ONLY.has(f.key)) && answer(data, f.key))));
@@ -355,6 +358,7 @@ export function ClientLeadTemplate({
             })}
             {!recordingNotesOnly && !isRoofing && !isLighting && <Section title="Additional Information"><Row label="Notes:" field="summary_notes" value={automaticNotes(serviceSnapshot.name, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time })} multiline onChange={onChange} /></Section>}
           </div> : <><Section title="Customer Information">
+            {editable && recordingNotesOnly ? <QCCustomerInformation values={copyLead as Record<string, unknown>} appointment={appointmentLabel({ appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }).replace(' · ', ' at ')} onChange={onChange!} serviceRef={qcServiceRef}/> : <>
             <Row label="App Date & Time:" value={formatClientDate(appointment.appointment_date) + ' • ' + formatTime(appointment.start_time)} />
             <Row label="Name:" field="full_name" value={leadValue(lead, 'full_name', 'full_name', 'name')} editValue={editValue('full_name', leadValue(lead, 'full_name', 'full_name', 'name'))} onChange={onChange} />
             <Row label="Phone:" field="phone_number" inputType="tel" value={leadValue(lead, 'phone_number', 'phone_number', 'phone')} editValue={editValue('phone_number', leadValue(lead, 'phone_number', 'phone_number', 'phone'))} onChange={onChange} />
@@ -362,6 +366,7 @@ export function ClientLeadTemplate({
             <Row label="Email:" field="email" inputType="email" value={leadValue(lead, 'email', 'email').toLowerCase()} editValue={editValue('email', leadValue(lead, 'email', 'email').toLowerCase())} onChange={onChange} />
             <Row label="Language:" field="language" value={leadValue(lead, 'language', 'language')} editValue={editValue('language', leadValue(lead, 'language', 'language'))} options={LANGUAGE_OPTIONS} onChange={onChange} />
             <Row label="Services Needed:" field="service_needed" value={serviceNeeded} editValue={editValue('service_needed', serviceNeeded)} onChange={onChange} />
+            </>}
           </Section>
 
           <Section title="Property Details" columns>
@@ -399,7 +404,7 @@ export function ClientLeadTemplate({
             <button
               type="button"
               disabled={saving}
-              onClick={() => void onSave?.()}
+              onClick={() => { if (qcServiceRef.current && !qcServiceRef.current.reportValidity()) return; void onSave?.(); }}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={15} />

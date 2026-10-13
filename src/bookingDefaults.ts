@@ -2,7 +2,7 @@ export const ROOFING_SERVICE_OPTIONS = ['Roof Inspection', 'Roof Repair', 'Roof 
 
 export function cleanProfileValue(value: unknown): string {
   const text = String(value ?? '').trim();
-  return /\(\s*Profile\.[^)]+\)/i.test(text) ? '' : text;
+  return /\(\s*Profile\./i.test(text) ? '' : text;
 }
 
 export function contractValue(value: unknown): string {
