@@ -3,6 +3,7 @@ import { Loader2, UploadCloud } from 'lucide-react';
 import { shouldShowField, getPortalSessionId, normalizeRoofAgeInput } from './portalUtils';
 import { supabase } from './supabase';
 import { qualifierVisible } from './appointmentQualifiers';
+import { contractValue, savedServiceValue } from './bookingDefaults';
 
 export interface PortalFormField {
   key: string;
@@ -13,6 +14,7 @@ export interface PortalFormField {
   options?: string[];
   allowOther?: boolean;
   defaultValue?: unknown;
+  placeholder?: string;
   showWhen?: { field?: string; equals?: unknown };
 }
 
@@ -83,7 +85,9 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
   }
 
   if (fieldType === 'select') {
-    return <div>{label}<select required={field.required} disabled={disabled} className={common} value={String(value ?? '')} onChange={e => onChange(field.key, e.target.value)}><option value="">Select...</option>{(field.options || []).map(option => <option key={option} value={option}>{option}</option>)}</select></div>;
+    const selected = field.key === 'contract' ? contractValue(value) : field.key === 'service_needed' ? savedServiceValue(value) : String(value ?? '');
+    const options = field.options || [];
+    return <div>{label}<select aria-label={field.label} required={field.required} disabled={disabled} className={common} value={selected} onChange={e => onChange(field.key, e.target.value)}>{field.key !== 'contract' && <option value="">{field.placeholder || 'Select...'}</option>}{field.key === 'service_needed' && selected && !options.includes(selected) && <option value={selected} disabled>{selected} (saved service)</option>}{options.map(option => <option key={option} value={option}>{option}</option>)}</select></div>;
   }
 
   if (fieldType === 'multiselect') {
