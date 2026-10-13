@@ -219,6 +219,7 @@ export function QCRecordingUpload({
   leadType,
   leadForm,
   onRecordingNotesChange,
+  importedTranscript,
 }: {
   leadId: string;
   value: string;
@@ -236,6 +237,7 @@ export function QCRecordingUpload({
   leadType?: string | null;
   leadForm?: Record<string, unknown>;
   onRecordingNotesChange?: (value: string) => void;
+  importedTranscript?: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -287,15 +289,15 @@ export function QCRecordingUpload({
         return;
       }
       const row = data as TranscriptRow | null;
-      setTranscript(row?.transcript || '');
+      setTranscript(importedTranscript || row?.transcript || '');
       const savedNotes = row?.method === 'booking-local-whisper' || row?.method === 'manual' ? row.summary : '';
-      setSummary(String(leadForm?.recording_notes || savedNotes || recordingNotes(row?.transcript || '')));
+      setSummary(String(leadForm?.recording_notes || (importedTranscript ? recordingNotes(importedTranscript) : savedNotes || recordingNotes(row?.transcript || ''))));
       setAssessment(row?.assessment || null);
-      setTranscriptStatus(row?.transcript ? `Saved transcript • ${row.method || 'manual'}` : '');
+      setTranscriptStatus(importedTranscript ? 'Imported transcript — review and Save Transcript to keep it.' : row?.transcript ? `Saved transcript • ${row.method || 'manual'}` : '');
     }
     void loadTranscript();
     return () => { active = false; };
-  }, [leadId]);
+  }, [leadId, importedTranscript]);
 
   async function upload(file: File) {
     setError('');
