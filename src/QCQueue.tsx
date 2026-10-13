@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Building2,
@@ -1756,8 +1757,8 @@ function ReviewDialog(props: DialogProps) {
         </section>
       </div>
     );
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 p-3 sm:p-6">
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="QC lead review" className="fixed inset-0 z-[130] overflow-y-auto bg-slate-950/55 p-3 sm:p-6">
       <section className="mx-auto max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
@@ -2141,7 +2142,7 @@ function ReviewDialog(props: DialogProps) {
           </aside>
         </div>
       </section>
-    </div>
+    </div>, document.body
   );
 }
 

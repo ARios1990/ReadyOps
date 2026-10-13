@@ -404,7 +404,7 @@ export function ClientLeadTemplate({
             <button
               type="button"
               disabled={saving}
-              onClick={() => { if (qcServiceRef.current && !qcServiceRef.current.reportValidity()) return; void onSave?.(); }}
+              onClick={() => { const field = qcServiceRef.current; if (field && !field.checkValidity()) { const section = field.closest('details'); if (section) section.open = true; field.reportValidity(); return; } void onSave?.(); }}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={15} />

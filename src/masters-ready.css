@@ -17,6 +17,9 @@
 .masters-module .masters-button.is-primary { background:#0868eb; color:#fff; border-color:#0868eb; }
 .masters-button:disabled { opacity:.4; cursor:not-allowed; }
 .masters-metric { display:flex; align-items:center; gap:14px; padding:17px; border:1px solid #bfdbfe; border-radius:12px; background:#eff7ff; }
+.masters-metric-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); }
+.masters-metric>div { min-width:0; }
+.masters-metric h3 { overflow-wrap:break-word; }
 .masters-metric-symbol { display:grid; place-items:center; flex-shrink:0; width:45px; height:45px; border-radius:50%; background:#d6eaff; color:#0968ec; }
 .masters-metric h3 { font-size:22px; }
 .masters-metric strong { display:block; margin-top:3px; font-size:27px; }
