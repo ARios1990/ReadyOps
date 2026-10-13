@@ -53,6 +53,8 @@ import { leadStatusClasses, leadStatusLabel } from "./leadStatusPresentation";
 import { useAuth } from "./AuthContext";
 import { AppointmentWeatherBadge } from "./AgentWeatherPreview";
 import { composeAddress } from "./inspectorNote";
+import { DuplicateBadge, DuplicateMatchesPanel } from "./LeadDuplicates";
+import { useLeadDuplicates, type LeadDuplicateMap, type LeadDuplicateMatch } from "./useLeadDuplicates";
 
 // RPC records stay flexible while the migration preserves legacy portal fields.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,6 +129,7 @@ export function QCQueue() {
   const { profile, session } = useAuth();
   const isManager = profile?.role === "manager";
   const isAdmin = profile?.role === "admin";
+  const canSeeDuplicates = isAdmin || profile?.role === "qc";
   const canOverrideScheduling =
     isAdmin &&
     session?.user.email?.trim().toLowerCase() === OWNER_OVERRIDE_EMAIL;
@@ -255,6 +258,14 @@ export function QCQueue() {
   useEffect(() => {
     void load();
   }, [load]);
+  const queueLeadIds = useMemo(
+    () => queue.rows.map((row) => String(row.lead?.id || "")).filter(Boolean),
+    [queue.rows],
+  );
+  const { duplicates, error: duplicatesError } = useLeadDuplicates(
+    queueLeadIds,
+    canSeeDuplicates,
+  );
   useEffect(() => {
     // When the Overview dashboard sends the operator here with `?status=needs_review`,
     // jump to the week that actually contains an actionable lead. The queue's default
@@ -997,6 +1008,9 @@ export function QCQueue() {
       <div className="readyops-qc-page">
       {error && <Notice tone="red" text={error} />}
       {message && <Notice tone="blue" text={message} />}
+      {duplicatesError && (
+        <Notice tone="red" text={`Couldn't check for duplicate leads: ${duplicatesError}`} />
+      )}
       <div
         className={`mb-4 rounded-xl border p-3 text-sm font-semibold ${isManager ? "border-violet-200 bg-violet-50 text-violet-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}
       >
@@ -1289,6 +1303,7 @@ export function QCQueue() {
               onSend={sendLead}
               isManager={isManager}
               canSend={isAdmin}
+              duplicates={duplicates}
               dateBasis={dateBasis}
               allHistory={isAllHistorySearch}
             />
@@ -1347,6 +1362,7 @@ export function QCQueue() {
           isManager={isManager}
           canSend={isAdmin}
           canOverrideScheduling={canOverrideScheduling}
+          duplicateMatches={duplicates[String(selected.lead.id)] || []}
           send={() => sendLead(selected)}
           selectedAgentId={selectedAgentId}
           setSelectedAgentId={setSelectedAgentId}
@@ -1367,6 +1383,7 @@ function CompanyGroup({
   onSend,
   isManager,
   canSend,
+  duplicates,
   dateBasis,
   allHistory,
 }: {
@@ -1377,6 +1394,7 @@ function CompanyGroup({
   onSend: (row: Obj) => Promise<void>;
   isManager: boolean;
   canSend: boolean;
+  duplicates: LeadDuplicateMap;
   dateBasis: "appointment" | "call";
   allHistory: boolean;
 }) {
@@ -1391,6 +1409,7 @@ function CompanyGroup({
       !row.appointment?.company_visible_at,
   ).length;
   const sent = approved - awaitingSend;
+  const duplicateCount = items.filter((row) => duplicates[row.lead.id]?.length).length;
   const denied = countBy(items, "denied");
   const correction = countBy(items, "needs_correction");
   const actionable = isManager
@@ -1428,6 +1447,11 @@ function CompanyGroup({
         <Pill tone="green">{sent} Sent</Pill>
         {correction > 0 && (
           <Pill tone="orange">{correction} Needs Correction</Pill>
+        )}
+        {duplicateCount > 0 && (
+          <Pill tone="amber">
+            <AlertTriangle size={11} /> {duplicateCount} Possible Duplicate{duplicateCount === 1 ? "" : "s"}
+          </Pill>
         )}
         <Pill tone="purple">{completion}% Complete</Pill>
         <button
@@ -1484,7 +1508,15 @@ function CompanyGroup({
                       )}
                       {formatTime(String(row.appointment.start_time))}
                     </td>
-                    <td className="font-bold">{row.lead.full_name}</td>
+                    <td className="font-bold">
+                      <span className="block">{row.lead.full_name}</span>
+                      {duplicates[row.lead.id]?.length > 0 && (
+                        <DuplicateBadge
+                          matches={duplicates[row.lead.id]}
+                          onClick={() => void onReview(row, false)}
+                        />
+                      )}
+                    </td>
                     <td className="min-w-[320px] max-w-[460px] whitespace-normal break-words leading-5">
                       <div>
                         {composeAddress({
@@ -1602,6 +1634,7 @@ type DialogProps = {
   isManager: boolean;
   canSend: boolean;
   canOverrideScheduling: boolean;
+  duplicateMatches: LeadDuplicateMatch[];
   send: () => Promise<void>;
   selectedAgentId: string;
   setSelectedAgentId: (value: string) => void;
@@ -1711,6 +1744,9 @@ function ReviewDialog(props: DialogProps) {
         )}
         <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
           <div className="min-w-0">
+            {props.duplicateMatches.length > 0 && (
+              <DuplicateMatchesPanel matches={props.duplicateMatches} />
+            )}
             <LeadEmailHistory leadId={props.row.lead.id} />
             <ClientLeadTemplate
               lead={{ ...props.row.lead, ...props.values }}

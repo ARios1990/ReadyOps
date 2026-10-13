@@ -30,7 +30,6 @@ import {
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { AgentWeatherPreview, useWeeklyWeather } from "./AgentWeatherPreview";
 import { RecordingCallLogImport } from './RecordingCallLogImport';
-import { DuplicateLeadWarning, parseDuplicateMatches, type DuplicateLeadMatch } from './DuplicateLeadWarning';
 import { fullAddress, type ImportDraft } from './recordingImport';
 
 interface Slot {
@@ -342,7 +341,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateLeadMatch[] | null>(null);
   const [serviceTemplates, setServiceTemplates] = useState<ServiceTemplate[]>([]);
   const [importDraft, setImportDraft] = useState<ImportDraft | null>(null);
   const [importMessage, setImportMessage] = useState('');
@@ -591,7 +589,7 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
     setBusy(false);
   }
 
-  async function submitAppointment(acknowledgedDuplicates?: DuplicateLeadMatch[]) {
+  async function submitAppointment() {
     if (!reservation) return;
     if (!selectedTemplate || templatesError) { setError('Service configuration is unavailable. Refresh or contact an Admin.'); return; }
     if (importDraft && (['address', 'city', 'state', 'zip_code'].some(key => !String(formValues[key] || '').trim()) || String(formValues.address || '').trim() === fullAddress('', String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')))) {
@@ -608,29 +606,8 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
       appointment_time: reservation.start_time,
       timezone: portal?.company.settings.timezone,
     };
-    if (!acknowledgedDuplicates) {
-      const { data: duplicateData, error: duplicateErr } = await supabase.rpc('check_public_lead_duplicates', {
-        p_reservation_token: reservation.reservation_token,
-        p_session_id: sessionId,
-        p_form_data: basePayload,
-        p_agent_name: agentName.trim(),
-      });
-      if (duplicateErr) {
-        setError(`Couldn't check for duplicate leads: ${rpcError(duplicateErr)}`);
-        setBusy(false);
-        return;
-      }
-      const matches = parseDuplicateMatches(duplicateData);
-      if (matches.length) {
-        setDuplicateMatches(matches);
-        setBusy(false);
-        return;
-      }
-    }
-    setDuplicateMatches(null);
     const payload = {
       ...basePayload,
-      ...(acknowledgedDuplicates?.length ? { _possible_duplicate_of: acknowledgedDuplicates.map(match => match.lead_code).filter(Boolean) } : {}),
       automatic_notes: automaticNotes(selectedTemplate.name, basePayload),
       lead_template: buildUniversalLeadTemplate(selectedTemplate, basePayload),
     };
@@ -1044,14 +1021,6 @@ export function AgentBookingPortal({ slug }: { slug: string }) {
           </section>
         )}
       </main>
-      {duplicateMatches && (
-        <DuplicateLeadWarning
-          matches={duplicateMatches}
-          busy={busy}
-          onCancel={() => setDuplicateMatches(null)}
-          onConfirm={() => void submitAppointment(duplicateMatches)}
-        />
-      )}
     </div>
   );
 }
