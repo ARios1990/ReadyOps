@@ -6,6 +6,7 @@
 .masters-heading p,.masters-section header p { margin-top:4px; font-size:12px; color:#1956a6; }
 .masters-icon { display:grid; place-items:center; padding:12px; border-radius:12px; background:linear-gradient(#1697ff,#0657df); color:white; box-shadow:0 5px 12px #0b64e526; }
 .masters-mark { width:210px; flex-shrink:0; }
+.masters-mark img { display:block; width:100%; height:auto; object-fit:contain; }
 .masters-mark.is-large { width:270px; max-width:100%; margin:auto; }
 .masters-hero-actions,.masters-section-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .masters-section { overflow:hidden; border:1px solid #cbe1fb; border-radius:14px; background:var(--readyops-surface,#fff); box-shadow:0 4px 15px #0a56a908; }
