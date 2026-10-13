@@ -46,6 +46,10 @@ const pdfLink=renderer.root.findAllByType('a').find(node=>node.props.download?.e
 assert.ok(pdfLink,'PDF generation exposes an explicit download link');
 assert.ok(pdfLink.props.href.startsWith('blob:'));
 assert.ok(pdfLink.props.download.includes('Alpha-Team'));
+await settle(()=>renderer.root.findAllByType('select').find(node=>node.props['aria-label']==='Paystub preview team').props.onChange({target:{value:'team-b'}}));
+assert.equal(renderer.root.findAllByType('a').filter(node=>node.props.download).length,0,'Changing the preview team removes its previous PDF');
+await act(async()=>{button('Download Paystub').props.onClick();await new Promise(resolve=>setTimeout(resolve,150));});
+assert.ok(renderer.root.findAllByType('a').find(node=>node.props.download).props.download.includes('Beta-Team'));
 await settle(()=>button('Individual agent').props.onClick());
 assert.equal(renderer.root.findAllByType('a').filter(node=>node.props.download).length,0,'Changing the payroll selection removes the stale download');
 act(()=>renderer.unmount());calls.length=0;
