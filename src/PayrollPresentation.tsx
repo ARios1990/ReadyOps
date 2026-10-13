@@ -29,7 +29,7 @@ export function PayrollPresentation({ entries, leads, teams, period, managerMode
   const [notice,setNotice]=useState('');
   const [readyPdf,setReadyPdf]=useState<{url:string;filename:string}|null>(null);
   useEffect(()=>()=>{if(readyPdf)URL.revokeObjectURL(readyPdf.url);},[readyPdf]);
-  useEffect(()=>{setReadyPdf(null);},[entries,period?.id,view,agentId,teamFilter]);
+  useEffect(()=>{setReadyPdf(null);},[entries,period?.id,view,agentId,teamFilter,previewTeam]);
   const selectedEntries=entries.filter(entry=>(teamFilter==='all'||entry.team_id===teamFilter)&&(view==='team'||entry.agent_id===agentId));
   useEffect(()=>{const candidates=entries.filter(entry=>teamFilter==='all'||entry.team_id===teamFilter);if (!candidates.some(entry=>entry.agent_id===agentId)) setAgentId(candidates[0]?.agent_id || '');},[entries,agentId,teamFilter]);
   const selectedIds=new Set(selectedEntries.map(entry=>entry.agent_id));
