@@ -40,6 +40,7 @@ import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
 import { RecordingCallLogImport } from './RecordingCallLogImport';
+import { QCImportedAppointment } from './QCImportedAppointment';
 import { normalizePhone, type ImportDraft } from './recordingImport';
 import './qc-layout.css';
 import { ClientLeadTemplate } from "./ClientLeadTemplate";
@@ -179,6 +180,8 @@ export function QCQueue() {
   const [progressVisible, setProgressVisible] = useState(true);
   const [calendarVisible, setCalendarVisible] = useState(true);
   const [importTranscript, setImportTranscript] = useState('');
+  const [newImport, setNewImport] = useState<{ draft: ImportDraft; filename: string } | null>(null);
+  const [submittedImportPhone, setSubmittedImportPhone] = useState('');
   const [importMatch, setImportMatch] = useState<{ draft: ImportDraft; filename: string; rows: Obj[] } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [values, setValues] = useState<Obj>({});
@@ -489,7 +492,7 @@ export function QCQueue() {
       });
       if (matchError) throw matchError;
       const matches = ((data as QueueData | null)?.rows || []).filter(row => normalizePhone(String(row.lead.phone_number || '')) === phone);
-      if (!matches.length) setError('No accessible QC lead matches this phone. Check the company filter or book the appointment first, then import it here.');
+      if (!matches.length) setError('No accessible QC lead matches this phone. Check the company filter, or use Create new appointment on the prepared call.');
       else setImportMatch({ draft, filename, rows: matches });
     } catch (matchError) { setError(rpcError(matchError)); }
     finally { setBusy(false); }
@@ -1109,7 +1112,7 @@ export function QCQueue() {
           value={`${completion}%`}
         />
       </section>
-      <div className="qc-import-placement"><RecordingCallLogImport mode="qc" disabled={busy} onApply={(draft, filename) => void matchImportedLead(draft, filename)} /></div>
+      <div className="qc-import-placement"><RecordingCallLogImport mode="qc" disabled={busy} submittedPhone={submittedImportPhone} onCreate={(draft, filename) => { setImportMatch(null); setNewImport({ draft, filename }); }} onApply={(draft, filename) => void matchImportedLead(draft, filename)} /></div>
       </div>
       {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {row.appointment.appointment_date} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
       <section className="mb-4 rounded-2xl border bg-white/95 p-3 shadow-sm">
@@ -1352,6 +1355,7 @@ export function QCQueue() {
           ))}
         </div>
       )}
+      {newImport && <QCImportedAppointment draft={newImport.draft} filename={newImport.filename} companies={refs.companies as { id: string; name: string; public_slug?: string }[]} agents={refs.agents as { id: string; name: string }[]} initialCompanyId={companyId} initialAgentId={agentId} onClose={() => setNewImport(null)} onBooked={() => { setSubmittedImportPhone(String(newImport.draft.values.phone_number || "")); setMessage("New appointment created in Pending QC."); void load(true); }} />}
       {selected && (
         <ReviewDialog
           row={selected}
