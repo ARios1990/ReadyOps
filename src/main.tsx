@@ -5,6 +5,7 @@ import './index.css';
 import './reference-dashboard-fixes.css';
 import './financial-navigation-fixes.css';
 import './company-portal-approved.css';
+import './frozen-table-headers.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
