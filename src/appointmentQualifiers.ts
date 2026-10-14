@@ -1,6 +1,7 @@
 import type { PortalFormField, PortalFormSection } from './DynamicLeadForm';
 import { preparePermanentLightingSchema } from './permanentLighting';
 import { ROOFING_SERVICE_OPTIONS } from './bookingDefaults';
+import { normalizeRoofAgeInput } from './portalUtils';
 export const LANGUAGE_OPTIONS = ['English', 'Spanish', 'Bilingual', 'Other'];
 
 export const HOME_TYPES = ['Single Family Home', 'Town Home', 'Multifamily Home', 'Commercial', 'Mobile Home', 'Other'];
@@ -52,7 +53,7 @@ export function automaticNotes(service: string, values: Record<string, unknown>)
   const need = get('service_needed');
   sentences.push(name ? `Spoke with ${name}${role} about ${service.toLowerCase()}${need ? ` (${need.toLowerCase()})` : ''}.` : `Service requested: ${service}${need ? ` (${need})` : ''}.`);
   if (/roof/i.test(service)) {
-    const age = get('roof_age'); const type = get('roof_type');
+    const age = normalizeRoofAgeInput(get('roof_age')); const type = get('roof_type');
     const roof = [age ? (/^\d+$/.test(age) ? `${age}-year-old` : `approximately ${age} years old`) : '', type.toLowerCase(), 'roof'].filter(Boolean).join(' ');
     if (age || type || get('damage_type')) sentences.push(`They reported a ${roof}${get('damage_type') ? ` with ${get('damage_type')}` : ''}.`);
     else if (get('visible_damage')) sentences.push(`Visible damage: ${get('visible_damage')}.`);

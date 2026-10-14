@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { QCCustomerInformation } from './QCCustomerInformation';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
-import { formatRoofAge, formatTime, normalizeRoofAgeInput } from './portalUtils';
+import { formatRoofAge, formatStories, formatTime, normalizeRoofAgeInput } from './portalUtils';
+import { UnitAnswerInput } from './UnitAnswerInput';
 import { DEFAULT_SERVICE_TEMPLATES, prepareServiceTemplate, buildUniversalLeadTemplate, inferServiceType, type ServiceTemplate } from './serviceTemplates';
 
 type LeadLike = {
@@ -159,6 +160,8 @@ function Row({
               onChange={(event) => onChange?.(field!, event.target.value)}
               className={controlClass + ' min-h-28 resize-y'}
             />
+          ) : field === 'roof_age' || field === 'stories' ? (
+            <UnitAnswerInput field={field} aria-label={label.replace(/:$/, '')} value={editValue ?? value} className={controlClass} placeholder={field === 'roof_age' ? '10 Years, 10+, or 7-10' : '2 Stories'} onValueChange={next => onChange?.(field, next)} />
           ) : (
             <input
               aria-label={label.replace(/:$/, '')}
@@ -301,7 +304,7 @@ export function ClientLeadTemplate({
     `Roof Age: ${copyValue(formatRoofAge(formValue(copyLead, 'roof_age')))}`,
     `Home Type: ${copyValue(formValue(copyLead, 'home_type'))}`,
     `Roof Type: ${copyValue(formValue(copyLead, 'roof_type'))}`,
-    `Stories: ${copyValue(formValue(copyLead, 'stories'))}`,
+    `Stories: ${copyValue(formatStories(formValue(copyLead, 'stories')))}`,
     `Insurance: ${copyValue(formValue(copyLead, 'insurance'))}`,
     `Insurance Name: ${copyValue(formValue(copyLead, 'insurance_name'))}`,
     `Contract: ${copyValue(formValue(copyLead, 'contract'))}`,
@@ -373,7 +376,7 @@ export function ClientLeadTemplate({
             <Row label="Roof Age:" field="roof_age" value={formatRoofAge(formValue(lead, 'roof_age'))} editValue={normalizeRoofAgeInput(editValue('roof_age', formValue(lead, 'roof_age')))} onChange={onChange} />
             <Row label="Home Type:" field="home_type" value={formValue(lead, 'home_type')} editValue={editValue('home_type', formValue(lead, 'home_type'))} onChange={onChange} />
             <Row label="Roof Type:" field="roof_type" value={formValue(lead, 'roof_type')} editValue={editValue('roof_type', formValue(lead, 'roof_type'))} onChange={onChange} />
-            <Row label="Stories:" field="stories" value={formValue(lead, 'stories')} editValue={editValue('stories', formValue(lead, 'stories'))} onChange={onChange} />
+            <Row label="Stories:" field="stories" value={formatStories(formValue(lead, 'stories'))} editValue={editValue('stories', formValue(lead, 'stories'))} onChange={onChange} />
             <Row label="Insurance:" field="insurance" value={formValue(lead, 'insurance')} editValue={editValue('insurance', formValue(lead, 'insurance'))} onChange={onChange} />
             <Row label="Insurance Name:" field="insurance_name" value={formValue(lead, 'insurance_name')} editValue={editValue('insurance_name', formValue(lead, 'insurance_name'))} onChange={onChange} />
             <Row label="Contract:" field="contract" value={formValue(lead, 'contract')} editValue={editValue('contract', formValue(lead, 'contract'))} onChange={onChange} />

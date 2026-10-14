@@ -24,6 +24,7 @@ import {
   formatTime,
   getPortalSessionId,
   localDate,
+  normalizePropertyUnits,
   rpcError,
   startOfWeek,
 } from "./portalUtils";
@@ -597,7 +598,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
     setBusy(true);
     setError("");
     const basePayload = {
-      ...formValues,
+      ...normalizePropertyUnits(formValues),
       contract: contractValue(formValues.contract),
       address: fullAddress(String(formValues.address || ''), String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')),
       appointment_date: reservation.appointment_date,

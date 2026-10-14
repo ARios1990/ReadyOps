@@ -146,6 +146,26 @@ export function normalizeRoofAgeInput(value: unknown): string {
     .replace(/\s*-\s*/, '-');
 }
 
+export function normalizeStoriesInput(value: unknown): string {
+  return String(value ?? '').trim().replace(/\s*stor(?:y|ies)\s*$/i, '').trim();
+}
+
+export function formatStories(value: unknown): string {
+  const text = normalizeStoriesInput(value);
+  if (!text) return '—';
+  if (/^\d+(?:\.\d+)?(?:\+|\s*-\s*\d+(?:\.\d+)?)?$/.test(text)) {
+    return `${text} ${Number(text) === 1 ? 'Story' : 'Stories'}`;
+  }
+  return text;
+}
+
+export function normalizePropertyUnits(values: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...values };
+  if (Object.prototype.hasOwnProperty.call(next, 'roof_age')) next.roof_age = normalizeRoofAgeInput(next.roof_age);
+  if (Object.prototype.hasOwnProperty.call(next, 'stories')) next.stories = normalizeStoriesInput(next.stories);
+  return next;
+}
+
 export function getPortalSessionId(): string {
   const key = 'masters-ready-portal-session';
   const existing = window.localStorage.getItem(key);
@@ -270,7 +290,7 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
     'Home Type: ' + leadTemplateValue(values, 'home_type'),
     'Roof Type: ' + leadTemplateValue(values, 'roof_type'),
     'Roof Age: ' + formatRoofAge(leadTemplateValue(values, 'roof_age')),
-    'Stories: ' + leadTemplateValue(values, 'stories'),
+    'Stories: ' + formatStories(leadTemplateValue(values, 'stories')),
     'Insurance: ' + leadTemplateValue(values, 'insurance'),
     'Insurance Name: ' + leadTemplateValue(values, 'insurance_name'),
     'Contract: ' + (leadTemplateValue(values, 'contract') || 'No'),

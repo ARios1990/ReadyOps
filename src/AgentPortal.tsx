@@ -10,6 +10,7 @@ import {
   formatDateLong,
   formatTime,
   localDate,
+  normalizePropertyUnits,
   rpcError,
 } from "./portalUtils";
 
@@ -153,7 +154,7 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
     setCorrectionSaving(true);
     setCorrectionError("");
     const formData = {
-      ...correctionValues,
+      ...normalizePropertyUnits(correctionValues),
       lead_template: buildLeadTemplate(correctionValues),
     };
     const { error: resubmitError } = await supabase.rpc(
