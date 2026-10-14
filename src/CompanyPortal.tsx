@@ -23,6 +23,7 @@ import {
   ImageUp,
   Loader2,
   MapPin,
+  Menu,
   Pencil,
   PenLine,
   Plus,
@@ -371,6 +372,7 @@ export function CompanyPortal({
     null,
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [setupTab, setSetupTab] = useState<SetupTab>("locations");
   const [companyLeadFilter, setCompanyLeadFilter] = useState("all");
@@ -2350,6 +2352,15 @@ export function CompanyPortal({
       </main>
       </div>
 
+      {mobileMenuOpen && <div className="company-mobile-menu-layer sm:hidden">
+        <button type="button" className="company-mobile-menu-backdrop" aria-label="Close company navigation" onClick={() => setMobileMenuOpen(false)} />
+        <section className="company-mobile-menu" aria-label="More company pages">
+          <div><h2>Company pages</h2><button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}><X size={20}/></button></div>
+          {([
+            ['setup','Company Setup',ShieldCheck],['payments','Payments',WalletCards],['reps','Representatives',Users],['reports','Reports',BarChart3],
+          ] as const).map(([key,label,Icon]) => <button key={key} type="button" onClick={() => {if(key === 'payments' || key === 'reps'){setTab('setup');setSetupTab(key);}else {setTab(key);if(key === 'setup')setSetupTab('locations');}setMobileMenuOpen(false);window.scrollTo({top:0,behavior:'auto'});}}><Icon size={20}/>{label}</button>)}
+        </section>
+      </div>}
       <nav
         aria-label="Mobile company navigation"
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur sm:hidden"
@@ -2358,21 +2369,21 @@ export function CompanyPortal({
           [
             ["overview", "Overview", CalendarDays],
             ["leads", "Leads", FileSpreadsheet],
-            ["setup", "Setup", ShieldCheck],
-            ["reports", "Reports", BarChart3],
+            ["calendar", "Calendar", CalendarClock],
           ] as [Tab, string, typeof CalendarDays][]
         ).map(([key, label, Icon]) => (
           <button
             key={key}
             type="button"
             aria-current={tab === key ? "page" : undefined}
-            onClick={() => setTab(key)}
+            onClick={() => { setTab(key); setMobileMenuOpen(false); window.scrollTo({top:0,behavior:'auto'}); }}
             className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black ${tab === key ? "bg-blue-50 text-blue-700" : "text-slate-500"}`}
           >
             <Icon size={19} />
             {label}
           </button>
         ))}
+        <button type="button" aria-label="More company pages" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(v => !v)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black ${tab === 'setup' || tab === 'reports' ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Menu size={19}/>More</button>
       </nav>
 
       {selectedLead && (
