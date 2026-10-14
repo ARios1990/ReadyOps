@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from 'react-dom';
-import { formatQCContactValues } from './qcContactFormatting';
+import { formatQCContactField, formatQCContactValues } from './qcContactFormatting';
 import {
   AlertTriangle,
   Building2,
@@ -472,7 +472,7 @@ export function QCQueue() {
     }
     setSelected(row);
     setSelectedAgentId(row.agent?.id || row.lead.agent_id || "");
-    setValues({ ...row.lead.form_data, ...row.lead });
+    setValues(formatQCContactValues({ ...row.lead.form_data, ...row.lead }));
     setTargetCompany(row.lead.company_id);
     setTargetLocation(row.lead.location_id || "");
     setTargetDate(row.appointment.appointment_date);
@@ -1559,7 +1559,7 @@ function CompanyGroup({
                       {formatTime(String(row.appointment.start_time))}
                     </td>
                     <td className="font-bold">
-                      <span className="block">{row.lead.full_name}</span>
+                      <span className="block">{formatQCContactField('full_name', row.lead.full_name || '')}</span>
                       {duplicates[row.lead.id]?.length > 0 && (
                         <DuplicateBadge
                           matches={duplicates[row.lead.id]}
@@ -1569,12 +1569,12 @@ function CompanyGroup({
                     </td>
                     <td className="min-w-[320px] max-w-[460px] whitespace-normal break-words leading-5">
                       <div>
-                        {composeAddress({
+                        {formatQCContactField('address', composeAddress({
                           address: row.lead.address,
                           city: row.lead.city,
                           state: row.lead.state,
                           zipCode: row.lead.zip_code,
-                        }) || "—"}
+                        })) || "—"}
                       </div>
                       <div className="mt-1.5">
                         <AppointmentWeatherBadge
