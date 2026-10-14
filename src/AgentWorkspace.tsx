@@ -3,7 +3,7 @@ import { CalendarDays, ChevronDown, Edit3, ExternalLink, LayoutDashboard, ListCh
 import { ThemeToggle } from './ThemeContext';
 import { READYOPS_LOGO_DATA_URI } from './brand';
 import { formatDateLong, formatTime } from './portalUtils';
-import { AgentStatusLabel } from './AgentStatusLabel';
+import { leadStatusLabel } from './leadStatusPresentation';
 import type { LeadRow } from './AgentPortal';
 import './agent-workspace.css';
 
@@ -43,9 +43,9 @@ export function AgentWorkspace({ name, token, rows, companies, mode, setMode, pa
   function go(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'auto' }); }
   const nav = () => navigation.map(([key,label,Icon]) => <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => go(key)}><Icon size={19}/><span>{label}</span></button>);
   const metrics = <section className="aw-metrics" aria-label="Lead outcomes">
-    <article><span>Successful</span><strong>{good + signed}</strong><p><AgentStatusLabel kind="inspector" status="good"/> <b>{good}</b> · <AgentStatusLabel kind="inspector" status="signed_contract"/> <b>{signed}</b></p></article>
+    <article><span>Successful</span><strong>{good + signed}</strong><p>Good <b>{good}</b> · Signed Contract <b>{signed}</b></p></article>
     <article><span>Open / Follow-Up</span><strong>{rows.length - unsuccessful.length - good - signed}</strong><p>Pending, rescheduled, or needs correction</p></article>
-    <article><span>Unsuccessful</span><strong>{unsuccessful.length}</strong><p><AgentStatusLabel kind="inspector" status="bad"/> <b>{bad}</b> · <AgentStatusLabel kind="inspector" status="no_show"/> <b>{noShow}</b> · <AgentStatusLabel kind="qc" status="denied"/> <b>{denied}</b></p><button type="button" onClick={() => {setFilter('unsuccessful');go('leads');}}>View unsuccessful leads</button></article>
+    <article><span>Unsuccessful</span><strong>{unsuccessful.length}</strong><p>Bad <b>{bad}</b> · No Show <b>{noShow}</b> · QC Denied <b>{denied}</b></p><button type="button" onClick={() => {setFilter('unsuccessful');go('leads');}}>View unsuccessful leads</button></article>
   </section>;
   return <div className="agent-workspace">
     <aside className="aw-sidebar"><img src={READYOPS_LOGO_DATA_URI} alt="ReadyOps"/><p>AGENT WORKSPACE</p><nav aria-label="Agent desktop navigation">{nav()}</nav><div className="aw-person"><span className="aw-avatar">{name.slice(0,1)}</span><div>{name}<small>Agent portal</small></div></div></aside>
@@ -61,5 +61,5 @@ export function AgentWorkspace({ name, token, rows, companies, mode, setMode, pa
   </div>;
 }
 function AgentLeadCard({row, correct}: {row: LeadRow; correct: (row: LeadRow) => void}) {
-  return <article className="aw-lead"><div className="aw-date"><span>{new Date(`${row.appointment_date}T12:00:00`).toLocaleDateString('en-US',{month:'short'})}</span><strong>{row.appointment_date.slice(-2)}</strong></div><div className="aw-lead-main"><h3>{row.name}</h3><p>{row.company_name}</p><p>{formatDateLong(row.appointment_date)} · {formatTime(row.start_time)}</p><div className="aw-statuses"><AgentStatusLabel className="aw-status" kind="qc" status={row.qc_status}/><span>Inspector: <AgentStatusLabel kind="inspector" status={row.client_status || row.appointment_status || 'pending'}/></span></div><details><summary>View details <ChevronDown size={15}/></summary><div className="aw-lead-details"><strong>Full address</strong><p>{row.address || 'No address recorded'}</p><a href={`tel:${row.phone}`}>{row.phone}</a><dl><div><dt>Inspector notes</dt><dd>{row.inspector_notes || 'No update yet'}</dd></div><div><dt>QC notes</dt><dd>{row.qc_reason || 'No QC note'}</dd></div><div><dt>Payroll week</dt><dd>{row.payroll_week_start} – {row.payroll_week_end}</dd></div><div><dt>Pay date</dt><dd>{row.pay_date || '—'}</dd></div></dl></div></details>{row.qc_status === 'needs_correction' && <button className="aw-correct" type="button" onClick={() => correct(row)}><Edit3 size={16}/>Open & Correct</button>}</div></article>;
+  return <article className="aw-lead"><div className="aw-date"><span>{new Date(`${row.appointment_date}T12:00:00`).toLocaleDateString('en-US',{month:'short'})}</span><strong>{row.appointment_date.slice(-2)}</strong></div><div className="aw-lead-main"><h3>{row.name}</h3><p>{row.company_name}</p><p>{formatDateLong(row.appointment_date)} · {formatTime(row.start_time)}</p><div className="aw-statuses"><span className={isUnsuccessful(row) ? 'aw-status aw-status-bad' : 'aw-status'}>{row.qc_status === 'approved' ? 'QC Approved' : leadStatusLabel(row.qc_status)}</span><span>Inspector: {leadStatusLabel(row.client_status || row.appointment_status || 'pending')}</span></div><details><summary>View details <ChevronDown size={15}/></summary><div className="aw-lead-details"><strong>Full address</strong><p>{row.address || 'No address recorded'}</p><a href={`tel:${row.phone}`}>{row.phone}</a><dl><div><dt>Inspector notes</dt><dd>{row.inspector_notes || 'No update yet'}</dd></div><div><dt>QC notes</dt><dd>{row.qc_reason || 'No QC note'}</dd></div><div><dt>Payroll week</dt><dd>{row.payroll_week_start} – {row.payroll_week_end}</dd></div><div><dt>Pay date</dt><dd>{row.pay_date || '—'}</dd></div></dl></div></details>{row.qc_status === 'needs_correction' && <button className="aw-correct" type="button" onClick={() => correct(row)}><Edit3 size={16}/>Open & Correct</button>}</div></article>;
 }

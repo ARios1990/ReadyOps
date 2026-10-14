@@ -5,33 +5,11 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import ts from 'typescript';
 const require=createRequire(import.meta.url);
-const localCache = {};
-function loadLocal(name) {
-  if (localCache[name]) return localCache[name];
-  const result = { exports: {} };
-  const source = fs.readFileSync(new URL(`../src/${name}`, import.meta.url), 'utf8');
-  const code = ts.transpileModule(source, {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('exports','require','module',code)(result.exports,id => id === './leadStatusPresentation' ? loadLocal('leadStatusPresentation.ts') : require(id),result);
-  return localCache[name] = result.exports;
-}
-const { AgentStatusLabel, agentStatusStyle } = loadLocal('AgentStatusLabel.tsx');
-for (const [status, kind, label, color] of [
-  ['approved','qc','QC Approved','#15803D'], ['QC_DENIED','qc','QC Denied','#DC2626'],
-  ['No Show','inspector','No Show','#1F2937'], ['pending','inspector','Pending','#0284C7'],
-  ['good_inspected','inspector','Good','#15803D'], ['cancelled','inspector','Bad','#DC2626'],
-  ['reschedule','inspector','Rescheduled','#EA580C'],
-]) {
-  assert.deepEqual(agentStatusStyle(status, kind), {label,color});
-  const rendered = TestRenderer.create(React.createElement(AgentStatusLabel,{status,kind}));
-  assert.equal(rendered.root.findByType('span').props.style.fontWeight,700);
-  assert.equal(rendered.root.findByType('span').props.style.color,color);
-  assert.deepEqual(rendered.root.findByType('span').children,[label]);
-}
 global.window={scrollTo(){}};
 const module={exports:{}};
 const source=fs.readFileSync(new URL('../src/AgentWorkspace.tsx',import.meta.url),'utf8');
 const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-new Function('exports','require','module',code)(module.exports,id=>id.endsWith('.css')?{}:id==='./ThemeContext'?{ThemeToggle:()=>React.createElement('button',null,'Light / Dark')}:id==='./brand'?{READYOPS_LOGO_DATA_URI:'logo'}:id==='./portalUtils'?{formatDateLong:v=>v,formatTime:v=>v}:id==='./AgentStatusLabel'?{AgentStatusLabel}:require(id),module);
+new Function('exports','require','module',code)(module.exports,id=>id.endsWith('.css')?{}:id==='./ThemeContext'?{ThemeToggle:()=>React.createElement('button',null,'Light / Dark')}:id==='./brand'?{READYOPS_LOGO_DATA_URI:'logo'}:id==='./portalUtils'?{formatDateLong:v=>v,formatTime:v=>v}:id==='./leadStatusPresentation'?{leadStatusLabel:v=>v}:require(id),module);
 const {AgentWorkspace,isUnsuccessful}=module.exports;
 const base={company_name:'Roofing Co',phone:'5551234567',address:'123 Very Long Address, Example City, TX 12345',appointment_date:'2026-10-13',start_time:'12:00',payroll_week_start:'2026-10-11',payroll_week_end:'2026-10-17',pay_date:'2026-10-24',qc_status:'approved'};
 const rows=[['good','approved','good'],['bad','approved','Bad'],['no-show','approved','No Show'],['cancelled','approved','cancelled'],['denied','denied','no_show'],['correction','needs_correction','pending']].map(([name,qc_status,client_status])=>({...base,name,lead_id:name,qc_status,client_status}));
