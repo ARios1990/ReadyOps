@@ -26,6 +26,22 @@ details[open]>.readyops-collapse-arrow,details[open]>summary>.readyops-collapse-
 .readyops-approved-shell .readyops-company-header img {display:none}
 .readyops-approved-shell .readyops-company-header {min-height:72px}
 .readyops-approved-shell .kpi-number {font-size:23px;font-weight:700}
+.company-outcome-card{color:var(--readyops-text);--company-outcome-color:var(--readyops-text)}
+.company-outcome-card .company-outcome-label{color:var(--company-outcome-color)}
+.company-outcome-card .kpi-number{color:var(--readyops-text)!important}
+.company-outcome-card[data-status=all]{--company-outcome-color:#075985}
+.company-outcome-card[data-status=good]{--company-outcome-color:#047857}
+.company-outcome-card[data-status=bad]{--company-outcome-color:#b91c1c}
+.company-outcome-card[data-status=no_show]{--company-outcome-color:#92400e}
+.company-outcome-card[data-status=rescheduled]{--company-outcome-color:#c2410c}
+.company-outcome-card[data-status=signed_contract]{--company-outcome-color:#065f46}
+.company-outcome-card[data-status=pending]{--company-outcome-color:#0e7490}
+html[data-theme=dark] .company-outcome-card[data-status=all]{--company-outcome-color:#93c5fd}
+html[data-theme=dark] .company-outcome-card[data-status=good],html[data-theme=dark] .company-outcome-card[data-status=signed_contract]{--company-outcome-color:#6ee7b7}
+html[data-theme=dark] .company-outcome-card[data-status=bad]{--company-outcome-color:#fca5a5}
+html[data-theme=dark] .company-outcome-card[data-status=no_show]{--company-outcome-color:#fcd34d}
+html[data-theme=dark] .company-outcome-card[data-status=rescheduled]{--company-outcome-color:#fdba74}
+html[data-theme=dark] .company-outcome-card[data-status=pending]{--company-outcome-color:#67e8f9}
 .readyops-approved-shell main {position:relative;isolation:isolate;min-height:calc(100dvh - 72px)}
 body:has(.readyops-approved-shell) .readyops-theme-floating {display:none}
 .readyops-approved-shell main::before {content:'';position:absolute;inset:0;pointer-events:none;z-index:-1;filter:grayscale(1);opacity:.025;background-image:url('/brand/masters-ready-background.jpg'),url('/brand/big-ready-background.jpg');background-position:center,center;background-repeat:no-repeat;background-size:cover,cover;background-blend-mode:screen}
