@@ -2879,49 +2879,42 @@ function CompanyLeadsSpreadsheet({
       key: "all",
       label: "Delivered",
       count: data.summary.delivered,
-      tone: "readyops-stat-delivered border-[#7DD3FC] bg-[#BAE6FD] text-[#075985]",
       Icon: Clipboard,
     },
     {
       key: "good",
       label: "Inspected",
       count: data.summary.good,
-      tone: "readyops-stat-good border-[#6EE7B7] bg-[#A7F3D0] text-[#047857]",
       Icon: ThumbsUp,
     },
     {
       key: "bad",
       label: "Bad",
       count: data.summary.bad,
-      tone: "readyops-stat-bad border-[#FCA5A5] bg-[#FECACA] text-[#B91C1C]",
       Icon: ThumbsDown,
     },
     {
       key: "no_show",
       label: "No Show",
       count: data.summary.no_show,
-      tone: "readyops-stat-no-show border-[#FBBF24] bg-[#FDE68A] text-[#92400E]",
       Icon: CalendarX2,
     },
     {
       key: "rescheduled",
       label: "Rescheduled",
       count: data.summary.rescheduled,
-      tone: "readyops-stat-rescheduled border-[#FDBA74] bg-[#FED7AA] text-[#C2410C]",
       Icon: CalendarClock,
     },
     {
       key: "signed_contract",
       label: "Signed Contract",
       count: data.summary.signed_contract,
-      tone: "readyops-stat-signed border-[#00512E] bg-[#006B3C] text-white",
       Icon: PenLine,
     },
     {
       key: "pending",
       label: "Pending Updates",
       count: data.summary.pending,
-      tone: "readyops-stat-pending border-[#67E8F9] bg-[#A5F3FC] text-[#0E7490]",
       Icon: Clock3,
     },
   ] as const;
@@ -2945,18 +2938,19 @@ function CompanyLeadsSpreadsheet({
       </div>
       <PortalSection title="Company Performance">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
-        {filterCards.map(({ key, label, count, tone, Icon }) => (
+        {filterCards.map(({ key, label, count, Icon }) => (
           <button
             key={key}
+            data-status={key}
             onClick={() => chooseFilter(key)}
-            className={`relative min-h-[86px] overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md bg-white border-slate-200 ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+            className={`company-outcome-card relative min-h-[86px] overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md bg-white border-slate-200 ${filter === key ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
           >
             <Icon
               size={18}
               strokeWidth={1.8}
               className="absolute right-3 top-1/2 -translate-y-1/2 opacity-90"
             />
-            <span className={`kpi-title block max-w-[72%] font-bold ${tone.split(" ").find(cls => cls.startsWith("text-")) || "text-blue-700"}`}>
+            <span className="company-outcome-label kpi-title block max-w-[72%] font-bold">
               {label}
             </span>
             <strong className={`kpi-number mt-1 block text-slate-950`}>
