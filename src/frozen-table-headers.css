@@ -1,0 +1,41 @@
+/* Keep each table's column labels with its vertically scrolling rows. Existing
+   shorter scroll areas and horizontal/frozen-column layouts remain in control. */
+:where(div):has(> table > thead) {
+  max-height: min(65dvh, 760px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.readyops-hscroll-body:has(> table > thead) {
+  min-height: 0;
+  max-height: min(65dvh, 760px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+table > thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  isolation: isolate;
+  box-shadow: 0 2px 0 var(--readyops-border);
+}
+
+:where(table > thead) {
+  background-color: var(--readyops-surface);
+}
+
+/* A sticky header group moves all header rows together, including cells that
+   are independently frozen on the left or right of the same table. */
+@media print {
+  :where(div):has(> table > thead),
+  .readyops-hscroll-body:has(> table > thead) {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  table > thead {
+    position: static !important;
+    box-shadow: none;
+  }
+}
