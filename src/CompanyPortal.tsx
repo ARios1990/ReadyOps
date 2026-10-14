@@ -52,6 +52,7 @@ import {
   formatDateLong,
   formatLeadAddress,
   formatRoofAge,
+  formatStories,
   formatTime,
   localDate,
   rpcError,
@@ -3331,7 +3332,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                           {String(form.home_type || "—")}
                         </td>
                         <td className="min-w-[58px] border-b border-r border-slate-200 px-2.5 py-3">
-                          {String(form.stories || "—")}
+                          {formatStories(form.stories)}
                         </td>
                         <td className="min-w-[64px] border-b border-r border-slate-200 px-2.5 py-3">
                           {String(form.insurance || "—")}

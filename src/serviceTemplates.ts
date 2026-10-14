@@ -1,4 +1,5 @@
 import type { PortalFormSection } from "./DynamicLeadForm";
+import { formatRoofAge, formatStories } from './portalUtils';
 import { permanentLightingSchema } from './permanentLighting';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema, updateQualifierSchema } from './appointmentQualifiers';
 
@@ -349,7 +350,7 @@ export function buildUniversalLeadTemplate(
       `Type of Service: ${template.name}`,
       ...roofingSummarySchema().flatMap(section => {
         const fields = section.fields.filter(field => qualifierVisible(field, data) && answer(data, field.key));
-        return fields.length ? [`\n**${section.title}**`, ...fields.map(field => `${field.label}: ${answer(data, field.key)}`)] : [];
+        return fields.length ? [`\n**${section.title}**`, ...fields.map(field => `${field.label}: ${field.key === 'roof_age' ? formatRoofAge(answer(data, field.key)) : field.key === 'stories' ? formatStories(answer(data, field.key)) : answer(data, field.key)}`)] : [];
       }),
     ].join('\n');
   }

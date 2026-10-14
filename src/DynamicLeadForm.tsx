@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { shouldShowField, getPortalSessionId, normalizeRoofAgeInput } from './portalUtils';
+import { shouldShowField, getPortalSessionId, normalizeStoriesInput, formatStories } from './portalUtils';
+import { UnitAnswerInput } from './UnitAnswerInput';
 import { supabase } from './supabase';
 import { qualifierVisible } from './appointmentQualifiers';
 import { contractValue, savedServiceValue } from './bookingDefaults';
@@ -85,9 +86,9 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
   }
 
   if (fieldType === 'select') {
-    const selected = field.key === 'contract' ? contractValue(value) : field.key === 'service_needed' ? savedServiceValue(value) : String(value ?? '');
+    const selected = field.key === 'contract' ? contractValue(value) : field.key === 'service_needed' ? savedServiceValue(value) : field.key === 'stories' ? (field.options || []).find(option => normalizeStoriesInput(option) === normalizeStoriesInput(value)) || normalizeStoriesInput(value) : String(value ?? '');
     const options = field.options || [];
-    return <div>{label}<select aria-label={field.label} required={field.required} disabled={disabled} className={common} value={selected} onChange={e => onChange(field.key, e.target.value)}>{field.key !== 'contract' && <option value="">{field.placeholder || 'Select...'}</option>}{field.key === 'service_needed' && selected && !options.includes(selected) && <option value={selected} disabled>{selected} (saved service)</option>}{options.map(option => <option key={option} value={option}>{option}</option>)}</select></div>;
+    return <div>{label}<select aria-label={field.label} required={field.required} disabled={disabled} className={common} value={selected} onChange={e => onChange(field.key, field.key === 'stories' ? normalizeStoriesInput(e.target.value) : e.target.value)}>{field.key !== 'contract' && <option value="">{field.placeholder || 'Select...'}</option>}{field.key === 'service_needed' && selected && !options.includes(selected) && <option value={selected} disabled>{selected} (saved service)</option>}{options.map(option => <option key={option} value={option}>{field.key === 'stories' ? formatStories(option) : option}</option>)}</select></div>;
   }
 
   if (fieldType === 'multiselect') {
@@ -107,6 +108,8 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
     );
   }
 
+  if (field.key === 'roof_age' || field.key === 'stories') return <div>{label}<UnitAnswerInput field={field.key} aria-label={field.label} required={field.required} disabled={disabled} className={common} value={value} placeholder={field.key === 'roof_age' ? 'e.g. 10 Years, 10+, or 7-10' : 'e.g. 2 Stories'} title={field.key === 'roof_age' ? 'Enter 10, 10 Years, 10+, or 7-10' : undefined} onValueChange={next => onChange(field.key, next)} /></div>;
+
   const inputType = fieldType === 'phone' ? 'tel'
     : fieldType === 'email' ? 'email'
       : fieldType === 'url' ? 'url'
@@ -118,7 +121,7 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
   return (
     <div className={isWide ? 'sm:col-span-2' : ''}>
       {label}
-      <input required={field.required} disabled={disabled} type={inputType} step={fieldType === 'currency' ? '0.01' : undefined} pattern={field.key === 'roof_age' ? '\\d+(?:\\+|-\\d+)?' : undefined} title={field.key === 'roof_age' ? 'Enter years as 10, 10+, or 7-10' : undefined} placeholder={field.key === 'roof_age' ? 'e.g. 10, 10+, or 7-10' : undefined} className={common} value={field.key === 'roof_age' ? normalizeRoofAgeInput(value) : String(value ?? '')} onChange={e => onChange(field.key, e.target.value)} />
+      <input required={field.required} disabled={disabled} type={inputType} step={fieldType === 'currency' ? '0.01' : undefined} className={common} value={String(value ?? '')} onChange={e => onChange(field.key, e.target.value)} />
     </div>
   );
 }
