@@ -16,6 +16,14 @@ function load(name) {
   return module.exports;
 }
 const { ClientLeadTemplate } = load('ClientLeadTemplate');
+const { formatQCContactField, formatQCContactValues } = load('qcContactFormatting');
+assert.equal(formatQCContactField('full_name', "  MARÍA   O'NEIL-MCDONALD JR.  "), "María O'Neil-McDonald Jr.");
+assert.equal(formatQCContactField('full_name', 'Mary McDonald DeLaCruz III'), 'Mary McDonald DeLaCruz III');
+assert.equal(formatQCContactField('address', '  17650  PHEASANT ln , COUNTRY CLUB HILLS, il 60478-1234  '), '17650 Pheasant LN, Country Club Hills, IL 60478-1234');
+assert.equal(formatQCContactField('address', '42 n 5TH st APT 2B, EL PASO, tx 79901'), '42 N 5th ST APT 2B, El Paso, TX 79901');
+const original = {full_name:'ROBERT MILLER', address:'12 MAIN RD, DALLAS, tx 75001', city:'DALLAS', email:'User@Example.com', zip_code:'75001', qc_status:'approved'};
+assert.deepEqual(formatQCContactValues(original), {...original,full_name:'Robert Miller',address:'12 Main RD, Dallas, TX 75001',city:'Dallas'});
+assert.equal(original.full_name,'ROBERT MILLER');
 const { DEFAULT_SERVICE_TEMPLATES } = load('serviceTemplates');
 const template = DEFAULT_SERVICE_TEMPLATES.find(item => item.id === 'roofing');
 function Harness() {
@@ -61,6 +69,13 @@ assert.equal(field('Services Needed').findAllByType('option')[0].children.join('
 assert.equal(field('Services Needed').findAllByType('option').length,14);
 assert.ok(!JSON.stringify(renderer.toJSON()).includes('(Profile.Services Needed)'));
 assert.equal(field('Address').type,'textarea');
+act(() => field('Customer Name').props.onChange({target:{value:'  LATARA   BROOKS '}}));
+assert.equal(field('Customer Name').props.value,'LATARA   BROOKS');
+act(() => field('Customer Name').props.onBlur({target:{value:field('Customer Name').props.value}}));
+assert.equal(field('Customer Name').props.value,'Latara Brooks');
+act(() => field('Address').props.onBlur({target:{value:'17650 PHEASANT LN, COUNTRY CLUB HILLS, il 60478'}}));
+assert.equal(field('Address').props.value,'17650 Pheasant LN, Country Club Hills, IL 60478');
+act(() => field('Address').props.onChange({target:{value:savedCustomer.address}}));
 assert.equal(field('Address').props.value,savedCustomer.address);
 assert.ok(field('Address').parent.props.className.includes('sm:col-span-2'));
 const customerFields = renderer.root.findAll(node => ['input','select','textarea'].includes(node.type)).map(node => node.props['aria-label']);

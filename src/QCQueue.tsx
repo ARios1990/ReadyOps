@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from 'react-dom';
+import { formatQCContactValues } from './qcContactFormatting';
 import {
   AlertTriangle,
   Building2,
@@ -516,6 +517,7 @@ export function QCQueue() {
       setBusy(false);
       return;
     }
+    const formattedValues = formatQCContactValues(values);
     const patch: Obj = {};
     [
       "full_name",
@@ -532,13 +534,13 @@ export function QCQueue() {
       "sq_ft",
       "web_url",
     ].forEach((key) => {
-      patch[key] = values[key] ?? "";
+      patch[key] = formattedValues[key] ?? "";
     });
     patch.recording_url = values.recording_url ?? "";
     patch.share_recording_with_company = Boolean(
       values.share_recording_with_company,
     );
-    patch.form_data = { ...selected.lead.form_data, ...values };
+    patch.form_data = { ...selected.lead.form_data, ...formattedValues };
     patch.form_data.roof_age = normalizeRoofAgeInput(values.roof_age);
     [
       "recording_url",
