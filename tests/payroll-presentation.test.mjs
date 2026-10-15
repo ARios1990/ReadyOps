@@ -33,7 +33,7 @@ const pendingFixtures=[
  {lead_id:'failed-paper',agent_id:'agent-a',full_name:'Failed Paper Customer',paper_lead:true,outcome:'bad'}
 ];
 let pendingRenderer;await settle(()=>pendingRenderer=TestRenderer.create(React.createElement(PayrollPresentation,{entries,leads:pendingFixtures,teams:[],teamFilter:'all',setTeamFilter(){},managerMode:false,reload:async()=>{}})));
-assert.deepEqual(pendingRenderer.root.findAll(node=>node.props.caption&&node.props.value!==undefined).map(node=>node.props.label),['Good Leads','Bad Leads','Total Leads','Pending Leads','Total Amount']);
+assert.deepEqual(pendingRenderer.root.findAll(node=>node.props.caption&&node.props.value!==undefined).map(node=>node.props.label),['Good Leads','Bad Leads','Total Leads','Pending Leads','Signed Contracts','Deductions','Bonuses','Total Amount']);
 const pendingMetric=pendingRenderer.root.findAll(node=>node.props.label==='Pending Leads'&&node.props.value!==undefined)[0];
 assert.equal(pendingMetric.props.value,4,'Pending counts QC, inspection, reschedules, and corrections without completed paper leads');
 await settle(()=>pendingRenderer.root.findByProps({'aria-label':'Payroll lead status'}).props.onChange({target:{value:'pending'}}));
@@ -42,6 +42,10 @@ assert.deepEqual(pendingSection.findAll(node=>Array.isArray(node.props.rows))[0]
 assert.ok(!JSON.stringify(pendingRenderer.toJSON()).includes('Paper Lead'));
 assert.equal(calls.length,0,'Lead grouping does not call any payroll mutation');
 act(()=>pendingRenderer.unmount());
+const metrics=renderer.root.findAll(node=>node.props.caption&&node.props.value!==undefined);
+assert.equal(metrics.find(node=>node.props.label==='Signed Contracts').props.value,1);
+assert.equal(metrics.find(node=>node.props.label==='Deductions').props.value,'$150.00');
+assert.equal(metrics.find(node=>node.props.label==='Bonuses').props.value,'$100.00');
 const button=text=>renderer.root.findAllByType('button').find(node=>node.children.filter(child=>typeof child==='string').join('').trim()===text);
 await settle(()=>renderer.root.findAllByType('select').find(node=>node.props['aria-label']==='Payroll team').props.onChange({target:{value:'team-a'}}));
 assert.ok(!JSON.stringify(renderer.toJSON()).includes('Test Homeowner B'));
