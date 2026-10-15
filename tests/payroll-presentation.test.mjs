@@ -23,6 +23,25 @@ const leads=[{lead_id:'l1',agent_id:'agent-a',team_id:'team-a',company_name:'Tes
 function Harness({managerMode=false,rows=entries}) {const[team,setTeam]=React.useState('all');return React.createElement(PayrollPresentation,{entries:rows,leads,teams:[{id:'team-a',name:'Alpha Team'},{id:'team-b',name:'Beta Team'}],period:{id:'period',week_start:'2026-10-11',week_end:'2026-10-17'},teamFilter:team,setTeamFilter:setTeam,managerMode,reload:async()=>reloaded++});}
 const settle=async action=>act(async()=>{action?.();for(let i=0;i<5;i++)await Promise.resolve();});
 let renderer;await settle(()=>renderer=TestRenderer.create(React.createElement(Harness)));
+// Pending includes all unresolved outcomes, irrespective of the legacy paper tag.
+const pendingFixtures=[
+ {lead_id:'pending-qc',agent_id:'agent-a',full_name:'Awaiting QC',outcome:'pending'},
+ {lead_id:'pending-inspection',agent_id:'agent-a',full_name:'Awaiting Inspection',qc_status:'approved',outcome:'pending'},
+ {lead_id:'reschedule',agent_id:'agent-a',full_name:'Rescheduled Customer',outcome:'rescheduled'},
+ {lead_id:'correction',agent_id:'agent-a',full_name:'Needs Correction',outcome:'needs_correction'},
+ {lead_id:'completed-paper',agent_id:'agent-a',full_name:'Completed Paper Customer',paper_lead:true,outcome:'good'},
+ {lead_id:'failed-paper',agent_id:'agent-a',full_name:'Failed Paper Customer',paper_lead:true,outcome:'bad'}
+];
+let pendingRenderer;await settle(()=>pendingRenderer=TestRenderer.create(React.createElement(PayrollPresentation,{entries,leads:pendingFixtures,teams:[],teamFilter:'all',setTeamFilter(){},managerMode:false,reload:async()=>{}})));
+assert.deepEqual(pendingRenderer.root.findAll(node=>node.props.caption&&node.props.value!==undefined).map(node=>node.props.label),['Good Leads','Bad Leads','Total Leads','Pending Leads','Total Amount']);
+const pendingMetric=pendingRenderer.root.findAll(node=>node.props.label==='Pending Leads'&&node.props.value!==undefined)[0];
+assert.equal(pendingMetric.props.value,4,'Pending counts QC, inspection, reschedules, and corrections without completed paper leads');
+await settle(()=>pendingRenderer.root.findByProps({'aria-label':'Payroll lead status'}).props.onChange({target:{value:'pending'}}));
+const pendingSection=pendingRenderer.root.findAll(node=>node.props.title==='Pending Leads'&&node.props.storageKey)[0];
+assert.deepEqual(pendingSection.findAll(node=>Array.isArray(node.props.rows))[0].props.rows.map(row=>row.lead_id),['pending-qc','pending-inspection','reschedule','correction']);
+assert.ok(!JSON.stringify(pendingRenderer.toJSON()).includes('Paper Lead'));
+assert.equal(calls.length,0,'Lead grouping does not call any payroll mutation');
+act(()=>pendingRenderer.unmount());
 const button=text=>renderer.root.findAllByType('button').find(node=>node.children.filter(child=>typeof child==='string').join('').trim()===text);
 await settle(()=>renderer.root.findAllByType('select').find(node=>node.props['aria-label']==='Payroll team').props.onChange({target:{value:'team-a'}}));
 assert.ok(!JSON.stringify(renderer.toJSON()).includes('Test Homeowner B'));
