@@ -169,6 +169,7 @@ export function AdminLeadCRM() {
   const [search, setSearch] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [teamId, setTeamId] = useState("");
+  const [agentId, setAgentId] = useState("");
   const [qcStatus, setQcStatus] = useState("all");
   const [clientStatus, setClientStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -216,10 +217,11 @@ export function AdminLeadCRM() {
       if (!quiet) setLoading(true);
       setError("");
       const [crmResult, referenceResult] = await Promise.all([
-        supabase.rpc("get_admin_lead_crm_by_team", {
+        supabase.rpc("get_admin_lead_crm_by_agent", {
           p_search: search || null,
           p_company_id: companyId || null,
           p_team_id: teamId || null,
+          p_agent_id: agentId || null,
           p_qc_status: qcStatus === "all" ? null : qcStatus,
           p_client_status: clientStatus === "all" ? null : clientStatus,
           p_source: source === "all" ? null : source,
@@ -249,6 +251,7 @@ export function AdminLeadCRM() {
       clientStatus,
       companyId,
       teamId,
+      agentId,
       dateBasis,
       endDate,
       offset,
@@ -595,6 +598,7 @@ export function AdminLeadCRM() {
       p_search: search || null,
       p_company_id: companyId || null,
       p_team_id: teamId || null,
+          p_agent_id: agentId || null,
       p_qc_status: qcStatus === "all" ? null : qcStatus,
       p_client_status: clientStatus === "all" ? null : clientStatus,
       p_source: source === "all" ? null : source,
@@ -604,7 +608,7 @@ export function AdminLeadCRM() {
     };
     try {
       const rows = await downloadLeadRows<Obj>(async (pageOffset, limit) => {
-        const result = await supabase.rpc("get_admin_lead_crm_by_team", { ...filters, p_offset: pageOffset, p_limit: limit });
+        const result = await supabase.rpc("get_admin_lead_crm_by_agent", { ...filters, p_offset: pageOffset, p_limit: limit });
         if (result.error) throw new Error(rpcError(result.error));
         return { rows: result.data?.rows || [], total: result.data?.total || 0 };
       });
@@ -703,7 +707,7 @@ export function AdminLeadCRM() {
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search lead ID, homeowner, phone, address…"
+              placeholder="Search lead ID, homeowner, agent, phone, address…"
               className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-xs"
             />
           </form>
@@ -711,6 +715,7 @@ export function AdminLeadCRM() {
             value={companyId}
             onChange={(value) => updateFilter(() => setCompanyId(value))}
             label="All Companies"
+            allValue=""
             options={data.companies.map((company) => ({
               value: company.id,
               label: company.name,
@@ -718,11 +723,22 @@ export function AdminLeadCRM() {
           />
           <Filter
             value={teamId}
-            onChange={(value) => updateFilter(() => setTeamId(value))}
+            onChange={(value) => updateFilter(() => { setTeamId(value); setAgentId(""); })}
             label="All Teams"
+            allValue=""
             options={(data.teams || []).map((team) => ({
               value: team.id,
               label: team.name,
+            }))}
+          />
+          <Filter
+            value={agentId}
+            onChange={(value) => updateFilter(() => setAgentId(value))}
+            label="All Agents"
+            allValue=""
+            options={references.agents.filter((agent) => !teamId || agent.team_id === teamId).map((agent) => ({
+              value: agent.id,
+              label: agent.name,
             }))}
           />
           <Filter
@@ -799,6 +815,7 @@ export function AdminLeadCRM() {
               setSearch("");
               setCompanyId("");
               setTeamId("");
+              setAgentId("");
               setQcStatus("all");
               setClientStatus("all");
               setSource("all");
@@ -2953,6 +2970,7 @@ function Filter({
 }) {
   return (
     <select
+      aria-label={label}
       value={selected}
       onChange={(event) => onChange(event.target.value)}
       className="h-10 rounded-lg border bg-white px-3 text-xs font-semibold"
