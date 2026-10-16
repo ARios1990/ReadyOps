@@ -2215,6 +2215,35 @@ function CompanyAvailabilityGrid({
   const locationRows: Array<CompanyLocation | null> = locations.length
     ? locations
     : [null];
+  const [liveSlots, setLiveSlots] = useState<Record<string, string>>({});
+  const publicSlug = String(company.public_slug || '');
+  const locationScope = locations.map(location => location.id).join(',');
+  useEffect(() => {
+    let cancelled = false;
+    setLiveSlots({});
+    if (!publicSlug) return;
+    const ids = locationScope ? locationScope.split(',') : [null];
+    const refresh = async () => {
+      if (document.hidden) return;
+      const next: Record<string, string> = {};
+      await Promise.all(ids.map(async id => {
+        const { data, error } = await supabase.rpc('get_public_booking_portal_active_locations', { p_slug: publicSlug, p_location_id: id, p_start_date: appointmentDate, p_end_date: appointmentDate });
+        const day = data?.days?.[0];
+        for (const time of TIME_SLOTS) {
+          const hour = Number(time);
+          const hour24 = hour >= 8 && hour <= 11 ? hour : hour === 12 ? 12 : hour + 12;
+          const start = `${String(hour24).padStart(2,'0')}:00`;
+          const slot = day?.slots?.find((item: Obj) => item.start_time === start);
+          next[`${id || 'all'}:${time}`] = error ? 'Unavailable' : day?.closed || !slot ? 'Closed' : slot.status === 'available' ? `${slot.openings} available` : slot.status === 'blocked' ? 'Blocked' : 'Full';
+        }
+      }));
+      if (!cancelled) setLiveSlots(next);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    window.addEventListener('focus', refresh);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [publicSlug, locationScope, appointmentDate, store.portalAppointments]);
   return (
     <section
       id={`company-availability-${company.company_id}`}
@@ -2265,7 +2294,7 @@ function CompanyAvailabilityGrid({
                     {team.abbreviation || team.name}
                   </td>
                   {TIME_SLOTS.map((slot) => {
-                    const status = availabilityStatus(
+                    const status = publicSlug ? liveSlots[`${location?.id || 'all'}:${slot}`] || 'Loading' : availabilityStatus(
                       company.company_id,
                       location,
                       appointmentDate,
@@ -2280,7 +2309,7 @@ function CompanyAvailabilityGrid({
                           onClick={() => location?.id ? onEditLocation(location.id) : onEditCompany()}
                           aria-label={`Edit ${location?.location_label || 'company-wide'} schedule, ${team.name}, ${formatTimeAmPm(slot)}, ${status}`}
                           title={`Edit schedule for ${location?.location_label || 'this company'} — ${status} at ${formatTimeAmPm(slot)}`}
-                          className={`block w-full rounded-md border px-1 py-2 text-center text-[10px] font-bold transition hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-500 ${status === "Open" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "Occupied" ? "border-blue-300 bg-blue-50 text-blue-700" : status === "Blocked" ? "border-red-300 bg-red-500 text-white" : "border-slate-300 bg-slate-100 text-slate-500"}`}
+                          className={`block w-full rounded-md border px-1 py-2 text-center text-[10px] font-bold transition hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-500 ${status === "Open" || status.endsWith(' available') ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "Full" || status === "Occupied" ? "border-blue-300 bg-blue-50 text-blue-700" : status === "Blocked" ? "border-red-300 bg-red-500 text-white" : "border-slate-300 bg-slate-100 text-slate-500"}`}
                         >
                           {status}
                         </button>

@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs && node tests/payroll-presentation.test.mjs && node tests/paystub.test.mjs && node tests/agent-workspace.test.mjs && node tests/unit-answers.test.mjs && node tests/admin-crm-agent-filter.test.mjs && node tests/date-display.test.mjs"
+    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs && node tests/payroll-presentation.test.mjs && node tests/paystub.test.mjs && node tests/agent-workspace.test.mjs && node tests/unit-answers.test.mjs && node tests/admin-crm-agent-filter.test.mjs && node tests/date-display.test.mjs && node tests/booking-capacity.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
