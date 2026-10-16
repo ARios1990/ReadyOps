@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import type { PortalFormField, PortalFormSection } from './DynamicLeadForm';
 import { preparePermanentLightingSchema } from './permanentLighting';
 import { ROOFING_SERVICE_OPTIONS } from './bookingDefaults';
@@ -39,7 +40,7 @@ export function roofingSummarySchema(): PortalFormSection[] {
 export function appointmentLabel(values: Record<string, unknown>) {
   const date = answer(values, 'appointment_date'); const time = answer(values, 'appointment_time');
   let day = date;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(date + 'T12:00:00'));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) day = formatDate(date);
   const match = time.match(/^(\d{1,2}):(\d{2})/);
   const clock = match ? `${Number(match[1]) % 12 || 12}:${match[2]} ${Number(match[1]) >= 12 ? 'PM' : 'AM'}` : time;
   return [day, clock].filter(Boolean).join(' · ');

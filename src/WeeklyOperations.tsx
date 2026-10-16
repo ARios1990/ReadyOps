@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from './dateDisplay';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -81,7 +82,7 @@ function formatWeekLabel(iso: string): string {
   const start = new Date(y, m - 1, d);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const fmt = (dt: Date) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const fmt = (dt: Date) => formatDate(dt);
   return `${fmt(start)} – ${fmt(end)}, ${end.getFullYear()}`;
 }
 
@@ -733,7 +734,7 @@ export function WeeklyOperations() {
                   <td className="px-2 py-2 text-right">{u.row_count}</td>
                   <td className="px-2 py-2 text-xs opacity-80">{(u.detected_columns || []).join(", ") || "—"}</td>
                   <td className="px-2 py-2 text-xs opacity-80">{(u.unmapped_columns || []).join(", ") || "—"}</td>
-                  <td className="px-2 py-2 opacity-80">{new Date(u.created_at).toLocaleString()}</td>
+                  <td className="px-2 py-2 opacity-80">{formatDateTime(u.created_at)}</td>
                   <td className="px-2 py-2">
                     <button
                       className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"

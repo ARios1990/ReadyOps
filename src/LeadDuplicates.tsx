@@ -1,3 +1,4 @@
+import { formatDateTime } from './dateDisplay';
 import { AlertTriangle, Building2, Calendar, MapPin, Phone, UserRound } from "lucide-react";
 import { composeAddress } from "./inspectorNote";
 import type { DuplicateField, LeadDuplicateMatch } from "./useLeadDuplicates";
@@ -72,7 +73,7 @@ export function DuplicateMatchesPanel({ matches }: { matches: LeadDuplicateMatch
                 <span className="flex items-center gap-1.5"><Building2 size={12} className="shrink-0 text-slate-400" />{match.company_name || "Unknown company"}</span>
                 <span className="flex items-center gap-1.5">
                   <Calendar size={12} className="shrink-0 text-slate-400" />
-                  Submitted {new Date(match.submitted_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                  Submitted {formatDateTime(match.submitted_at)}
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">

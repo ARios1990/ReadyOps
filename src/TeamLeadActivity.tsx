@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { LeadEmailHistory } from "./LeadEmailHistory";
@@ -77,7 +78,7 @@ export function TeamLeadActivity() {
                   <td>{row.agent_name}</td>
                   <td>{row.service_needed}</td>
                   <td>
-                    {ap ? `${ap.appointment_date} ${ap.start_time}` : "—"}
+                    {ap ? `${formatDate(ap.appointment_date)} ${ap.start_time}` : "—"}
                   </td>
                   <td>{row.qc_status}</td>
                   <td>{ap?.client_status || "—"}</td>

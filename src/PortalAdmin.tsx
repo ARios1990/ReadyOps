@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Ban,
@@ -1640,7 +1641,7 @@ function CompanyRow(props: CompanyRowProps) {
                 {packagePaymentState(company).toUpperCase()}
               </span>
               <div className="mt-1 text-[10px] text-slate-400">
-                {company.package.payment_date || "No date"}
+                {formatDate(company.package.payment_date) || "No date"}
               </div>
             </div>
           ) : (
@@ -2161,7 +2162,7 @@ function CompanyRow(props: CompanyRowProps) {
                       {detail.map((row) => (
                         <tr key={row.lead.id} className="border-t">
                           <td className="p-2">
-                            {row.appointment.appointment_date}{" "}
+                            {formatDate(row.appointment.appointment_date)}{" "}
                             {formatTime(String(row.appointment.start_time))}
                           </td>
                           <td>

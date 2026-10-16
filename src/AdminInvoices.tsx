@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, RefreshCw, WalletCards } from "lucide-react";
 import { supabase } from "./supabase";
@@ -203,13 +204,13 @@ export function AdminInvoices() {
                           "—"}
                       </td>
                       <td>
-                        {r.period_start} → {r.period_end}
+                        {formatDate(r.period_start)} → {formatDate(r.period_end)}
                       </td>
                       <td>{r.billable_leads}</td>
                       <td>{money(Number(r.total))}</td>
                       <td>{money(Number(r.amount_paid))}</td>
                       <td className="font-bold">{money(Number(r.balance))}</td>
-                      <td>{r.due_date || "—"}</td>
+                      <td>{formatDate(r.due_date) || "—"}</td>
                       <td>
                         <select
                           value={r.status}

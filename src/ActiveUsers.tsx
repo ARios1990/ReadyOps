@@ -1,3 +1,4 @@
+import { formatDateTime } from './dateDisplay';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Building2, Loader2, RefreshCw, Search, ShieldCheck, Users, Wifi, Clock,
@@ -51,10 +52,7 @@ function formatTimeAgo(iso: string, now: number): string {
   return `${d}d ago`;
 }
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
+
 
 function roleTone(role: string | null | undefined): string {
   switch (role) {

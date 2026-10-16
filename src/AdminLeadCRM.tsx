@@ -1,3 +1,5 @@
+import { formatDate } from './dateDisplay';
+import { formatDateTime } from './dateDisplay';
 import {
   useCallback,
   useEffect,
@@ -560,7 +562,7 @@ export function AdminLeadCRM() {
         row.lead.city,
         row.lead.state,
         row.lead.zip_code,
-        row.appointment.appointment_date,
+        formatDate(row.appointment.appointment_date),
         row.appointment.start_time,
         displayCompanyName(row.company.name),
         row.agent.name,
@@ -1736,7 +1738,7 @@ function LeadDetailModal({
                   label="Lead Received"
                   value={
                     lead.created_at
-                      ? new Date(lead.created_at).toLocaleString()
+                      ? formatDateTime(lead.created_at)
                       : "—"
                   }
                 />
@@ -1784,9 +1786,9 @@ function LeadDetailModal({
                       [
                         "Sent to Client",
                         appointment.company_visible_at
-                          ? new Date(
+                          ? formatDateTime(
                               appointment.company_visible_at,
-                            ).toLocaleString()
+                            )
                           : "Not sent",
                       ],
                       ["Attendance", appointment.attendance_status],
@@ -2461,7 +2463,7 @@ function HistoryList({
         })),
         ...reschedules.map((item) => ({
           at: item.changed_at,
-          title: `Rescheduled to ${item.new_date} ${timeValue(item.new_time)}`,
+          title: `Rescheduled to ${formatDate(item.new_date)} ${timeValue(item.new_time)}`,
           note: item.reason,
         })),
         ...audits.map((item) => ({
@@ -2487,7 +2489,7 @@ function HistoryList({
             {item.title}
           </p>
           <p className="text-[11px] text-slate-500">
-            {item.at ? new Date(item.at).toLocaleString() : "—"}
+            {item.at ? formatDateTime(item.at) : "—"}
             {item.note ? ` · ${item.note}` : ""}
           </p>
         </div>
@@ -2863,7 +2865,7 @@ function inlineCellDisplay(row: Obj, column: LeadColumnKey): ReactNode {
   }
   if (column === "leadReceived")
     return row.lead?.created_at
-      ? new Date(row.lead.created_at).toLocaleString()
+      ? formatDateTime(row.lead.created_at)
       : "—";
   if (column === "company")
     return <span className="font-semibold">{value(row.company?.name)}</span>;
@@ -3070,7 +3072,7 @@ function value(input: unknown): string {
   return String(input).replace(/_/g, " ");
 }
 function dateValue(input: unknown): string {
-  return input ? String(input) : "—";
+  return input ? formatDate(String(input)) : "—";
 }
 function timeValue(input: unknown): string {
   return input ? formatTime(String(input)) : "—";

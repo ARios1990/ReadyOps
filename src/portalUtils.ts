@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 export type JsonMap = Record<string, unknown>;
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
@@ -67,17 +68,9 @@ export function scheduleWeekStart(date = new Date()): Date {
   return startOfWeek(date);
 }
 
-export function formatDateLong(value: string): string {
-  const date = new Date(`${value}T12:00:00`);
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
-  }).format(date);
-}
+export function formatDateLong(value: string): string { return formatDate(value); }
 
-export function formatDateShort(value: string): string {
-  const date = new Date(`${value}T12:00:00`);
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
-}
+export function formatDateShort(value: string): string { return formatDate(value); }
 
 export function formatTime(value: string): string {
   const [hourText, minuteText = '00'] = value.split(':');
@@ -259,7 +252,7 @@ export function buildLeadTemplate(values: Record<string, unknown>): string {
   if (appointmentDate) {
     const parsed = new Date(`${appointmentDate}T12:00:00`);
     if (!Number.isNaN(parsed.getTime())) {
-      dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+      dateLabel = formatDate(parsed);
     }
   }
   const appointmentDateTime = [dateLabel, appointmentTime ? formatTime(appointmentTime) : ''].filter(Boolean).join(' & ');

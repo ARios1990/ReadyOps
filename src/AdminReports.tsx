@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase";
@@ -239,7 +240,7 @@ export function AdminReports({
 
   function exportCsv() {
     const rows = filtered.map((r) => ({
-      Date: r.appointment_date,
+      Date: formatDate(r.appointment_date),
       Company: companies.find((c) => c.id === r.company_id)?.name || "",
       Agent: r.lead?.agent_name || "",
       Lead_ID: r.lead?.lead_code || "",
@@ -528,7 +529,7 @@ function AppointmentTable({
         "Sales",
       ]}
       rows={rows.map((r) => [
-        r.appointment_date,
+        formatDate(r.appointment_date),
         companies.find((c) => c.id === r.company_id)?.name || "—",
         r.lead?.agent_name || "—",
         r.lead?.lead_code || "—",

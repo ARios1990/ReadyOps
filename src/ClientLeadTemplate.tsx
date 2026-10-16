@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { useRef, useState } from 'react';
 import { QCCustomerInformation } from './QCCustomerInformation';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
@@ -61,7 +62,7 @@ function leadValue(lead: LeadLike, topLevel: keyof LeadLike, ...formKeys: string
 function formatClientDate(value: string): string {
   const parsed = new Date(value + 'T12:00:00');
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  return formatDate(parsed);
 }
 
 function formatAddress(lead: LeadLike): string {
@@ -98,7 +99,7 @@ function normalizeLastChecked(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
   const parsed = new Date(value.slice(0, 10) + 'T12:00:00');
   if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() < 1980) return '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  return formatDate(parsed);
 }
 
 function serviceTitle(serviceNeeded: string, lead: LeadLike): string {

@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 export type PayrollRecord = Record<string, unknown>;
 export const amount = (value: unknown) => { const number = Number(value || 0); return Number.isFinite(number) ? number : 0; };
 export const payrollMoney = (value: unknown) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount(value));
@@ -28,7 +29,7 @@ export async function buildPaystubPdf({ title, period, entries }: { title: strin
   };
   header();
   for (const line of wrap(title,530,17)) { text(line,36,y,17,true); y-=23; }
-  text(`Pay period: ${period.week_start || '-'} to ${period.week_end || '-'}`,36,y,11,false,muted); y-=35;
+  text(`Pay period: ${formatDate(period.week_start) || '-'} to ${formatDate(period.week_end) || '-'}`,36,y,11,false,muted); y-=35;
   const totals = payrollTotals(entries);
   const summary: [string,number][] = [['Base / hourly earnings',totals.base],['Lead and signed-contract commission',totals.commission],['Bonuses',totals.bonus],['Gross earnings',totals.gross],['Deductions',totals.deductions]];
   for (const [label,value] of summary) { text(label,36,y); text(payrollMoney(value),440,y,11,true); y-=25; }
@@ -39,7 +40,7 @@ export async function buildPaystubPdf({ title, period, entries }: { title: strin
   text('PAYROLL BREAKDOWN',36,y,13,true); y-=26;
   for (const entry of entries) {
     const lines = wrap(`${entry.agent_name || 'Agent'} - ${entry.team_name || 'Unassigned team'}`,360);
-    const paymentLines=wrap(`Status: ${entry.status==='paid'?'PAID':'NOT PAID'}${entry.payment_date ? ` | Payment date: ${entry.payment_date}` : ''}${entry.payment_method ? ` | ${entry.payment_method}` : ''}`,540,9);
+    const paymentLines=wrap(`Status: ${entry.status==='paid'?'PAID':'NOT PAID'}${entry.payment_date ? ` | Payment date: ${formatDate(String(entry.payment_date))}` : ''}${entry.payment_method ? ` | ${entry.payment_method}` : ''}`,540,9);
     const actorLines=entry.payment_recorded_by_name?wrap(`Payment recorded by: ${entry.payment_recorded_by_name}`,540,9):[];
     const height = lines.length*15+paymentLines.length*16+actorLines.length*16+42;
     if (y-height<55) { page=pdf.addPage([612,792]); header(); y=665; }
