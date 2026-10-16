@@ -22,9 +22,9 @@ assert.equal(formatQCContactField('full_name', 'Mary McDonald DeLaCruz III'), 'M
 assert.equal(formatQCContactField('address', '  17650  PHEASANT ln , COUNTRY CLUB HILLS, il 60478-1234  '), '17650 Pheasant LN, Country Club Hills, IL 60478-1234');
 assert.equal(formatQCContactField('address', '42 n 5TH st APT 2B, EL PASO, tx 79901'), '42 N 5th ST APT 2B, El Paso, TX 79901');
 assert.equal(formatQCContactField('address', '123 MAIN rd Dallas tx 75001'), '123 Main RD Dallas TX 75001');
-assert.equal(formatQCContactField('address', '123 MAIN rd, Dallas, tx,75001'), '123 Main RD, Dallas, TX, 75001');
-assert.equal(formatQCContactField('address', '195 CREEKVIEW DR, Pensacola, FL, 32503'), '195 Creekview DR, Pensacola, FL, 32503');
-assert.equal(formatQCContactField('address', '8416 MILLSTREAM DR, Pensacola, FL, 32514'), '8416 Millstream DR, Pensacola, FL, 32514');
+assert.equal(formatQCContactField('address', '123 MAIN rd, Dallas, tx,75001'), '123 Main RD, Dallas, TX 75001');
+assert.equal(formatQCContactField('address', '195 CREEKVIEW DR, Pensacola, FL, 32503'), '195 Creekview DR, Pensacola, FL 32503');
+assert.equal(formatQCContactField('address', '8416 MILLSTREAM DR, Pensacola, FL, 32514'), '8416 Millstream DR, Pensacola, FL 32514');
 const original = {full_name:'ROBERT MILLER', address:'12 MAIN RD, DALLAS, tx 75001', city:'DALLAS', email:'User@Example.com', zip_code:'75001', qc_status:'approved'};
 assert.deepEqual(formatQCContactValues(original), {...original,full_name:'Robert Miller',address:'12 Main RD, Dallas, TX 75001',city:'Dallas'});
 assert.equal(original.full_name,'ROBERT MILLER');

@@ -18,6 +18,7 @@ export function formatQCContactField(key: string, value: string) {
   if (key !== 'address') return value;
   return properText(value).replace(/\s*,\s*/g, ', ').replace(/\b[A-Za-z]+\b/g, word => abbreviations.has(word.toUpperCase()) ? word.toUpperCase() : word)
     .replace(/\b([A-Za-z]{2})(?=\s*,?\s*\d{5}(?:-\d{4})?\b)/g, (word, state: string) => states.has(state.toUpperCase()) ? state.toUpperCase() : word)
+    .replace(/\b([A-Z]{2})\s*,\s*(?=\d{5}(?:-\d{4})?\b)/g, (match, state: string) => states.has(state) ? state + ' ' : match)
     .replace(/,\s*([A-Za-z]{2})(?=\s+\d{5}(?:-\d{4})?\b|\s*$)/g, (match, state: string) => states.has(state.toUpperCase()) ? ', ' + state.toUpperCase() : match);
 }
 
