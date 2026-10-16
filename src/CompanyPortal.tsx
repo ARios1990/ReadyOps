@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from './dateDisplay';
 import { LeadContactEditor } from './LeadContactEditor';
 import { downloadLeadRows } from './downloadLeadRows';
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -1880,7 +1881,7 @@ export function CompanyPortal({
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black text-slate-900">{receipt.file_name}</p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {receipt.payment_method} • {formatPackageMoney(receipt.amount)} • {new Date(receipt.created_at).toLocaleString()}
+                            {receipt.payment_method} • {formatPackageMoney(receipt.amount)} • {formatDateTime(receipt.created_at)}
                           </p>
                           {receipt.reference && <p className="mt-1 text-xs text-slate-600">Reference: {receipt.reference}</p>}
                         </div>
@@ -2338,7 +2339,7 @@ export function CompanyPortal({
                         {item.action.replace(/_/g, " ")}
                       </p>
                       <span className="text-xs text-slate-400">
-                        {new Date(item.created_at).toLocaleString()}
+                        {formatDateTime(item.created_at)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
@@ -3303,7 +3304,7 @@ className="min-h-11 w-full rounded-lg border border-blue-300 bg-blue-100 px-3 te
                         </td>
                         <td className="min-w-[125px] border-b border-r border-slate-200 px-2.5 py-3 font-black text-blue-700">
                           <span className="block">
-                            {new Date(`${appointment.appointment_date}T12:00:00`).toLocaleDateString("en-US")}
+                            {formatDate(appointment.appointment_date)}
                           </span>
                           <span className="mt-1 block text-slate-900">
                             {formatTime(appointment.start_time)}
@@ -3891,7 +3892,7 @@ function CompanyAppointmentsDashboard({
           <span className="ml-2 text-[10px] font-semibold text-slate-500">
             Last updated:{" "}
             {dashboard?.last_updated_at
-              ? new Date(dashboard.last_updated_at).toLocaleString()
+              ? formatDateTime(dashboard.last_updated_at)
               : "Live"}
           </span>
         </div>
@@ -3911,17 +3912,9 @@ function CompanyAppointmentsDashboard({
               Daily Appointments
             </p>
             <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-              {visibleWeekStart.toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}{" "}
+              {formatDate(visibleWeekStart)}{" "}
               –{" "}
-              {visibleWeekEnd.toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
+              {formatDate(visibleWeekEnd)}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -3965,10 +3958,7 @@ function CompanyAppointmentsDashboard({
                   {date.toLocaleDateString(undefined, { weekday: "long" })}
                 </span>
                 <span className="float-right text-[10px]">
-                  {date.toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {formatDate(date)}
                 </span>
                 <div className="mt-3 flex items-center justify-between text-xs">
                   <span>
@@ -3984,9 +3974,7 @@ function CompanyAppointmentsDashboard({
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-black">
-          {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
-            weekday: "long",
-          })}{" "}
+          {formatDate(selectedDay)}{" "}
           Leads
         </h2>
         <span className="text-xs font-bold">

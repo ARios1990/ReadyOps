@@ -1,3 +1,4 @@
+import { formatDateTime } from './dateDisplay';
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { useAuth } from "./AuthContext";
@@ -111,14 +112,14 @@ export function LeadEmailHistory({ leadId }: { leadId: string }) {
               {row.status.toUpperCase()}
             </strong>{" "}
             • {row.request_key === "initial" ? "Automatic" : "Resend"} •{" "}
-            {new Date(row.created_at).toLocaleString()}
+            {formatDateTime(row.created_at)}
           </summary>
           <p className="mt-2 break-all text-xs">
             Recipients: {row.recipients.join(", ") || "None configured"}
           </p>
           <p className="text-xs">
             Sent at:{" "}
-            {row.sent_at ? new Date(row.sent_at).toLocaleString() : "Not sent"}
+            {row.sent_at ? formatDateTime(row.sent_at) : "Not sent"}
           </p>
           {row.error_message && (
             <p className="mt-1 text-xs text-red-700">{row.error_message}</p>
@@ -126,7 +127,7 @@ export function LeadEmailHistory({ leadId }: { leadId: string }) {
           <ul className="mt-2 space-y-1 text-xs">
             {row.lead_email_attempts.map((attempt) => (
               <li key={attempt.id}>
-                {new Date(attempt.started_at).toLocaleString()} —{" "}
+                {formatDateTime(attempt.started_at)} —{" "}
                 {attempt.status}
                 {attempt.error_message ? `: ${attempt.error_message}` : ""}
               </li>

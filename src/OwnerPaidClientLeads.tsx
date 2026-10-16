@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import {
   useCallback,
   useEffect,
@@ -461,7 +462,7 @@ export function OwnerPaidClientLeads() {
                           PAID
                         </span>
                         <span className="mt-1 block capitalize text-slate-500">
-                          {row.payment_source} • {row.payment_date || "Date not entered"}
+                          {row.payment_source} • {formatDate(row.payment_date) || "Date not entered"}
                         </span>
                       </td>
                       <td>

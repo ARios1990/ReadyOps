@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import {
   useCallback,
   useEffect,
@@ -1117,7 +1118,7 @@ export function QCQueue() {
       </section>
       <div className="qc-import-placement"><RecordingCallLogImport mode="qc" disabled={busy} submittedPhone={submittedImportPhone} onCreate={(draft, filename) => { setImportMatch(null); setNewImport({ draft, filename }); }} onApply={(draft, filename) => void matchImportedLead(draft, filename)} /></div>
       </div>
-      {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {row.appointment.appointment_date} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
+      {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {formatDate(row.appointment.appointment_date)} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
       <section className="mb-4 rounded-2xl border bg-white/95 p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
           <Select
@@ -1272,10 +1273,7 @@ export function QCQueue() {
                 {date.toLocaleDateString(undefined, { weekday: "long" })}
               </p>
               <strong className="block text-base">
-                {date.toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatDate(date)}
               </strong>
               <span className="mt-2 block text-xs">
                 {day.scheduled}{" "}
@@ -1553,7 +1551,7 @@ function CompanyGroup({
                     <td className="p-3 font-bold text-blue-700">
                       {(dateBasis === "call" || allHistory) && (
                         <span className="block text-[10px] font-semibold text-slate-500">
-                          {row.appointment.appointment_date}
+                          {formatDate(row.appointment.appointment_date)}
                         </span>
                       )}
                       {formatTime(String(row.appointment.start_time))}

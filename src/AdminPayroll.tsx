@@ -1,3 +1,4 @@
+import { formatDate } from './dateDisplay';
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -399,7 +400,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
               <option value="">No period selected</option>
               {periods.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.week_start} – {item.week_end} • {item.status}
+                  {formatDate(item.week_start)} – {formatDate(item.week_end)} • {item.status}
                 </option>
               ))}
             </select>
@@ -585,7 +586,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
                         {entry.agent_name || agent?.name || `Agent ${String(entry.agent_id || "").slice(0, 8) || "unassigned"}`}
                       </td>
                       <td><span className={`readyops-ref-team team-${String(team?.abbreviation || entry.team_abbreviation || 'none').toLowerCase().replace(/[^a-z0-9]/g, '')}`}>{entry.team_name || team?.name || "—"}</span></td>
-                      <td className="whitespace-nowrap">{entry.week_start} – {entry.week_end}</td>
+                      <td className="whitespace-nowrap">{formatDate(entry.week_start)} – {formatDate(entry.week_end)}</td>
                       <td><PayrollNumberInput label={`${entry.agent_name} days worked`} value={row.days_worked} disabled={isLocked} className={inputClass} step="1" max={7} onChange={value => updateDraft(entry, "days_worked", value)} /></td>
                       <td>{numberValue(entry.total_leads)}</td><td>{numberValue(entry.qc_approved)}</td><td>{numberValue(entry.successful_leads)}</td>
                       <td>{numberValue(entry.bad_leads) + numberValue(entry.no_show_leads) + numberValue(entry.qc_denied)}</td>

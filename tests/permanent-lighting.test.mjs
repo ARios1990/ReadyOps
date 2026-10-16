@@ -9,7 +9,7 @@ assert.deepEqual(s.prepareServiceTemplate(t),t);
 const values={full_name:'Maria Lopez',phone_number:'555-010-0001',appointment_date:'2026-10-09',appointment_time:'11:00',service_needed:'Free Design & Estimate',decision_makers:'Other',decision_makers_other:'Owner and property manager',additional_properties:'No',second_address:'Stale address'};
 const out=s.buildUniversalLeadTemplate(t,values);
 assert.ok(out.startsWith('Type of Service: Permanent Lighting Appointment'));
-assert.ok(out.includes('Appointment Date & Time: Oct 9, 2026 at 11:00 AM'));
+assert.ok(out.includes('Appointment Date & Time: 10/09/2026 at 11:00 AM'));
 assert.ok(out.includes('Decision Maker Present: Owner and property manager'));
 assert.ok(out.includes('Notes: Spoke with Maria Lopez.'));
 assert.ok(!out.includes('Stale address'));

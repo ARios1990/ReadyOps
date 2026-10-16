@@ -10,7 +10,7 @@ assert.deepEqual(s.prepareServiceTemplate(template).form_schema, template.form_s
 const customized = q.organizeQuestionSchema([{ id: 'service', title: 'Company Qualifiers', fields: [{ key: 'roof_age', label: 'Roof Age', type: 'text', mode: 'required' }, { key: 'company_detail', label: 'Company Detail', type: 'text', mode: 'hidden' }] }], 'roofing');
 assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'roof_age').mode, 'required');
 assert.equal(customized.flatMap(section => section.fields).find(field => field.key === 'company_detail').mode, 'hidden');
-assert.equal(q.appointmentLabel(values), 'Oct 7, 2026 · 12:00 PM');
+assert.equal(q.appointmentLabel(values), '10/07/2026 · 12:00 PM');
 const withoutInsurance = template.form_schema.map(section => ({ ...section, fields: section.fields.filter(field => !['insurance', 'insurance_name'].includes(field.key)) }));
 const restoredInsurance = q.updateQualifierSchema(withoutInsurance, 'roofing').flatMap(section => section.fields);
 assert.equal(restoredInsurance.filter(field => field.key === 'insurance').length, 1);
@@ -24,7 +24,7 @@ const text = s.buildUniversalLeadTemplate(template, values);
 assert.ok(text.includes('Roof Type: Slate'));
 assert.ok(!text.includes('Appointment Visit'));
 assert.ok(text.includes('Claim Filed: No'));
-assert.ok(text.includes('App Date & Time: Oct 7, 2026 at 12:00 PM'));
+assert.ok(text.includes('App Date & Time: 10/07/2026 at 12:00 PM'));
 assert.ok(!text.includes('Approved'));
 assert.ok(text.includes('Reported hail size: 1 inch'));
 assert.ok(text.includes('Maria, a homeowner, will meet'));
