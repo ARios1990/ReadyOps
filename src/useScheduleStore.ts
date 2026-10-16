@@ -120,7 +120,7 @@ export function useScheduleStore(): ScheduleStoreResult {
     if (bookingsRes.data) setBookings(bookingsRes.data);
     if (appointmentsRes.data) {
       setPortalAppointments((appointmentsRes.data as PortalAppointment[]).filter(
-        appointment => !['cancelled', 'rescheduled', 'qc_denied'].includes(appointment.status),
+        appointment => !['cancelled', 'rescheduled'].includes(appointment.status),
       ));
     }
     if (reservationsRes.data) setPortalReservations(reservationsRes.data as PortalReservation[]);
@@ -142,7 +142,6 @@ export function useScheduleStore(): ScheduleStoreResult {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_teams' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_location_agents' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_schedule_exceptions' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_schedule_rules' }, () => fetchAll())
       .subscribe();
     return () => { channel.unsubscribe(); };
   }, [fetchAll]);

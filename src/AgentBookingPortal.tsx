@@ -39,7 +39,6 @@ interface Slot {
   status: string;
   capacity: number;
   bookedCount: number;
-  openings: number;
 }
 interface DayAvailability {
   day: string;
@@ -195,9 +194,8 @@ function normalizePublicPortalData(value: unknown): PublicPortalData {
                 start: asString(slot.start_time),
                 end: asString(slot.end_time),
                 status,
-                capacity: asNumber(slot.capacity) || openings,
-                bookedCount: asNumber(slot.booked),
-                openings,
+                capacity: openings,
+                bookedCount: status === "available" ? 0 : 1,
               };
             })
             .filter((slot) => slot.start && slot.end),
@@ -388,10 +386,9 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
     serviceAreaZip: selectedServiceArea?.zip,
   });
 
-  const availabilityRequest = useRef(0);
-  async function loadPortal(nextLocationId = locationId, background = false) {
-    const request = ++availabilityRequest.current;
-    if (!background) { setLoading(true); setError(""); }
+  async function loadPortal(nextLocationId = locationId) {
+    setLoading(true);
+    setError("");
     const [{ data, error: rpcErr }, { data: locationTimezone }] =
       await Promise.all([
         supabase.rpc("get_public_booking_portal_active_locations", {
@@ -405,8 +402,6 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
           p_location_id: nextLocationId,
         }),
       ]);
-    if (request !== availabilityRequest.current) return;
-    if (rpcErr && background) return;
     if (rpcErr) {
       setError(rpcError(rpcErr));
       setPortal(null);
@@ -438,7 +433,6 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
           }
         }
       } catch (loadError) {
-        if (background) return;
         setError(
           loadError instanceof Error
             ? loadError.message
@@ -453,14 +447,6 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
   useEffect(() => {
     void loadPortal();
   }, [slug, startDate, endDate, locationId]); // eslint-disable-line react-hooks/exhaustive-deps -- loadPortal intentionally reloads only for portal scope changes
-
-  useEffect(() => {
-    const refresh = () => { if (!document.hidden && !busy) void loadPortal(locationId, true); };
-    const timer = window.setInterval(refresh, 15000);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
-  }, [slug, startDate, endDate, locationId, busy]); // eslint-disable-line react-hooks/exhaustive-deps -- refresh current booking scope without replacing form input
 
   useEffect(() => {
     if (!reservation) {
@@ -516,7 +502,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
           p_actor_name: agentName.trim(),
         },
       );
-      if (rpcErr) { await loadPortal(locationId, true); setError(rpcError(rpcErr)); }
+      if (rpcErr) setError(rpcError(rpcErr));
       else {
         const moved = data as {
           appointment_date: string;
@@ -552,7 +538,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
           p_start_time: slot.start,
         },
       );
-      if (rpcErr) { await loadPortal(locationId, true); setError(rpcError(rpcErr)); }
+      if (rpcErr) setError(rpcError(rpcErr));
       else {
         setReservation(data as Reservation);
         setExpandedDate(day.date);
@@ -573,7 +559,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
         p_agent_name: agentName.trim(),
       },
     );
-    if (rpcErr) { await loadPortal(locationId, true); setError(rpcError(rpcErr)); }
+    if (rpcErr) setError(rpcError(rpcErr));
     else {
       setReservation(data as Reservation);
       setExpandedDate(day.date);
@@ -937,9 +923,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
                       />
                     </div>
                     <div className="text-right">
-                      {!settings.allowPublicBooking && !rescheduleMode ? (
-                        <span className="text-xs font-bold text-slate-500">BOOKING PAUSED</span>
-                      ) : day.closed ? (
+                      {day.closed ? (
                         <span className="text-xs font-bold text-slate-400">
                           CLOSED
                         </span>
@@ -950,7 +934,8 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
                       ) : (
                         <>
                           <p className="text-sm font-bold text-emerald-600">
-                            {day.openings} appointment{day.openings === 1 ? "" : "s"} available
+                            {day.openings} Opening
+                            {day.openings === 1 ? "" : "s"}
                           </p>
                           <p className="text-[11px] text-slate-400">
                             {day.booked} booked
@@ -977,7 +962,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
                             {formatTime(slot.start)}
                             <span className="mt-1 block text-[10px] uppercase">
                               {slot.status === "available"
-                                ? `${slot.openings ?? Math.max(slot.capacity - slot.bookedCount, 0)} of ${slot.capacity} available`
+                                ? "Available"
                                 : slot.status}
                             </span>
                           </button>
