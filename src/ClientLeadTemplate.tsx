@@ -402,7 +402,7 @@ export function ClientLeadTemplate({
           </>}
         </div>
 
-        {recordingNotesOnly && <div className="px-3 pb-3"><Section title="Recording notes"><Row label="Notes from the recording:" field="recording_notes" multiline value={String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')} onChange={onChange} /><p className="mt-2 text-xs text-slate-500">Use the recording transcript to capture what was actually said. Blank means recording notes have not been saved.</p></Section></div>}
+        {recordingNotesOnly && <div className="px-3 pb-3"><Section title="Notes"><Row label="Notes from the recording:" field="recording_notes" multiline value={String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')} onChange={onChange} /><p className="mt-2 text-xs text-slate-500">Use the recording transcript to capture what was actually said. Blank means recording notes have not been saved.</p></Section></div>}
         {editable && (
           <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-3">
             <button

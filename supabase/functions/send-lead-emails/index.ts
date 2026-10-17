@@ -77,6 +77,8 @@ Deno.serve(async (req: Request) => {
       let failure: string | null = null;
       let retry = false;
       try {
+        const { error: complianceError } = await db.rpc('assert_lead_contact_clear', { p_lead_id: job.lead_id });
+        if (complianceError) throw new Error('Compliance restriction: delivery requires current reviewed clearance.');
         const email = renderLeadEmail(job.snapshot);
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
