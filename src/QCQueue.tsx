@@ -42,6 +42,8 @@ import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
+import { QCCompliancePanel } from './QCCompliancePanel';
+import { DNCImport } from './DNCImport';
 import { RecordingCallLogImport } from './RecordingCallLogImport';
 import { QCImportedAppointment } from './QCImportedAppointment';
 import { normalizePhone, type ImportDraft } from './recordingImport';
@@ -1053,6 +1055,7 @@ export function QCQueue() {
       <div className="readyops-qc-page">
       {error && <Notice tone="red" text={error} />}
       {message && <Notice tone="blue" text={message} />}
+      {isAdmin && <DNCImport />}
       {duplicatesError && (
         <Notice tone="red" text={`Couldn't check for duplicate leads: ${duplicatesError}`} />
       )}
@@ -1797,6 +1800,7 @@ function ReviewDialog(props: DialogProps) {
               <DuplicateMatchesPanel matches={props.duplicateMatches} />
             )}
             <LeadEmailHistory leadId={props.row.lead.id} />
+            {!props.isManager && <QCCompliancePanel leadId={props.row.lead.id} phone={String(props.row.lead.phone_number||'')} qcStatus={status} />}
             <ClientLeadTemplate
               lead={{ ...props.row.lead, ...props.values }}
               appointment={props.row.appointment}
