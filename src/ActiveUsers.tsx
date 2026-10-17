@@ -1,9 +1,11 @@
 import { formatDateTime } from './dateDisplay';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Building2, Loader2, RefreshCw, Search, ShieldCheck, Users, Wifi, Clock,
+  Building2, Loader2, RefreshCw, Search, ShieldCheck, Users, Wifi, Clock,
 } from 'lucide-react';
 import { supabase } from './supabase';
+import { AdminWorkspaceShell } from './AdminWorkspaceShell';
+import { useAuth } from './AuthContext';
 
 type PresenceRow = {
   user_id: string;
@@ -23,6 +25,7 @@ type ProfileRow = {
 type Row = PresenceRow & { profile: ProfileRow | null };
 
 type CompanyPresenceRow = {
+  session_id?: string; actor_key?: string; actor_user_id?: string; actor_kind?: string; actor_name?: string; actor_role?: string;
   company_id: string;
   session_started_at: string;
   last_seen_at: string;
@@ -54,17 +57,12 @@ function formatTimeAgo(iso: string, now: number): string {
 
 
 
-function roleTone(role: string | null | undefined): string {
-  switch (role) {
-    case 'admin': return 'bg-amber-50 text-amber-800 border-amber-200';
-    case 'manager': return 'bg-blue-50 text-blue-800 border-blue-200';
-    case 'qc': return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-    case 'agent': return 'bg-slate-50 text-slate-700 border-slate-200';
-    default: return 'bg-slate-50 text-slate-500 border-slate-200';
-  }
-}
 
 export function ActiveUsers() {
+  const {profile}=useAuth();
+  const [kind,setKind]=useState('all');
+  const [days,setDays]=useState(30);
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({companies:true,staff:true,companyRecent:true,staffOnline:true});
   const [rows, setRows] = useState<Row[]>([]);
   const [companyRows, setCompanyRows] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +76,7 @@ export function ActiveUsers() {
     else setRefreshing(true);
     setError('');
 
-    const [userPresenceResult, companyPresenceResult] = await Promise.all([
+    const [userPresenceResult, companyPresenceResult, sessionResult] = await Promise.all([
       supabase
         .from('user_presence')
         .select('user_id, session_started_at, last_seen_at, current_path, updated_at')
@@ -87,17 +85,20 @@ export function ActiveUsers() {
         .from('company_portal_presence')
         .select('company_id, session_started_at, last_seen_at, current_section, updated_at')
         .order('last_seen_at', { ascending: false }),
+      supabase.from('company_portal_sessions').select('company_id,session_id,actor_key,actor_user_id,actor_kind,actor_name,actor_role,session_started_at,last_seen_at,current_section').order('last_seen_at',{ascending:false}),
     ]);
 
-    if (userPresenceResult.error || companyPresenceResult.error) {
-      setError((userPresenceResult.error || companyPresenceResult.error)?.message || 'Unable to load presence activity.');
+    if (userPresenceResult.error || companyPresenceResult.error || sessionResult.error) {
+      setError((userPresenceResult.error || companyPresenceResult.error || sessionResult.error)?.message || 'Unable to load presence activity.');
       if (initial) setLoading(false);
       else setRefreshing(false);
       return;
     }
 
     const presence = (userPresenceResult.data || []) as PresenceRow[];
-    const companyPresence = (companyPresenceResult.data || []) as CompanyPresenceRow[];
+    const sessions=(sessionResult.data||[]) as CompanyPresenceRow[];
+    const seenCompanies=new Set(sessions.map(s=>s.company_id));
+    const companyPresence=[...sessions,...((companyPresenceResult.data||[]) as CompanyPresenceRow[]).filter(s=>!seenCompanies.has(s.company_id))];
     const userIds = [...new Set(presence.map(p => p.user_id))];
     const companyIds = [...new Set(companyPresence.map(p => p.company_id))];
     let profileMap = new Map<string, ProfileRow>();
@@ -170,7 +171,7 @@ export function ActiveUsers() {
   const filteredCompanies = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return companyRows;
-    return companyRows.filter(row => [row.company_name, row.company_state, row.current_section]
+    return companyRows.filter(row => [row.company_name, row.company_state, row.current_section,row.actor_name,row.actor_role]
       .filter(Boolean)
       .some(value => String(value).toLowerCase().includes(q)));
   }, [companyRows, search]);
@@ -180,351 +181,49 @@ export function ActiveUsers() {
   const companiesOnline = filteredCompanies.filter(r => isOnline(r.last_seen_at, now));
   const companiesRecent = filteredCompanies.filter(r => !isOnline(r.last_seen_at, now));
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              onClick={() => { window.location.href = '/'; }}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <ArrowLeft size={14} /> Dashboard
-            </button>
-            <div className="min-w-0">
-              <h1 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-                <Users size={18} className="text-blue-600" /> Active Users
-              </h1>
-              <p className="truncate text-xs text-slate-500">Live view of staff and companies using ReadyOps right now.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 sm:flex">
-              <span className="relative inline-flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-              </span>
-              {online.length + companiesOnline.length} online
-            </div>
-            <button
-              onClick={() => { void load(false); }}
-              disabled={refreshing || loading}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Staff online" value={online.length} tone="emerald" icon={Wifi} />
-          <StatCard label="Company portals online" value={companiesOnline.length} tone="blue" icon={Building2} />
-          <StatCard label="Recently active" value={recent.length + companiesRecent.length} tone="blue" icon={Clock} />
-          <StatCard label="Total tracked" value={rows.length + companyRows.length} tone="slate" icon={ShieldCheck} />
-        </div>
-
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search staff, company, role, or page..."
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">
-            <Loader2 className="animate-spin text-blue-600" size={28} />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <CompanyPresenceSection
-              title="Companies Using Their Portal"
-              subtitle="Private company links active within the last 90 seconds"
-              rows={companiesOnline}
-              onlineState
-              now={now}
-              emptyText="No company portal is currently active."
-            />
-            <CompanyPresenceSection
-              title="Recently Active Company Portals"
-              subtitle="Company portals last seen more than 90 seconds ago"
-              rows={companiesRecent}
-              onlineState={false}
-              now={now}
-              emptyText="No recent company portal activity to show."
-            />
-            <PresenceSection
-              title="Staff Online Now"
-              subtitle="Signed-in ReadyOps users active within the last 90 seconds"
-              rows={online}
-              onlineState
-              now={now}
-              emptyText="No one is currently online."
-            />
-            <PresenceSection
-              title="Recently Active Staff"
-              subtitle="Signed-in users last seen more than 90 seconds ago"
-              rows={recent}
-              onlineState={false}
-              now={now}
-              emptyText="No recent activity to show."
-            />
-          </div>
-        )}
-      </main>
+  const cutoff=now-days*86400000;
+  const staffRecent=recent.filter(r=>new Date(r.last_seen_at).getTime()>=cutoff);
+  const companyRecent=companiesRecent.filter(r=>new Date(r.last_seen_at).getTime()>=cutoff);
+  const older=[...recent.filter(r=>new Date(r.last_seen_at).getTime()<cutoff).map(staffActivity),...companiesRecent.filter(r=>new Date(r.last_seen_at).getTime()<cutoff).map(companyActivity)];
+  const flip=(id:string)=>setExpanded(s=>({...s,[id]:!s[id]}));
+  const all=(value:boolean)=>setExpanded(Object.fromEntries(['companies','staff','companyOnline','companyRecent','staffOnline','staffRecent','older'].map(k=>[k,value])));
+  const group=(id:string,title:string,items:Activity[],icon:typeof Users=Users)=><ActivityGroup key={id} title={title} items={items} now={now} open={!!expanded[id]} toggle={()=>flip(id)} icon={icon}/>;
+  return <AdminWorkspaceShell active="active-users" title="Active Users" subtitle="Monitor staff and company portal activity" actions={<><span className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">● Live</span><button disabled={loading||refreshing} onClick={()=>void load(false)} className="readyops-ref-secondary"><RefreshCw size={15} className={refreshing?'animate-spin':''}/> Refresh</button></>}>
+   <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+     <StatCard label="Staff Online" value={online.length} icon={Users}/><StatCard label="Company Portals Online" value={new Set(companiesOnline.filter(r=>r.actor_kind!=='staff').map(r=>r.company_id)).size} icon={Building2}/><StatCard label="Recently Active" value={staffRecent.length+companyRecent.length} icon={Clock}/><StatCard label="Total Tracked" value={rows.length+companyRows.length} icon={ShieldCheck}/>
     </div>
-  );
-}
-
-function StatCard({
-  label, value, tone, icon: Icon,
-}: {
-  label: string;
-  value: number;
-  tone: 'emerald' | 'blue' | 'slate';
-  icon: typeof Wifi;
-}) {
-  const tones: Record<typeof tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    slate: 'bg-slate-50 text-slate-700 border-slate-200',
-  };
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-      </div>
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${tones[tone]}`}>
-        <Icon size={18} />
-      </div>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3">
+     <label className="relative min-w-0 grow basis-64"><Search size={16} className="absolute left-3 top-3 text-slate-400"/><input aria-label="Search activity" placeholder="Search staff or companies…" value={search} onChange={e=>setSearch(e.target.value)} className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"/></label>
+     {['all','staff','companies'].map(k=><button key={k} onClick={()=>setKind(k)} aria-pressed={kind===k} className={`rounded-full px-4 py-2 text-sm font-semibold ${kind===k?'bg-blue-600 text-white':'border bg-slate-50 text-slate-700'}`}>{k[0].toUpperCase()+k.slice(1)}</button>)}
+     <select aria-label="Recent activity date range" value={days} onChange={e=>setDays(Number(e.target.value))} className="rounded-lg border p-2 text-sm">{[7,30,90].map(n=><option key={n} value={n}>Last {n} days</option>)}</select>
+     <button className="rounded-lg border px-3 py-2 text-sm font-semibold text-blue-700" onClick={()=>all(true)}>Expand All</button><button className="rounded-lg border px-3 py-2 text-sm font-semibold text-blue-700" onClick={()=>all(false)}>Collapse All</button>
     </div>
-  );
+    <p className="text-xs text-slate-500">Staff visits use the signed-in account. Shared links alone cannot identify the person. Older records are unverified. Counts include separate portal sessions; company-online count excludes identified staff visits.</p>
+    {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {loading?<div className="flex justify-center p-12"><Loader2 className="animate-spin text-blue-600"/></div>:<>
+     <div className={`grid gap-4 ${kind==='all'?'xl:grid-cols-[1.4fr_1fr]':''}`}>
+      {kind!=='staff'&&<section className="min-w-0 rounded-xl border bg-white p-3 sm:p-4"><SectionHeading title="Company Portals" count={filteredCompanies.length} icon={Building2} open={!!expanded.companies} toggle={()=>flip('companies')}/>{expanded.companies&&<div className="mt-3 space-y-3">{group('companyOnline','Online Now',companiesOnline.map(companyActivity),Wifi)}{group('companyRecent','Recently Active',companyRecent.map(companyActivity),Clock)}</div>}</section>}
+      {kind!=='companies'&&<section className="min-w-0 rounded-xl border bg-white p-3 sm:p-4"><SectionHeading title="Staff Activity" count={filtered.length} icon={Users} open={!!expanded.staff} toggle={()=>flip('staff')}/>{expanded.staff&&<div className="mt-3 space-y-3">{group('staffOnline','Online Now',online.map(staffActivity),Wifi)}{group('staffRecent','Recently Active Staff',staffRecent.map(staffActivity),Clock)}</div>}</section>}
+     </div>
+     {group('older','Older Activity',older.filter(r=>kind==='all'||(kind==='staff'?r.type==='staff':r.type==='company')),Clock)}
+    </>}
+    <p className="text-xs text-slate-400">Your signed-in account: {profile?.display_name||'Staff'} · Activity refreshes every 15 seconds.</p>
+   </div>
+  </AdminWorkspaceShell>;
 }
-
-function CompanyPresenceSection({
-  title, subtitle, rows, onlineState, now, emptyText,
-}: {
-  title: string;
-  subtitle: string;
-  rows: CompanyRow[];
-  onlineState: boolean;
-  now: number;
-  emptyText: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-5 py-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Building2 size={16} className="text-blue-600" /> {title}</h2>
-          <p className="text-xs text-slate-500">{subtitle}</p>
-        </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{rows.length}</span>
-      </header>
-
-      {rows.length === 0 ? (
-        <div className="px-5 py-10 text-center text-sm text-slate-500">{emptyText}</div>
-      ) : (
-        <>
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Status</th>
-                  <th className="px-5 py-3 font-semibold">Company</th>
-                  <th className="px-5 py-3 font-semibold">Portal Section</th>
-                  <th className="px-5 py-3 font-semibold">Session Started</th>
-                  <th className="px-5 py-3 font-semibold">Last Seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(row => (
-                  <tr key={row.company_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
-                    <td className="px-5 py-3"><StatusDot online={onlineState} /></td>
-                    <td className="px-5 py-3">
-                      <div className="font-semibold text-slate-900">{row.company_name}</div>
-                      <div className="text-xs text-slate-500">{row.company_state || 'Company portal'}</div>
-                    </td>
-                    <td className="px-5 py-3"><PathPill path={row.current_section ? `/company-portal/${row.current_section}` : '/company-portal'} /></td>
-                    <td className="px-5 py-3 text-slate-600">{formatDateTime(row.session_started_at)}</td>
-                    <td className="px-5 py-3 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="grid gap-3 p-4 md:hidden">
-            {rows.map(row => (
-              <article key={row.company_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">{row.company_name}</div>
-                    <div className="text-xs text-slate-500">{row.company_state || 'Company portal'}</div>
-                  </div>
-                  <StatusDot online={onlineState} />
-                </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Section</dt>
-                    <dd className="mt-0.5"><PathPill path={row.current_section || 'portal'} /></dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Last seen</dt>
-                    <dd className="mt-0.5 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-    </section>
-  );
+type Activity={id:string;type:'staff'|'company';name:string;detail:string;identity:string;last:string;page:string|null};
+function staffActivity(r:Row):Activity{return {id:r.user_id,type:'staff',name:r.profile?.display_name||r.profile?.email||'Unnamed staff',detail:r.profile?.role||'Staff',identity:'Signed-in staff',last:r.last_seen_at,page:r.current_path};}
+function companyActivity(r:CompanyRow):Activity{return {id:[r.company_id,r.session_id||'legacy',r.actor_key||'unknown'].join(':'),type:'company',name:r.company_name,detail:r.company_state||'—',identity:r.actor_kind==='staff'?`${r.actor_name||'Staff'} · ${r.actor_role||'Staff'} visit`:r.actor_kind==='company_verified'?`${r.actor_name||'Company user'} · Verified company user`:'Shared link — identity unverified',last:r.last_seen_at,page:r.current_section};}
+function pageLabel(value:string|null){if(!value)return '—';if(value.startsWith('/company/'))return 'Company Portal';if(value==='/'||value.includes('overview'))return 'Overview';if(value.includes('qc'))return 'QC Queue';if(value.includes('payroll'))return 'Payroll';if(value.includes('crm')||value.includes('lead'))return 'Leads';if(value.includes('active-users'))return 'Active Users';if(value.includes('setup'))return 'Setup';return value.split('?')[0].replace(/^\/|\/$/g,'').replace(/[-_]/g,' ').slice(0,45);}
+function StatCard({label,value,icon:Icon}:{label:string;value:number;icon:typeof Users}){return <div className="flex items-center gap-3 rounded-xl border bg-white p-4"><span className="rounded-full bg-blue-50 p-3 text-blue-600"><Icon size={23}/></span><div><strong className="text-3xl text-slate-900">{value}</strong><p className="text-xs text-slate-500 sm:text-sm">{label}</p></div></div>;}
+function SectionHeading({title,count,icon:Icon,open,toggle}:{title:string;count:number;icon:typeof Users;open:boolean;toggle:()=>void}){return <div className="flex items-center justify-between gap-2"><h2 className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-900 sm:text-base"><Icon className="shrink-0 text-blue-600" size={20}/>{title}<span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{count}</span></h2><button aria-expanded={open} onClick={toggle} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-bold text-blue-600">{open?'Hide ⌃':'Show ⌄'}</button></div>;}
+function ActivityGroup({title,items,now,open,toggle,icon}:{title:string;items:Activity[];now:number;open:boolean;toggle:()=>void;icon:typeof Users}){
+ const [page,setPage]=useState(0);const max=Math.max(0,Math.ceil(items.length/5)-1),current=Math.min(page,max),visible=items.slice(current*5,current*5+5);
+ return <section className="min-w-0 overflow-hidden rounded-xl border bg-white"><header className="bg-slate-50/70 p-3"><SectionHeading title={title} count={items.length} icon={icon} open={open} toggle={toggle}/></header>{open&&<>{!items.length?<p className="p-5 text-sm text-slate-500">No activity in this group.</p>:<>
+  <div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-xs"><thead className="bg-slate-100 text-slate-600"><tr>{['Name / Company','Visitor / Role','Status','Last Page','Last Active'].map(h=><th key={h} className="px-3 py-3 font-semibold">{h}</th>)}</tr></thead><tbody>{visible.map(r=><tr key={r.id} className="border-t border-slate-100"><td className="px-3 py-3"><strong className="text-slate-900">{r.name}</strong><p className="mt-1 text-slate-500">{r.detail}</p></td><td className="px-3 py-3"><span className={`font-semibold ${r.identity.includes('unverified')?'text-amber-700':r.type==='company'&&r.identity.includes('visit')?'text-blue-700':'text-slate-700'}`}>{r.identity}</span></td><td className="px-3 py-3"><Status online={isOnline(r.last,now)}/></td><td className="px-3 py-3 text-slate-600">{pageLabel(r.page)}</td><td className="whitespace-nowrap px-3 py-3 text-slate-600" title={formatDateTime(r.last)}>{formatTimeAgo(r.last,now)}</td></tr>)}</tbody></table></div>
+  <div className="divide-y md:hidden">{visible.map(r=><article key={r.id} className="space-y-2 p-3 text-sm"><div className="flex justify-between gap-2"><strong>{r.name}</strong><Status online={isOnline(r.last,now)}/></div><p className="text-xs font-semibold text-blue-800">{r.identity}</p><p className="text-xs text-slate-500">{r.detail} · {pageLabel(r.page)} · {formatTimeAgo(r.last,now)}</p></article>)}</div>
+  <footer className="flex items-center justify-between gap-2 border-t p-3 text-xs text-slate-500"><span>Showing {current*5+1}–{Math.min(items.length,current*5+5)} of {items.length}</span><div className="flex gap-2"><button aria-label={`Previous ${title} page`} disabled={!current} onClick={()=>setPage(current-1)} className="rounded border px-2 py-1 disabled:opacity-30">‹</button><span className="rounded bg-blue-600 px-2 py-1 text-white">{current+1}</span><button aria-label={`Next ${title} page`} disabled={current>=max} onClick={()=>setPage(current+1)} className="rounded border px-2 py-1 disabled:opacity-30">›</button></div></footer>
+ </>}</>}</section>;
 }
-
-function PresenceSection({
-  title, subtitle, rows, onlineState, now, emptyText,
-}: {
-  title: string;
-  subtitle: string;
-  rows: Row[];
-  onlineState: boolean;
-  now: number;
-  emptyText: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-5 py-4">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900">{title}</h2>
-          <p className="text-xs text-slate-500">{subtitle}</p>
-        </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{rows.length}</span>
-      </header>
-
-      {rows.length === 0 ? (
-        <div className="px-5 py-10 text-center text-sm text-slate-500">{emptyText}</div>
-      ) : (
-        <>
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Status</th>
-                  <th className="px-5 py-3 font-semibold">User</th>
-                  <th className="px-5 py-3 font-semibold">Role</th>
-                  <th className="px-5 py-3 font-semibold">Current Page</th>
-                  <th className="px-5 py-3 font-semibold">Session Started</th>
-                  <th className="px-5 py-3 font-semibold">Last Seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(row => (
-                  <tr key={row.user_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
-                    <td className="px-5 py-3">
-                      <StatusDot online={onlineState} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="font-semibold text-slate-900">{row.profile?.display_name || 'Unnamed user'}</div>
-                      <div className="text-xs text-slate-500">{row.profile?.email || '—'}</div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <RoleBadge role={row.profile?.role || null} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <PathPill path={row.current_path} />
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">{formatDateTime(row.session_started_at)}</td>
-                    <td className="px-5 py-3 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="grid gap-3 p-4 md:hidden">
-            {rows.map(row => (
-              <article key={row.user_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <StatusDot online={onlineState} />
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{row.profile?.display_name || 'Unnamed user'}</div>
-                      <div className="text-xs text-slate-500">{row.profile?.email || '—'}</div>
-                    </div>
-                  </div>
-                  <RoleBadge role={row.profile?.role || null} />
-                </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Page</dt>
-                    <dd className="mt-0.5"><PathPill path={row.current_path} /></dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Session</dt>
-                    <dd className="mt-0.5 text-slate-600">{formatDateTime(row.session_started_at)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-wide text-slate-400">Last seen</dt>
-                    <dd className="mt-0.5 text-slate-600">{formatTimeAgo(row.last_seen_at, now)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function StatusDot({ online }: { online: boolean }) {
-  if (online) {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-        <span className="relative inline-flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-70"></span>
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-        </span>
-        Online
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-      <span className="h-2 w-2 rounded-full bg-slate-400" />
-      Away
-    </span>
-  );
-}
-
-function RoleBadge({ role }: { role: string | null }) {
-  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Unknown';
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${roleTone(role)}`}>
-      {label}
-    </span>
-  );
-}
-
-function PathPill({ path }: { path: string | null }) {
-  if (!path) return <span className="text-xs text-slate-400">—</span>;
-  return (
-    <span className="inline-block max-w-[280px] truncate rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-700" title={path}>
-      {path}
-    </span>
-  );
-}
+function Status({online}:{online:boolean}){return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${online?'bg-emerald-50 text-emerald-700':'bg-amber-50 text-amber-700'}`}>● {online?'Online':'Away'}</span>;}
