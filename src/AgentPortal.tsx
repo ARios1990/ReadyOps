@@ -60,7 +60,7 @@ type CorrectionData = {
 
 export function AgentPortal({ slug, token }: { slug: string; token: string }) {
   const [data, setData] = useState<AgentPortalData | null>(null);
-  const [mode, setMode] = useState<RangeMode>("this");
+  const [mode, setMode] = useState<RangeMode>("all");
   const [payDate, setPayDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -83,8 +83,8 @@ export function AgentPortal({ slug, token }: { slug: string; token: string }) {
       };
     if (mode === "all")
       return {
-        start: localDate(addDays(sunday, -90)),
-        end: localDate(addDays(sunday, 45)),
+        start: "0001-01-01",
+        end: "9999-12-31",
       };
     return { start: localDate(sunday), end: localDate(addDays(sunday, 6)) };
   }, [mode]);
