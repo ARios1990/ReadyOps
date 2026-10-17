@@ -17,7 +17,7 @@ export function PersonalPortalLink({ name }: { name: string }) {
       <input aria-label={`${name}'s personal portal link`} readOnly value={link}
         onFocus={event => event.currentTarget.select()}
         className="min-w-0 flex-1 basis-64 rounded-lg border border-slate-300 px-3 py-2 text-sm"/>
-      <button type="button" className="aw-primary" style={{ backgroundColor: '#315eee', color: '#ffffff' }} onClick={() => void copy()}>Copy My Link</button>
+      <button type="button" className="aw-primary" onClick={() => void copy()}>Copy My Link</button>
     </div>
     <p className="mt-2 text-xs">This private link opens your leads. Share it only with authorized people.</p>
     {notice && <p className="mt-2 text-sm" role="status">{notice}</p>}
