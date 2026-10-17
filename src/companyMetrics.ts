@@ -7,7 +7,9 @@
  *                    (company_visible_at IS NOT NULL AND status NOT IN
  *                     ('draft','qc_pending','qc_denied','cancelled','rescheduled'))
  *   - Scheduled upcoming = same predicate, appointment_date >= current_date
- *   - Package delivered  = count of the above restricted to that package
+ *   - Package delivered  = distinct released, QC-approved leads in that package
+ *                          whose latest appointment is Good or Signed Contract
+ *                          (readyops_delivered_lead_count is authoritative)
  *   - Package pending    = greatest(lead_target - delivered, 0)
  *   - Status counts      = one mutually exclusive disposition for every
  *                          delivered lead, including Pending Updates
