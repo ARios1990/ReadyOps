@@ -32,9 +32,9 @@ export function QCCompliancePanel({leadId,phone,qcStatus}:{leadId:string;phone:s
   {notice&&<p role="status" className="my-2 font-bold text-green-700">{notice}</p>}
   {state&&!state.restricted&&state.review?.override_restriction&&<p className="my-2 rounded-lg bg-blue-50 p-3 font-bold text-blue-900">Admin override active — QC approval and sending are available. The original lookup result remains recorded.</p>}
   {isAdmin&&state?.restricted&&<div className="my-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
-   <p className="font-bold text-amber-950">Admin override available</p>
-   <p className="mt-1 text-xs text-amber-900">An unresolved compliance check is blocking approval or sending. Record your reviewed grounds to continue. This does not change the DNC result or send the lead automatically.</p>
-   <button type="button" disabled={busy} aria-expanded={showOverride} onClick={()=>setShowOverride(!showOverride)} className="mt-2 rounded-lg bg-blue-700 px-3 py-2 font-bold text-white disabled:opacity-40">Admin Override — Continue QC</button>
+   <p className="font-bold text-amber-950">DNC advisory — Admin sending available</p>
+   <p className="mt-1 text-xs text-amber-900">This warning does not block Admin approval or Send Lead to Company. You may optionally record reviewed evidence below. The original DNC result stays visible.</p>
+   <button type="button" disabled={busy} aria-expanded={showOverride} onClick={()=>setShowOverride(!showOverride)} className="mt-2 rounded-lg bg-blue-700 px-3 py-2 font-bold text-white disabled:opacity-40">Record Optional Compliance Review</button>
    {showOverride&&<div className="mt-3">
     <label className="block text-xs font-bold">Reason and reviewed evidence (at least 20 characters)<textarea aria-label="Admin override reason and evidence" className="mt-1 w-full rounded-lg border p-2 text-slate-900" value={evidence} onChange={e=>setEvidence(e.target.value)}/></label>
     <label className="mt-2 block text-xs font-bold">Evidence reference (at least 5 characters)<input aria-label="Admin override evidence reference" placeholder="Recording timestamp or document reference" className="mt-1 w-full rounded-lg border p-2 text-slate-900" value={source} onChange={e=>setSource(e.target.value)}/></label>
