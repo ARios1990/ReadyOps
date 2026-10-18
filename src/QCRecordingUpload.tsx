@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { CheckCircle2, ClipboardCopy, ExternalLink, FileText, Headphones, HelpCircle, Loader2, RefreshCw, Save, Sparkles, UploadCloud, XCircle } from 'lucide-react';
 import { supabase } from './supabase';
@@ -251,6 +251,16 @@ export function QCRecordingUpload({
   const [aiError, setAiError] = useState('');
   const [aiResult, setAiResult] = useState<QualifyResult | null>(null);
   const [assessment, setAssessment] = useState<Assessment>(null);
+  const currentRecording = useRef({ leadId, value });
+  currentRecording.current = { leadId, value };
+  const previousRecording = useRef({ leadId, value });
+  useEffect(() => {
+    const previous = previousRecording.current;
+    previousRecording.current = { leadId, value };
+    if (previous.leadId === leadId && previous.value === value) return;
+    setTranscript(''); setSummary(''); setAssessment(null); setAiResult(null); setAiError('');
+    setTranscriptStatus(previous.leadId === leadId ? 'Recording replaced. Transcribe the current audio to generate a new transcript.' : '');
+  }, [leadId, value]);
 
   const appointmentInfo = { date: appointmentDate, time: appointmentTime, address, city, state, zipCode };
   const inspectorNote = assessment ? buildInspectorNote(assessment, appointmentInfo, { homeownerName, leadType, form: leadForm }) : '';
@@ -283,7 +293,7 @@ export function QCRecordingUpload({
         .select('transcript,summary,language,method,assessment')
         .eq('lead_id', leadId)
         .maybeSingle();
-      if (!active) return;
+      if (!active || currentRecording.current.leadId !== leadId || currentRecording.current.value !== value) return;
       if (loadError) {
         setTranscriptStatus('Transcript storage is temporarily unavailable.');
         return;
@@ -349,6 +359,8 @@ export function QCRecordingUpload({
   }
 
   async function transcribeRecording() {
+    const source = { leadId, value };
+    const isCurrent = () => currentRecording.current.leadId === source.leadId && currentRecording.current.value === source.value;
     setError('');
     setTranscriptStatus('');
     if (!playbackUrl) {
@@ -361,6 +373,7 @@ export function QCRecordingUpload({
     try {
       setTranscriptStatus('Starting free local Whisper AI — no paid API...');
       const localTranscript = await transcribeWithLocalWhisper(playbackUrl, language, setTranscriptStatus);
+      if (!isCurrent()) { setTranscribing(false); return; }
       if (!localTranscript) throw new Error('Local Whisper did not return transcript text.');
       const localSummary = buildRuleBasedSummary(localTranscript);
       setTranscript(localTranscript);
@@ -370,6 +383,7 @@ export function QCRecordingUpload({
       setTranscribing(false);
       return;
     } catch (localError) {
+      if (!isCurrent()) { setTranscribing(false); return; }
       localFailureDetail = localError instanceof Error ? localError.message : 'Local Whisper failed.';
       setTranscriptStatus(`Local Whisper unavailable (${localFailureDetail}). Trying browser speech fallback...`);
     }
@@ -441,6 +455,7 @@ export function QCRecordingUpload({
         });
       });
 
+      if (!isCurrent()) return;
       if (!finalTranscript) throw new Error('No speech was recognized in the recording. You can paste or type the transcript manually.');
       const nextSummary = buildRuleBasedSummary(finalTranscript);
       setTranscript(finalTranscript);
@@ -455,6 +470,7 @@ export function QCRecordingUpload({
   }
 
   async function transcribeAndQualify() {
+    const source = { leadId, value };
     setAiError('');
     setAiResult(null);
     setAiQualifying(true);
@@ -469,10 +485,12 @@ export function QCRecordingUpload({
           lead_id: leadId,
           recording_url: value || undefined,
           transcript: transcript.trim() || undefined,
+          force_transcription: Boolean(value),
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const response = data as QualifyResponse | null;
+      if (currentRecording.current.leadId !== source.leadId || currentRecording.current.value !== source.value) return;
       if (invokeError) throw new Error(await functionErrorMessage(invokeError, response));
       if (response?.error) throw new Error(response.error);
       if (!response) throw new Error('The AI function returned an empty response.');
@@ -504,7 +522,7 @@ export function QCRecordingUpload({
         <input
           type="file"
           accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
-          disabled={uploading}
+          disabled={uploading || transcribing || aiQualifying}
           className="hidden"
           onChange={event => {
             const file = event.target.files?.[0];
@@ -517,6 +535,7 @@ export function QCRecordingUpload({
       <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Recording URL (optional fallback)</label>
       <input
         value={value.startsWith(STORAGE_PREFIX) ? '' : value}
+        disabled={uploading || transcribing || aiQualifying}
         onChange={event => onChange(event.target.value.trim())}
         placeholder="Paste ReadyMode recording URL or upload a file above"
         className="mt-1 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-slate-700"
@@ -599,7 +618,7 @@ export function QCRecordingUpload({
             )}
           </div>
         )}
-        <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify reuses the transcript when available, otherwise uses secured OpenAI transcription, then evaluates the call against company requirements.</p>
+        <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify transcribes the currently selected recording, then evaluates the call against company requirements. Without audio, it uses the pasted or saved transcript.</p>
         <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Use recording passages</button>

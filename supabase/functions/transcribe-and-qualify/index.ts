@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { selectRecordingInput } from "./recordingSelection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +130,7 @@ Deno.serve(async (req: Request) => {
       lead_id,
       recording_url: requestedRecordingUrl,
       transcript: requestedTranscript,
+      force_transcription: forceTranscription,
     } = await req.json();
     if (!lead_id) return json({ error: "lead_id is required" }, 400);
 
@@ -185,9 +187,24 @@ Deno.serve(async (req: Request) => {
       .select("transcript")
       .eq("lead_id", lead.id)
       .maybeSingle();
-    let transcript = clientTranscript || String(savedTranscript?.transcript || "").trim();
+    let selected;
+    try {
+      selected = selectRecordingInput({ leadId: lead.id,
+        savedRecordingUrl: String(lead.recording_url || ''), requestedRecordingUrl,
+        clientTranscript, savedTranscript: String(savedTranscript?.transcript || '').trim(),
+        forceTranscription: forceTranscription === true });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : 'Invalid recording' }, 400); }
+    let { transcript, recordingUrl } = selected;
     let transcriptionModelUsed = transcript ? "existing_transcript" : "";
-    let recordingUrl = String(lead.recording_url || "").trim();
+    if (selected.changed) {
+      let attach = admin.from('portal_leads')
+        .update({ recording_url: recordingUrl, updated_at: new Date().toISOString() })
+        .eq('id', lead.id);
+      attach = lead.recording_url == null ? attach.is('recording_url', null) : attach.eq('recording_url', lead.recording_url);
+      const { data: attached, error: attachError } = await attach.select('id').maybeSingle();
+      if (attachError) return json({ error: `Unable to attach current recording: ${attachError.message}` }, 500);
+      if (!attached) return json({ error: 'The recording changed. Reload the lead and transcribe its current audio.' }, 409);
+    }
 
     if (!transcript && !recordingUrl) {
       // An upload can finish before the parent lead-edit form is saved. Prefer
@@ -477,6 +494,14 @@ ${transcript}`;
       summary,
     };
 
+    // Do not let a slower request overwrite results after another reviewer replaces the audio.
+    if (recordingUrl) {
+      const { data: currentRecording, error: currentError } = await admin.from('portal_leads')
+        .select('recording_url').eq('id', lead.id).maybeSingle();
+      if (currentError || currentRecording?.recording_url !== recordingUrl) {
+        return json({ error: 'The recording changed during transcription. Retry with the current audio.' }, 409);
+      }
+    }
     // 7. Persist results.
     const { error: transcriptError } = await admin.from("qc_lead_transcripts").upsert({
       lead_id: lead.id,
