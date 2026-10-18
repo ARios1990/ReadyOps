@@ -42,6 +42,7 @@ import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
+import { RoofProsFormStatus, ROOF_PROS_COMPANY_ID } from './RoofProsFormStatus';
 import { QCCompliancePanel } from './QCCompliancePanel';
 import { DNCImport } from './DNCImport';
 import { RecordingCallLogImport } from './RecordingCallLogImport';
@@ -858,7 +859,7 @@ export function QCQueue() {
     if (sendError) setError(rpcError(sendError));
     else {
       setMessage(
-        `${row.lead.lead_code || "Lead"} was sent to ${row.company?.name || "the company"}.`,
+        `${row.lead.lead_code || "Lead"} was sent to ${row.company?.name || "the company"}.${row.company?.id === ROOF_PROS_COMPANY_ID ? ' The Roof Pros Google Form is queued separately; its status appears in the lead review.' : ''}`,
       );
       setSelected(null);
       await load(true);
@@ -2006,6 +2007,7 @@ function ReviewDialog(props: DialogProps) {
               )}
               </div>
             )}
+            {props.canSend && <RoofProsFormStatus leadId={props.row.lead.id} companyId={props.row.company.id} sent={Boolean(props.row.appointment?.company_visible_at)}/>}
             {awaitingSend && (
               <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
                 <div className="flex items-center gap-2 text-emerald-950">
