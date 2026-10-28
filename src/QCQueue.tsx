@@ -42,6 +42,8 @@ import { supabase } from "./supabase";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
+import {applyVerifiedFields,type RecordingVerification,type VerifiedDraft} from '../supabase/functions/_shared/recordingVerification';
+import {RecordingVerificationContext} from './RecordingVerificationBadge';
 import { RoofProsFormStatus, ROOF_PROS_COMPANY_ID } from './RoofProsFormStatus';
 import { QCCompliancePanel } from './QCCompliancePanel';
 import { DNCImport } from './DNCImport';
@@ -191,6 +193,8 @@ export function QCQueue() {
   const [importMatch, setImportMatch] = useState<{ draft: ImportDraft; filename: string; rows: Obj[] } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [values, setValues] = useState<Obj>({});
+  const leadDrafts=useRef(new Map<string,Obj>());
+  useEffect(()=>{if(selected?.lead.id)leadDrafts.current.set(selected.lead.id,values);},[selected?.lead.id,values]);
   const [targetCompany, setTargetCompany] = useState("");
   const [targetLocation, setTargetLocation] = useState("");
   const [targetDate, setTargetDate] = useState("");
@@ -450,7 +454,31 @@ export function QCQueue() {
       });
       return;
     }
-    setValues((previous) => ({ ...previous, [key]: value }));
+    setValues((previous) => {
+      const next={...previous,[key]:value};
+      if(!key.startsWith('_qc_')&&value!==previous[key])next._qc_manual_fields=Array.from(new Set([...(previous._qc_manual_fields||[]),key]));
+      if(key==='recording_url'&&value!==previous.recording_url){next._qc_recording_history=previous._qc_recording_review?.history||previous._qc_recording_history;delete next._qc_recording_review;}
+      else if(value!==previous[key]&&previous._qc_recording_review?.findings?.[key]&&!key.startsWith('_qc_')){
+        next._qc_recording_review={...previous._qc_recording_review,findings:{...previous._qc_recording_review.findings,[key]:{...previous._qc_recording_review.findings[key],status:'review',updated:false,detail:'Manual correction preserved. Review against the transcript before saving.'}}};
+      }
+      return next;
+    });
+  }
+  function applyRecordingVerification(verification:RecordingVerification){
+    if(!selected||verification.lead_id!==selected.lead.id)return;
+    setValues(previous=>{
+      if(String(previous.recording_url||'')!==verification.recording_url)return previous;
+      const result=applyVerifiedFields(previous,verification);
+      if(!canOverrideScheduling){
+        for(const field of ['appointment_date','appointment_time'] as const){
+          if(result.draft.findings[field]?.updated){
+            result.values[field]=previous[field];
+            result.draft.findings[field]={...result.draft.findings[field]!,status:'review',updated:false,detail:'An owner must review and save appointment schedule corrections.'};
+          }
+        }
+      }
+      return result.values;
+    });
   }
 
   async function openReview(row: Obj, startReview = false) {
@@ -476,7 +504,7 @@ export function QCQueue() {
     }
     setSelected(row);
     setSelectedAgentId(row.agent?.id || row.lead.agent_id || "");
-    setValues(formatQCContactValues({ ...row.lead.form_data, ...row.lead }));
+    setValues(leadDrafts.current.get(row.lead.id)||formatQCContactValues({ ...row.lead.form_data, ...row.lead,appointment_date:row.appointment.appointment_date,appointment_time:String(row.appointment.start_time).slice(0,5) }));
     setTargetCompany(row.lead.company_id);
     setTargetLocation(row.lead.location_id || "");
     setTargetDate(row.appointment.appointment_date);
@@ -554,16 +582,21 @@ export function QCQueue() {
       "call_recording",
       "share_recording_with_company",
     ].forEach((key) => delete patch.form_data[key]);
-        const { data: updatedLead, error: updateError } = await supabase.rpc("qc_update_lead", {
+    const scheduleChanged=formattedValues.appointment_date&&formattedValues.appointment_time&&
+      (formattedValues.appointment_date!==selected.appointment.appointment_date||String(formattedValues.appointment_time).slice(0,5)!==String(selected.appointment.start_time).slice(0,5));
+    const { data: savedData, error: updateError } = await supabase.rpc("qc_save_verified_edits", {
       p_lead_id: selected.lead.id,
       p_patch: patch,
+      p_date:scheduleChanged?formattedValues.appointment_date:null,
+      p_time:scheduleChanged?formattedValues.appointment_time:null,
     });
     if (updateError) setError(rpcError(updateError));
     else {
-            const persistedLead = (updatedLead || {}) as Obj;
+      const saved=(savedData||{}) as Obj;
+      const persistedLead = (saved.lead || {}) as Obj;
       setSelected((current) =>
         current
-          ? { ...current, lead: { ...current.lead, ...persistedLead } }
+          ? { ...current, lead: { ...current.lead, ...persistedLead },appointment:saved.appointment||current.appointment,qc_review:saved.qc_review||current.qc_review }
           : current,
       );
       setValues((current) => ({
@@ -1366,6 +1399,7 @@ export function QCQueue() {
           row={selected}
           values={values}
           change={change}
+          applyVerification={applyRecordingVerification}
           refs={refs}
           targetCompany={targetCompany}
           setTargetCompany={(value) => {
@@ -1656,6 +1690,7 @@ type DialogProps = {
   row: Obj;
   values: Obj;
   change: (key: string, value: unknown) => void;
+  applyVerification: (verification:RecordingVerification)=>void;
   refs: RefData;
   targetCompany: string;
   setTargetCompany: (value: string) => void;
@@ -1802,9 +1837,9 @@ function ReviewDialog(props: DialogProps) {
             )}
             <LeadEmailHistory leadId={props.row.lead.id} />
             {!props.isManager && <QCCompliancePanel leadId={props.row.lead.id} phone={String(props.row.lead.phone_number||'')} qcStatus={status} />}
-            <ClientLeadTemplate
+            <RecordingVerificationContext.Provider value={props.values._qc_recording_review as VerifiedDraft|undefined}><ClientLeadTemplate
               lead={{ ...props.row.lead, ...props.values }}
-              appointment={props.row.appointment}
+              appointment={{...props.row.appointment,appointment_date:props.values.appointment_date||props.row.appointment.appointment_date,start_time:props.values.appointment_time||props.row.appointment.start_time}}
               showLabel={false}
               showCopySection
               recordingNotesOnly
@@ -1812,7 +1847,7 @@ function ReviewDialog(props: DialogProps) {
               onChange={props.change}
               onSave={props.save}
               saving={props.busy}
-            />
+            /></RecordingVerificationContext.Provider>
           </div>
           <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2">
 <div className="order-4 min-w-0 rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
@@ -1865,6 +1900,11 @@ function ReviewDialog(props: DialogProps) {
             <div className="order-1 min-w-0 md:col-span-2">
               <QCRecordingUpload
                 leadId={props.row.lead.id}
+                onVerification={props.applyVerification}
+                onVerificationStale={()=>props.change('_qc_recording_review',undefined)}
+                onRecordingContextChange={context=>props.change('_qc_recording_context',context)}
+                onSummaryDraftChange={draft=>props.change('_qc_summary_draft',draft)}
+                language={String(props.values.language||'')}
                 onRecordingNotesChange={(value) => props.change('recording_notes', value)}
                 importedTranscript={props.importedTranscript}
                 value={String(props.values.recording_url || "")}
@@ -1875,6 +1915,7 @@ function ReviewDialog(props: DialogProps) {
                 }
                 appointmentDate={props.row.appointment.appointment_date}
                 appointmentTime={props.row.appointment.start_time}
+                appointmentTimezone={props.row.appointment.timezone}
                 address={props.row.lead.address}
                 city={props.row.lead.city}
                 state={props.row.lead.state}

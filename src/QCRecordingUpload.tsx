@@ -6,6 +6,8 @@ import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { getLane } from './leadTypes';
 import { buildInspectorNote } from './inspectorNote';
 import { recordingNotes } from './recordingImport';
+import {transcriptKey,type RecordingVerification,type VerifiedDraft} from '../supabase/functions/_shared/recordingVerification';
+import {RecordingVerificationWorkspace,type AppointmentSummaryDraft} from './RecordingVerificationWorkspace';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -31,6 +33,7 @@ type QualifierKey =
 type QualifierValue = 'yes' | 'no' | 'unknown';
 
 type Assessment = {
+  recording_verification?: RecordingVerification;
   qualifiers?: Partial<Record<QualifierKey, QualifierValue>>;
   evidence?: Partial<Record<QualifierKey, string>>;
   optional_details?: {
@@ -211,6 +214,7 @@ export function QCRecordingUpload({
   onShareChange,
   appointmentDate,
   appointmentTime,
+  appointmentTimezone,
   address,
   city,
   state,
@@ -220,6 +224,10 @@ export function QCRecordingUpload({
   leadForm,
   onRecordingNotesChange,
   importedTranscript,
+  onVerification,
+  onSummaryDraftChange,
+  onVerificationStale,
+  onRecordingContextChange,
 }: {
   leadId: string;
   value: string;
@@ -229,6 +237,7 @@ export function QCRecordingUpload({
   onShareChange: (value: boolean) => void;
   appointmentDate?: string | null;
   appointmentTime?: string | null;
+  appointmentTimezone?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -238,6 +247,10 @@ export function QCRecordingUpload({
   leadForm?: Record<string, unknown>;
   onRecordingNotesChange?: (value: string) => void;
   importedTranscript?: string;
+  onVerification?: (verification:RecordingVerification)=>void;
+  onSummaryDraftChange?: (draft:AppointmentSummaryDraft)=>void;
+  onVerificationStale?: ()=>void;
+  onRecordingContextChange?: (context:Record<string,unknown>)=>void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -254,10 +267,39 @@ export function QCRecordingUpload({
   const currentRecording = useRef({ leadId, value });
   currentRecording.current = { leadId, value };
   const previousRecording = useRef({ leadId, value });
+  const analyzed=useRef(new Set<string>());
+  const manualTranscript=useRef(false);
+  const analysisGeneration=useRef(0);
+  const recordingContext=(leadForm?._qc_recording_context||{}) as Record<string,unknown>;
+  const recordingContextKey=JSON.stringify(recordingContext);
+  const applied=useRef('');
+  const verificationCallback=useRef(onVerification);verificationCallback.current=onVerification;
+  const reviewDraft=leadForm?._qc_recording_review as VerifiedDraft|undefined;
+  const currentVerification=assessment?.recording_verification;
+  useEffect(()=>{
+    if(!currentVerification||currentVerification.lead_id!==leadId||currentVerification.recording_url!==value||currentVerification.transcript_key!==transcriptKey(transcript))return;
+    const key=`${leadId}|${value}|${JSON.stringify(currentVerification)}`;
+    if(applied.current===key)return;
+    applied.current=key;verificationCallback.current?.(currentVerification);
+  },[currentVerification,leadId,value,transcript]);
+  useEffect(()=>{
+    if(!onVerification||!transcript.trim()||transcribing||aiQualifying||savingTranscript)return;
+    if(currentVerification?.recording_url===value&&currentVerification.transcript_key===transcriptKey(transcript))return;
+    const key=`${leadId}|${value}|${transcriptKey(transcript)}|${recordingContextKey}`;
+    if(analyzed.current.has(key))return;
+    const timer=window.setTimeout(()=>{
+      analyzed.current.add(key);
+      void transcribeAndQualify(true,Boolean(value)&&currentVerification?.recording_url!==value&&!manualTranscript.current);
+    },900);
+    return ()=>window.clearTimeout(timer);
+    // The analysis is bound to the exact lead, audio and transcript above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[leadId,value,transcript,recordingContextKey,transcribing,aiQualifying,savingTranscript,currentVerification,Boolean(onVerification)]);
   useEffect(() => {
     const previous = previousRecording.current;
     previousRecording.current = { leadId, value };
     if (previous.leadId === leadId && previous.value === value) return;
+    manualTranscript.current=false;
     setTranscript(''); setSummary(''); setAssessment(null); setAiResult(null); setAiError('');
     setTranscriptStatus(previous.leadId === leadId ? 'Recording replaced. Transcribe the current audio to generate a new transcript.' : '');
   }, [leadId, value]);
@@ -335,7 +377,7 @@ export function QCRecordingUpload({
       lead_id: leadId,
       transcript: nextTranscript.trim(),
       summary: nextSummary.trim(),
-      language: speechLanguage(language),
+      language: assessment?.recording_verification?.observations.find(o=>o.field==='language'&&o.certainty==='confirmed')?.value||null,
       method,
       updated_by: userData.user?.id || null,
       updated_at: new Date().toISOString(),
@@ -372,14 +414,14 @@ export function QCRecordingUpload({
     let localFailureDetail = '';
     try {
       setTranscriptStatus('Starting free local Whisper AI — no paid API...');
-      const localTranscript = await transcribeWithLocalWhisper(playbackUrl, language, setTranscriptStatus);
+      const localTranscript = await transcribeWithLocalWhisper(playbackUrl, 'auto', setTranscriptStatus);
       if (!isCurrent()) { setTranscribing(false); return; }
       if (!localTranscript) throw new Error('Local Whisper did not return transcript text.');
       const localSummary = buildRuleBasedSummary(localTranscript);
       setTranscript(localTranscript);
       setSummary(localSummary);
       setTranscriptStatus('Local Whisper transcription complete. Saving to QC...');
-      await saveTranscript(localTranscript, localSummary, 'local_whisper');
+      await saveTranscript(localTranscript, localSummary, 'local_whisper_auto');
       setTranscribing(false);
       return;
     } catch (localError) {
@@ -469,8 +511,9 @@ export function QCRecordingUpload({
     }
   }
 
-  async function transcribeAndQualify() {
+  async function transcribeAndQualify(verifyOnly=false,refreshAudio=true) {
     const source = { leadId, value };
+    const generation=++analysisGeneration.current;
     setAiError('');
     setAiResult(null);
     setAiQualifying(true);
@@ -485,12 +528,14 @@ export function QCRecordingUpload({
           lead_id: leadId,
           recording_url: value || undefined,
           transcript: transcript.trim() || undefined,
-          force_transcription: Boolean(value),
+          force_transcription: refreshAudio&&Boolean(value),
+          verify_only: verifyOnly,
+          recording_context:{...recordingContext,recording_url:value,timezone:recordingContext.timezone||appointmentTimezone||''},
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const response = data as QualifyResponse | null;
-      if (currentRecording.current.leadId !== source.leadId || currentRecording.current.value !== source.value) return;
+      if (currentRecording.current.leadId !== source.leadId || currentRecording.current.value !== source.value||analysisGeneration.current!==generation) return;
       if (invokeError) throw new Error(await functionErrorMessage(invokeError, response));
       if (response?.error) throw new Error(response.error);
       if (!response) throw new Error('The AI function returned an empty response.');
@@ -516,6 +561,7 @@ export function QCRecordingUpload({
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
       <div className="flex items-center gap-2"><Headphones size={16} className="text-blue-700"/><h3 className="font-bold text-blue-950">Appointment Recording</h3></div>
       <p className="mt-1 text-xs text-slate-500">Upload the ReadyMode call recording here. MP3, WAV, M4A, WebM and OGG are supported up to 100 MB.</p>
+      {onRecordingContextChange&&<details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-semibold">Recording date for relative appointment references</summary><p className="mt-1">Use the actual call date and property timezone when known. An older call’s “tomorrow” is never calculated from today or the upload date.</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{[['recorded_at','Actual call date','date'],['timezone','Property timezone','text']].map(([key,label,type])=><label key={key}>{label}<input aria-label={label} type={type} value={String(recordingContext.recording_url===value?recordingContext[key]|| (key==='timezone'?appointmentTimezone||'':''):key==='timezone'?appointmentTimezone||'':'')} onChange={event=>{manualTranscript.current=true;analyzed.current.clear();analysisGeneration.current++;setAssessment(null);onVerificationStale?.();onRecordingContextChange({...recordingContext,recording_url:value,[key]:event.target.value,timezone:key==='timezone'?event.target.value:recordingContext.timezone||appointmentTimezone||''});}} className="mt-1 w-full rounded border border-blue-200 bg-white p-2"/></label>)}</div></details>}
 
       <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-200 bg-white px-4 py-4 text-sm font-bold text-blue-700 hover:bg-blue-50">
         {uploading ? <Loader2 size={17} className="animate-spin"/> : <UploadCloud size={17}/>} {uploading ? 'Uploading recording…' : 'Upload Recording'}
@@ -547,7 +593,7 @@ export function QCRecordingUpload({
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2"><FileText size={16} className="text-slate-700"/><div><h4 className="text-sm font-black text-slate-900">Call Transcript</h4><p className="text-[11px] text-slate-500">Authorized QC reviewers only • {speechLanguage(language)}</p></div></div>
+          <div className="flex items-center gap-2"><FileText size={16} className="text-slate-700"/><div><h4 className="text-sm font-black text-slate-900">Call Transcript</h4><p className="text-[11px] text-slate-500">Authorized QC reviewers only • Customer preference: {language || 'Not verified'}</p></div></div>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
@@ -557,6 +603,10 @@ export function QCRecordingUpload({
             </button>
           </div>
         </div>
+        {reviewDraft?.verification.lead_id===leadId&&reviewDraft.verification.recording_url===value&&reviewDraft.verification.transcript_key===transcriptKey(transcript)&&onVerification&&<RecordingVerificationWorkspace
+          leadId={leadId} review={reviewDraft} values={{...leadForm,appointment_date:leadForm?.appointment_date||appointmentDate,appointment_time:leadForm?.appointment_time||appointmentTime}}
+          savedDraft={leadForm?._qc_summary_draft as AppointmentSummaryDraft|undefined}
+          onDraftChange={onSummaryDraftChange} onRegenerate={()=>void transcribeAndQualify(true,false)} busy={aiQualifying}/>}
         {aiError && <p className="mt-2 text-xs font-semibold text-red-700">{aiError}</p>}
         {aiResult && (
           <div className="mt-2">
@@ -619,7 +669,7 @@ export function QCRecordingUpload({
           </div>
         )}
         <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify transcribes the currently selected recording, then evaluates the call against company requirements. Without audio, it uses the pasted or saved transcript.</p>
-        <textarea value={transcript} onChange={event => setTranscript(event.target.value)} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
+        <textarea value={transcript} onChange={event => {manualTranscript.current=true;analyzed.current.clear();analysisGeneration.current++;setTranscript(event.target.value);setAssessment(null);onVerificationStale?.();}} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Use recording passages</button>
           <button type="button" disabled={savingTranscript} onClick={() => void saveTranscript()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{savingTranscript ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Save Transcript</button>

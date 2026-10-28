@@ -115,6 +115,7 @@ function normalizeAddressText(value: string): string {
 export function formatRoofAge(value: unknown): string {
   const text = normalizeRoofAgeInput(value);
   if (!text) return '—';
+  if (/^~\d+$/.test(text)) return `Approximately ${text.slice(1)} Years`;
   if (/^\d+(?:\.\d+)?$/.test(text)) {
     const years = Number(text);
     return `${years} ${years === 1 ? 'Year' : 'Years'}`;
@@ -128,12 +129,13 @@ export function formatRoofAge(value: unknown): string {
 
 export function isValidRoofAge(value: unknown): boolean {
   const text = normalizeRoofAgeInput(value);
-  return text === '' || /^\d+(?:\+|-\d+)?$/.test(text);
+  return text === '' || /^(?:~\d+|\d+(?:\+|-\d+)?)$/.test(text);
 }
 
 export function normalizeRoofAgeInput(value: unknown): string {
   return String(value ?? '')
     .trim()
+    .replace(/^(?:approximately|approx\.?|about|around)\s*(\d+)/i,'~$1')
     .replace(/\s*years?\s*$/i, '')
     .trim()
     .replace(/\s*-\s*/, '-');

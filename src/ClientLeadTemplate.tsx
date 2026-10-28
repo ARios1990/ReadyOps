@@ -1,6 +1,7 @@
 import { formatDate } from './dateDisplay';
 import { useRef, useState } from 'react';
 import { QCCustomerInformation } from './QCCustomerInformation';
+import { RecordingVerificationBadge } from './RecordingVerificationBadge';
 import { answer, appointmentLabel, automaticNotes, LANGUAGE_OPTIONS, NOTES_ONLY, qualifierVisible, roofingSummarySchema } from './appointmentQualifiers';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
 import { formatRoofAge, formatStories, formatTime, normalizeRoofAgeInput } from './portalUtils';
@@ -145,6 +146,7 @@ function Row({
   return (
     <label className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-0.5 text-sm leading-5">
       <strong className="min-w-0 max-w-full break-words font-bold text-slate-950">{label}</strong>
+      {field && <RecordingVerificationBadge field={field}/>}
       {editable ? (
         <span className="flex min-w-[140px] flex-1 items-center gap-1">
           {options?.length ? (
@@ -381,6 +383,9 @@ export function ClientLeadTemplate({
             <Row label="Insurance:" field="insurance" value={formValue(lead, 'insurance')} editValue={editValue('insurance', formValue(lead, 'insurance'))} onChange={onChange} />
             <Row label="Insurance Name:" field="insurance_name" value={formValue(lead, 'insurance_name')} editValue={editValue('insurance_name', formValue(lead, 'insurance_name'))} onChange={onChange} />
             <Row label="Contract:" field="contract" value={formValue(lead, 'contract')} editValue={editValue('contract', formValue(lead, 'contract'))} onChange={onChange} />
+            <Row label="Homeowner Status:" field="homeowner_authority" value={formValue(lead, 'homeowner_authority')} editValue={editValue('homeowner_authority', formValue(lead, 'homeowner_authority'))} onChange={onChange} />
+            <Row label="Public Adjuster Agreement:" field="public_adjuster_agreement" value={formValue(lead, 'public_adjuster_agreement')} editValue={editValue('public_adjuster_agreement', formValue(lead, 'public_adjuster_agreement'))} options={['Yes','No']} onChange={onChange} />
+            <Row label="Conditional Roofing Obligation:" field="conditional_roofing_obligation" value={formValue(lead, 'conditional_roofing_obligation')} editValue={editValue('conditional_roofing_obligation', formValue(lead, 'conditional_roofing_obligation'))} options={['Yes','No']} onChange={onChange} />
             <Row label="Home Value:" field="home_value" value={homeValue} editValue={editValue('home_value', rawHomeValue)} onChange={onChange} />
             <Row label="SQ FT:" field="sq_ft" value={squareFeet} editValue={editValue('sq_ft', rawSquareFeet)} onChange={onChange} />
             <Row label="Web Link:" field="web_url" inputType="url" value={webLink} editValue={editValue('web_url', webLink)} href={webLink || undefined} onChange={onChange} />

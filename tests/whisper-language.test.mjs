@@ -16,3 +16,7 @@ assert.equal(calls[1].model, 'onnx-community/whisper-tiny.en');
 assert.equal(calls[1].options.language, undefined);
 assert.equal(calls[1].options.task, undefined);
 console.log('PASS Spanish transcription receives its language and English-only model receives compatible options');
+
+await worker.onmessage({data:{type:'transcribe',audio:new Float32Array(16000),language:'auto'}});
+assert.equal(calls[2].model,'onnx-community/whisper-tiny');assert.equal(calls[2].options.language,undefined);assert.equal(calls[2].options.task,'transcribe');
+console.log('PASS automatic transcription uses multilingual speech without forcing the saved lead language');

@@ -9,7 +9,7 @@ export function UnitAnswerInput({ field, value, onValueChange, ...props }: Omit<
   const [draft, setDraft] = useState(() => text.trim() ? format(text) : '');
   useEffect(() => { if (!editing) setDraft(text.trim() ? format(text) : ''); }, [editing, text, format]);
   return <input {...props} type="text" value={draft}
-    pattern={field === 'roof_age' ? '[0-9]+(?:[+]|-[0-9]+)?(?:[ ]*[Yy][Ee][Aa][Rr][Ss]?)?' : undefined}
+    pattern={field === 'roof_age' ? '(?:(?:~|[Aa]pproximately[ ]+|[Aa]bout[ ]+|[Aa]round[ ]+)?[0-9]+)(?:[+]|-[0-9]+)?(?:[ ]*[Yy][Ee][Aa][Rr][Ss]?)?' : undefined}
     onFocus={() => setEditing(true)}
     onChange={event => { setDraft(event.target.value); onValueChange(event.target.value); }}
     onBlur={() => { onValueChange(normalize(draft)); setDraft(draft.trim() ? format(draft) : ''); setEditing(false); }} />;

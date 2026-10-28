@@ -137,7 +137,7 @@ function runTranscription(transcriber: WhisperTranscriber, audio: Float32Array, 
     chunk_length_s: 30,
     stride_length_s: 5,
     return_timestamps: true,
-    ...(multilingual ? { language: normalized.startsWith('es') || normalized.includes('spanish') ? 'es' : normalized, task: 'transcribe' as const } : {}),
+    ...(multilingual ? { ...(normalized==='auto'?{}:{language:normalized.startsWith('es') || normalized.includes('spanish') ? 'es' : normalized}), task: 'transcribe' as const } : {}),
   });
 }
 
