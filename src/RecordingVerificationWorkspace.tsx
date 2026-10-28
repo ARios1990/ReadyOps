@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {ClipboardCopy,RefreshCw} from 'lucide-react';
 import {VERIFIED_FIELDS,type VerifiedDraft,type VerifiedField} from '../supabase/functions/_shared/recordingVerification';
 import {appointmentLabel} from './appointmentQualifiers';
+import {formatRoofAge,formatStories,formatTime} from './portalUtils';
 import {RecordingVerificationBadge,RecordingVerificationContext} from './RecordingVerificationBadge';
 export type AppointmentSummaryDraft={lead_id:string;notes:string;qc_note:string;generated_notes:string;generated_qc_note:string};
 export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,onDraftChange,onRegenerate,busy}:{
@@ -23,12 +24,14 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[leadId,source]);
  function edit(patch:Partial<AppointmentSummaryDraft>){const next={...draft,...patch};setDraft(next);onDraftChange?.(next);}
+ const display=(key:string)=>values[key]==null||values[key]===''?'—':key==='roof_age'?formatRoofAge(values[key]):key==='stories'?formatStories(values[key]):key==='appointment_time'?formatTime(String(values[key])):String(values[key]);
  const fullSummary=[
   'Roofing Appointment Summary','Customer Information',`App Date & Time: ${appointmentLabel(values)||'—'}`,
-  ...[['full_name','Name'],['contact_name','Actual Contact'],['contact_role','Contact Role'],['phone_number','Phone'],['address','Address'],['language','Language'],['service_needed','Services Need']]
-   .filter(([key])=>!['contact_name','contact_role'].includes(key)||values[key]).map(([key,label])=>`${label}: ${String(values[key]||'—')}`),
+  ...[['full_name','Name'],['contact_name','Actual Contact'],['contact_role','Contact Role'],['phone_number','Phone'],['address','Address'],['email','Email'],['language','Language'],['service_needed','Services Need']]
+   .filter(([key])=>!['contact_name','contact_role'].includes(key)||values[key]).map(([key,label])=>`${label}: ${display(key)}`),
   'Property Details',...Object.entries(VERIFIED_FIELDS).filter(([key])=>!['full_name','address','language','contact_name','contact_role','appointment_date','appointment_time'].includes(key))
-   .map(([key,label])=>`${label}: ${String(values[key]||'—')}`),
+   .map(([key,label])=>`${label}: ${display(key)}`),
+  ...[['home_value','Home Value'],['sq_ft','SQ FT'],['web_url','Web Link']].map(([key,label])=>`${label}: ${display(key)}`),
   `Notes: ${draft.notes}`,draft.qc_note?`QC Note: ${draft.qc_note}`:'',
  ].filter(Boolean).join('\n');
  const copy=(text:string)=>void navigator.clipboard.writeText(text);
@@ -37,7 +40,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
    <h4 className="text-sm font-black text-slate-950">Recording Verification / QC Review</h4>
    <p className="mt-1 text-xs text-slate-600">Recording-supported corrections are pending in the lead form. Review them and use Save Changes. QC approval and Send remain separate.</p>
    {review.warnings.length>0&&<ul className="mt-3 space-y-2">{review.warnings.map((w,i)=><li key={i} className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950"><strong>{w.title}:</strong> {w.detail}<details className="mt-1"><summary className="cursor-pointer">Transcript evidence</summary><p className="mt-1 whitespace-pre-wrap">“{w.excerpt}”</p></details></li>)}</ul>}
-   <div className="mt-3 grid gap-2 sm:grid-cols-2">{Object.entries(VERIFIED_FIELDS).map(([field,label])=><div key={field} className="rounded border border-slate-100 p-2 text-xs"><strong>{label}</strong><p>{String(values[field]||'—')}</p><RecordingVerificationBadge field={field}/></div>)}</div>
+   <div className="mt-3 grid gap-2 sm:grid-cols-2">{Object.entries(VERIFIED_FIELDS).map(([field,label])=><div key={field} className="rounded border border-slate-100 p-2 text-xs"><strong>{label}</strong><p>{display(field)}</p><RecordingVerificationBadge field={field}/></div>)}</div>
    {review.history.length>0&&<details className="mt-3 text-xs"><summary className="cursor-pointer font-bold">Recording correction history ({review.history.length})</summary>{review.history.map((entry,i)=><p key={i} className="mt-1">{VERIFIED_FIELDS[entry.field as VerifiedField]||entry.field}: {entry.before||'blank'} → {entry.after}</p>)}</details>}
   </div>
   <div className="rounded-xl border border-blue-200 bg-white p-3">
