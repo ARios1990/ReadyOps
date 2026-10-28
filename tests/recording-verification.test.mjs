@@ -92,6 +92,10 @@ for(const [value,quote] of [['6','The roof is six years old.'],['22','My roof is
  assert.equal(normalizeVerification({observations:[observation('roof_age',value,quote)]},{...context,transcript:quote}).observations[0].certainty,'confirmed','Spoken English/Spanish ages and ranges remain supported');
 }
 assert.equal(normalizeVerification({observations:[observation('roof_age','6','My roof is twenty-two years old.')]},{...context,transcript:'My roof is twenty-two years old.'}).observations[0].certainty,'uncertain','The age value must match the number in the quote');
+const ageQuestion='Do you know how old the roof is? Seven, eight, nine years old? The shed has major roof damage.';
+assert.equal(normalizeVerification({observations:[observation('roof_age','7-9',ageQuestion)]},{...context,transcript:ageQuestion}).observations[0].certainty,'uncertain','A suggested age in an unanswered question is not the homeowner age');
+const ageAnswer='Is the roof seven years old? No, it is twenty-two years old.';
+assert.equal(normalizeVerification({observations:[observation('roof_age','22',ageAnswer)]},{...context,transcript:ageAnswer}).observations[0].certainty,'confirmed','The customer answer after an age question remains supported');
 const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
 assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
 assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');

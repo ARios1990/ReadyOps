@@ -39,5 +39,9 @@ verify_jwt = false
 [functions.upload-company-payment-receipt]
 verify_jwt = false
 
+# Only accepts a short-lived, single-draft capability minted by an authenticated Admin RPC.
+[functions.roof-pros-manual-review]
+verify_jwt = false
+
 [functions.company-payment-receipt-url]
 verify_jwt = false
