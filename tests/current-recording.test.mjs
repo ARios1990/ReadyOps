@@ -103,7 +103,7 @@ const fakeFetch=async url=>{
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
-new Function('Deno','createClient','selectRecordingInput','normalizeVerification','verificationInstructions','verificationSchema','fetch',ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)({serve(fn){handler=fn;},env:{get(){return 'server-test';}}},()=>admin,selectRecordingInput,verification.normalizeVerification,verification.verificationInstructions,verification.verificationSchema,fakeFetch);
+new Function('Deno','createClient','selectRecordingInput','normalizeVerification','verificationInstructions','verificationSchema','inspectorNoteInstructions','fetch',ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)({serve(fn){handler=fn;},env:{get(){return 'server-test';}}},()=>admin,selectRecordingInput,verification.normalizeVerification,verification.verificationInstructions,verification.verificationSchema,verification.inspectorNoteInstructions,fakeFetch);
 const reset=url=>{storedUrl=url;transcriptWrite=null;signedPath='';transcriptionCalls=0;changedDuringCall=false;lostAttach=false;};
 const request=body=>handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer reviewer'},body:JSON.stringify({lead_id:'lead',recording_url:fresh,transcript:'OLD CLIENT',...body})}));
 for(const prior of [old,null,'']){

@@ -33,4 +33,3 @@ Preserve stated DNC requests and estimate-specific context. Keep unresolved
 identity/address conflicts and follow-up in QC warnings. Exact transcript passages
 support the generated paragraph. Existing notes and manual edits are preserved;
 the workbook is a style reference and does not backfill customer facts.
-
