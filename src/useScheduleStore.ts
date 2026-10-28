@@ -100,7 +100,7 @@ export function useScheduleStore(): ScheduleStoreResult {
         .lte('appointment_date', localDate(weekEnd)),
       supabase.from('company_teams').select('*'),
       supabase.from('company_location_agents').select('*'),
-      supabase.from('company_schedule_exceptions').select('*').gte('exception_date', localDate(weekStart)).lte('exception_date', localDate(weekEnd)),
+      supabase.from('company_schedule_exceptions').select('*').is('cancelled_at',null).gte('exception_date', localDate(weekStart)).lte('exception_date', localDate(weekEnd)),
     ]);
 
     if (teamsRes.data) setTeams(teamsRes.data);
@@ -137,6 +137,7 @@ export function useScheduleStore(): ScheduleStoreResult {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_bookings' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_appointments' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appointment_reservations' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_schedule_rules' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_locations' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_companies' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_teams' }, () => fetchAll())
