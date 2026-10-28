@@ -64,15 +64,20 @@ function recordingDay(recordedAt?:string,timezone?:string):string{
 }
 function relativeDate(quote:string,anchor:string):string{
  const text=normalize(quote);let offset:number|undefined;
+ if(/\b(last|previous|past|pasado|pasada)\b/.test(text))return '';
+ const days=['sunday|domingo','monday|lunes','tuesday|martes','wednesday|miércoles|miercoles','thursday|jueves','friday|viernes','saturday|sábado|sabado'];
+ const mentioned=days.map((day,index)=>new RegExp(`\\b(${day})\\b`).test(text)?index:-1).filter(index=>index>=0);
+ if(mentioned.length>1)return '';
  if(/\b(tomorrow|mañana)\b/.test(text))offset=1;
  else if(/\b(today|hoy)\b/.test(text))offset=0;
  else{
-  const days=['sunday|domingo','monday|lunes','tuesday|martes','wednesday|miércoles|miercoles','thursday|jueves','friday|viernes','saturday|sábado|sabado'];
-  const target=days.findIndex(day=>new RegExp(`\\b(${day})\\b`).test(text));
+  const target=mentioned[0]??-1;
   if(target>=0){offset=(target-new Date(anchor+'T12:00:00Z').getUTCDay()+7)%7;if(offset===0)return '';}
  }
  if(offset===undefined)return '';
- return new Date(new Date(anchor+'T12:00:00Z').getTime()+offset*86400000).toISOString().slice(0,10);
+ const result=new Date(new Date(anchor+'T12:00:00Z').getTime()+offset*86400000);
+ if(mentioned.length&&mentioned[0]!==result.getUTCDay())return '';
+ return result.toISOString().slice(0,10);
 }
 export function normalizeVerification(raw:unknown,context:{leadId:string;recordingUrl:string;transcript:string;originalSpeech:boolean;recordedAt?:string;timezone?:string}):RecordingVerification{
  const input=(raw&&typeof raw==='object'?raw:{}) as Record<string,unknown>;
@@ -85,6 +90,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   if(obs.certainty==='approximate'&&obs.field!=='roof_age')obs.certainty='uncertain';
   if(!['high','medium','low'].includes(obs.confidence))obs.confidence='low';
   if(!['customer','both'].includes(obs.speaker))obs.certainty='uncertain';
+  if(obs.basis==='unknown')obs.certainty='uncertain';
   if(obs.field==='contract'&&['public_adjuster','conditional_roofing'].includes(String(input.contract_kind)))obs.certainty='uncertain';
   if(obs.field==='language'&&(!['English','Spanish','Bilingual'].includes(obs.value)||
    (!context.originalSpeech&&obs.basis!=='explicit')))obs.certainty='uncertain';
