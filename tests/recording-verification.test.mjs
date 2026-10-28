@@ -64,6 +64,10 @@ assert.equal(normalizeVerification(raw,{...context,recordedAt:'2026-99-10',timez
 const address=normalizeVerification({observations:[observation('address','125 Main Street','The address is 125 Main Street.')]},context);
 assert.equal(applyVerifiedFields({...existing,address:'125 Main ST'},address).draft.findings.address.status,'confirmed','Street suffix formatting is not a mismatch');
 assert.equal(applyVerifiedFields({...existing,address:'125 Main ST, Example City, FL 32514'},address).draft.findings.address.status,'review','Partial address is not mistaken for a full verified address');
+for(const ambiguous of ['Last Friday at 11.', 'Tomorrow, Friday at 11.', 'Friday or Saturday at 11.']){
+ const check=normalizeVerification({observations:[observation('appointment_date','2099-01-01',ambiguous,{basis:'relative_date'})]}, {...context,transcript:ambiguous,recordedAt:'2026-10-21',timezone:'America/Chicago'});
+ assert.equal(check.observations[0].certainty,'uncertain','Ambiguous or past relative references must be held');
+}
 console.log('PASS grounded corrections, source binding, identity/address review, adjuster restrictions, manual edits, approximate ages, languages and call-local relative dates');
 
 const {RecordingVerificationWorkspace}=load('src/RecordingVerificationWorkspace.tsx');
