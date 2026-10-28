@@ -82,6 +82,7 @@ console.log('PASS automatic pending draft correction, manual preservation, one a
 
 // Exercise the deployed handler with simulated storage/OpenAI, without real calls or lead writes.
 let handler, storedUrl, transcriptWrite, signedPath, transcriptionCalls, changedDuringCall, lostAttach;
+let speechText='What time can you get here? My roof is seven years old.', primaryLanguage, focusedLanguage;
 const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{from:()=>({createSignedUrl:async path=>{signedPath=path;return {data:{signedUrl:'https://audio.invalid/current'}};}})},from(table){
  let update, filter, expected;
  const q={select(){return q;},eq(key,val){if(key==='recording_url'){filter=true;expected=val;}return q;},is(key,val){filter=true;expected=val;return q;},update(data){update=data;return q;},
@@ -98,12 +99,12 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{fr
 }};
 const fakeFetch=async (url,options={})=>{
  if(url==='https://audio.invalid/current')return new Response('audio-bytes',{headers:{'content-type':'audio/mpeg'}});
- if(url.endsWith('/audio/transcriptions')){transcriptionCalls++;if(changedDuringCall)storedUrl='storage://qc-recordings/lead/newer.mp3';return Response.json({text:'What time can you get here? My roof is seven years old.'});}
+ if(url.endsWith('/audio/transcriptions')){transcriptionCalls++;if(changedDuringCall)storedUrl='storage://qc-recordings/lead/newer.mp3';return Response.json({text:speechText});}
  if(url.endsWith('/responses')&&JSON.parse(options.body).text?.format?.name==='customer_language_and_inspector_notes'){
   const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));assert(body.input.includes('CURRENT CALL SUMMARY (rewrite aid only):\nFresh summary'));
-  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
+  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:focusedLanguage||{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{language_detection:primaryLanguage,observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
@@ -119,5 +120,40 @@ reset(old);changedDuringCall=true;assert.equal((await request({})).status,409);a
 reset(old);lostAttach=true;assert.equal((await request({})).status,409);assert.equal(transcriptionCalls,0);
 reset(old);assert.equal((await request({recording_url:'storage://qc-recordings/other/new.mp3'})).status,400);assert.equal(transcriptionCalls,0);
 console.log('PASS Edge handler new audio download, fresh transcription despite saved text, nullable attachment, race rejection and cross-lead rejection');
+
+// Regeneration must retain supported language without trusting a lead's saved
+// preference, old audio, changed text, agent introductions or conflicting speech.
+const unknownLanguage={value:'Unknown',confidence:'low',excerpt:'',speaker:'unknown',basis:'unknown'};
+speechText='My shed has major roof damage. Yes, I am. I want a Spanish inspector.';
+const englishCustomer={value:'English',confidence:'high',excerpt:'My shed has major roof damage.',speaker:'customer',basis:'customer_speech'};
+primaryLanguage=englishCustomer;
+focusedLanguage={...englishCustomer,excerpt:'Yes, I am.'};
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.language,'English','A short focused quote cannot erase primary customer evidence');
+const currentCached={transcript:speechText,method:'ai-openai',assessment:transcriptWrite.assessment};
+Object.assign(saved,currentCached);primaryLanguage=unknownLanguage;focusedLanguage=unknownLanguage;
+reset(fresh);assert.equal((await request({transcript:speechText,verify_only:true})).status,200);
+assert.equal(transcriptionCalls,0);assert.equal(transcriptWrite.language,'English','Same-call regeneration keeps revalidated evidence');
+saved.assessment={recording_verification:{...currentCached.assessment.recording_verification,recording_url:old}};
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.language,null,'A different audio source cannot supply cached language');
+saved.assessment={recording_verification:{...currentCached.assessment.recording_verification,transcript_key:'different'}};
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.language,null,'Changed transcript evidence is not reused');
+Object.assign(saved,priorSaved);
+primaryLanguage=englishCustomer;
+focusedLanguage={value:'Spanish',confidence:'high',excerpt:'I want a Spanish inspector.',speaker:'customer',basis:'explicit'};
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.assessment.recording_verification.observations.find(o=>o.field==='language').value,'Spanish','Explicit inspector preference overrides speech');
+speechText='My shed has major roof damage. Mi techo tiene mucho daño.';
+focusedLanguage={value:'Spanish',confidence:'high',excerpt:'Mi techo tiene mucho daño.',speaker:'customer',basis:'customer_speech'};
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.language,null,'Conflicting speech findings need review');
+assert(transcriptWrite.assessment.recording_verification.warnings.some(w=>w.title==='Customer Language Needs Review'));
+speechText='This is a roofing company. Yes, I am.';
+primaryLanguage={...englishCustomer,excerpt:'This is a roofing company.'};focusedLanguage=unknownLanguage;
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.language,null,'The telemarketer introduction cannot verify the customer language');
+console.log('PASS language refresh preserves same-call customer evidence, rejects stale/agent evidence, honors preference and holds conflicts');
 
 
