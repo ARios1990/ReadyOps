@@ -103,7 +103,7 @@ const fakeFetch=async (url,options={})=>{
   const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));
   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{}})}]}]});
+ if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');

@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1|2|3|4|5|6;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2|3|4|5|6|7;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -171,14 +171,25 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
  let notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
+ const established=(field:VerifiedField)=>observations.some(o=>o.field===field&&o.confidence==='high'&&['confirmed','approximate'].includes(o.certainty));
+ const repetitive=/\b(?:single[- ]story|two[- ]story|one[- ]story|\d+[- ]stor(?:y|ies)|square feet|sq\.?\s*ft|property value|roof type|shingle roof|metal roof|tile roof)\b|\bno (?:current |active |signed )?(?:roofing )?contract\b/i.test(notes);
+ const unsupportedAge=/\broof\b[^.!?]{0,80}\b(?:years? old|older than|age)\b/i.test(notes)&&!established('roof_age');
+ const unsupportedDamage=/\b(?:missing shingles|eave damage|no (?:known )?damage|reported[^.!?]{0,60}damage)\b/i.test(notes)&&!established('visible_damage')&&!established('damage_type');
+ if(notes&&(repetitive||unsupportedAge||unsupportedDamage)){
+  const excerpt=noteQuotes.find(q=>supported(q,context.transcript)) as string|undefined;
+  if(excerpt)warnings.push({title:'Inspector Notes Need Review',detail:'The generated paragraph included repetitive or unconfirmed details. Only supported field facts are included below; review the call for any omitted visit instructions.',excerpt});
+  notes='';
+ }
  if(!notes)notes=notesFromVerifiedFields(observations,context.transcript);
+ const dnc=context.transcript.match(/\b(?:do not call|don't call|stop calling|no me llam(?:e|es|en)|no me vuelva(?:n)? a llamar)[^.!?]{0,160}[.!?]?/i)?.[0];
+ if(dnc&&!warnings.some(w=>/\bDNC\b|do not call|stop calling/i.test(w.title+' '+w.detail)))warnings.push({title:'Do Not Call Request',detail:'A stop-call request appears in this recording. Preserve it and review the exact consent and estimate context before any sales follow-up.',excerpt:dnc});
  // An inspector reading an older call must not interpret its "tomorrow" as
  // tomorrow from today. Keep the supported clock time while QC reviews the date.
  if(!anchor)notes=notes.replace(/\b(?:today|tomorrow|hoy|ma[ñn]ana)\b/gi,'').replace(/\bfor\s+at\b/gi,'at').replace(/\s+/g,' ').replace(/\s+([,.])/g,'$1').trim();
  // Routine negative contract answers belong in form fields, not repeated notes.
  notes=notes.replace(/\s+and\s+(?:(?:they|he|she|the customer)\s+)?(?:has|have)\s+no\s+(?:current\s+)?(?:signed\s+)?roofing\s+contract\b/gi,'');
  notes=notes.replace(/,?\s+with no (?:active|current|signed) contract with (?:any|another) roofing company\b/gi,'');
- return {version:6,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ return {version:7,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){

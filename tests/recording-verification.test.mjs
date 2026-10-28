@@ -70,6 +70,13 @@ const groundedNotes=normalizeVerification({notes:'Invented summary.',notes_evide
 assert.match(groundedNotes.notes,/about 22 years old/);
 assert(!/shingle|one story|193400|Alex Example|Invented/i.test(groundedNotes.notes),'Fallback includes only relevant grounded observations and no source-form or invented details');
 assert.equal(normalizeVerification({notes:'Invented summary.',notes_evidence:['Not in the call'],observations:[]},context).notes,'','Missing supported facts remains blank');
+const repetitiveNotes=normalizeVerification({...raw,notes:'The customer confirmed the roof is about 22 years old. The inspection will take place at a single-story home.'},context);
+assert(!/single-story/i.test(repetitiveNotes.notes),'Routine stories are excluded even if the language model includes them');
+assert(repetitiveNotes.warnings.some(w=>w.title==='Inspector Notes Need Review'));
+const inventedAge=normalizeVerification({observations:[observation('appointment_time','11:00','Tomorrow at 11 works.')],notes:'The roof is older than 10 years. Visit at 11 AM.',notes_evidence:['Tomorrow at 11 works.']},context);
+assert(!/10 years/i.test(inventedAge.notes),'An age needs an established age observation as well as source quotes');
+const dncPreserved=normalizeVerification({observations:[],notes:'Routine single-story home.',notes_evidence:['Do not call me again.']},{...context,transcript:'Do not call me again. I only agreed to the requested estimate.'});
+assert(dncPreserved.warnings.some(w=>w.title==='Do Not Call Request'&&w.excerpt.includes('Do not call')),'Rejected narrative cannot erase a stop-call request');
 const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
 assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
 assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');
