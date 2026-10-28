@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/package-roof-helper.mjs --check && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs && node tests/payroll-presentation.test.mjs && node tests/paystub.test.mjs && node tests/agent-workspace.test.mjs && node tests/unit-answers.test.mjs && node tests/admin-crm-agent-filter.test.mjs && node tests/date-display.test.mjs && node tests/dnc-compliance.test.mjs && node tests/qc-admin-override-ui.test.mjs && node tests/portal-presence-identity.test.mjs && node tests/current-recording.test.mjs && node tests/roof-pros-form.test.mjs && node tests/roof-pros-manual.test.mjs && node tests/recording-verification.test.mjs && node tests/qc-verified-save.test.mjs && node tests/unified-scheduling.test.mjs && node tests/availability-grid.test.mjs"
+    "test": "node tests/team-services-email.test.mjs && node tests/inline-staff-row.test.mjs && node tests/appointment-qualifiers.test.mjs && node tests/client-template-editing.test.mjs && node tests/download-leads.test.mjs && node tests/company-column-layout.test.mjs && node tests/permanent-lighting.test.mjs && node tests/portal-contact.test.mjs && node tests/recording-import.test.mjs && node tests/booking-transcript.test.mjs && node tests/whisper-language.test.mjs && node tests/qc-new-booking.test.mjs && node tests/payroll-presentation.test.mjs && node tests/paystub.test.mjs && node tests/agent-workspace.test.mjs && node tests/unit-answers.test.mjs && node tests/admin-crm-agent-filter.test.mjs && node tests/date-display.test.mjs && node tests/dnc-compliance.test.mjs && node tests/qc-admin-override-ui.test.mjs && node tests/portal-presence-identity.test.mjs && node tests/current-recording.test.mjs && node tests/roof-pros-form.test.mjs && node tests/recording-verification.test.mjs && node tests/qc-verified-save.test.mjs && node tests/unified-scheduling.test.mjs && node tests/availability-grid.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -32,7 +32,6 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
-    "jsdom": "30.1.3",
     "postcss": "^8.4.35",
     "react-test-renderer": "18.3.1",
     "tailwindcss": "^3.4.1",

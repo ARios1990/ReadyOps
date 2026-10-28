@@ -73,7 +73,7 @@ export function transcriptKey(text:string):string{
 const normalize=(text:unknown)=>String(text??'').normalize('NFKC').toLowerCase().replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,' ').trim();
 const supported=(quote:unknown,transcript:string)=>typeof quote==='string'&&quote.trim().length>=4&&normalize(transcript).includes(normalize(quote));
 function quotedRoofAge(value:string,excerpt:string):boolean{
- let text=normalize(excerpt).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^.!?]*\?/g,' ');
+ let text=normalize(excerpt).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
  if(!/\byears?\b|\banos?\b|\bold\b|\bage\b|\bedad\b/.test(text))return false;
  const units:Record<string,number>={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,cero:0,uno:1,un:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29};
  const tens:Record<string,number>={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,veinte:20,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90};
