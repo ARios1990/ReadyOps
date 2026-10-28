@@ -1,3 +1,4 @@
+import {useAvailabilityRefresh} from "./scheduleAvailability";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -195,7 +196,7 @@ function normalizePublicPortalData(value: unknown): PublicPortalData {
                 end: asString(slot.end_time),
                 status,
                 capacity: openings,
-                bookedCount: status === "available" ? 0 : 1,
+                bookedCount: asNumber(slot.booked),
               };
             })
             .filter((slot) => slot.start && slot.end),
@@ -386,9 +387,11 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
     serviceAreaZip: selectedServiceArea?.zip,
   });
 
-  async function loadPortal(nextLocationId = locationId) {
-    setLoading(true);
-    setError("");
+  const portalLoadGeneration=useRef(0);
+  async function loadPortal(nextLocationId = locationId, quiet = false) {
+    const generation=++portalLoadGeneration.current;
+    if(!quiet) setLoading(true);
+    if(!quiet) setError("");
     const [{ data, error: rpcErr }, { data: locationTimezone }] =
       await Promise.all([
         supabase.rpc("get_public_booking_portal_active_locations", {
@@ -402,6 +405,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
           p_location_id: nextLocationId,
         }),
       ]);
+    if(generation!==portalLoadGeneration.current)return;
     if (rpcErr) {
       setError(rpcError(rpcErr));
       setPortal(null);
@@ -447,6 +451,8 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
   useEffect(() => {
     void loadPortal();
   }, [slug, startDate, endDate, locationId]); // eslint-disable-line react-hooks/exhaustive-deps -- loadPortal intentionally reloads only for portal scope changes
+
+  useAvailabilityRefresh(()=>{if(!busy) void loadPortal(locationId,true);});
 
   useEffect(() => {
     if (!reservation) {
@@ -956,15 +962,16 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
                               (!settings.allowPublicBooking && !rescheduleMode)
                             }
                             onClick={() => void selectSlot(day, slot)}
-                            className={`rounded-xl border px-3 py-3 text-sm font-bold transition ${slot.status === "available" ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
+                            className={`rounded-xl border px-3 py-3 text-sm font-bold transition ${slot.status === "available" ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50" : ["blocked","full","booked"].includes(slot.status) ? "cursor-not-allowed border-red-200 bg-red-50 text-red-700" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
                           >
                             <Clock3 size={14} className="mx-auto mb-1" />
                             {formatTime(slot.start)}
                             <span className="mt-1 block text-[10px] uppercase">
                               {slot.status === "available"
                                 ? "Available"
-                                : slot.status}
+                                : slot.status === "past" ? "Closed" : slot.status === "booked" ? "Full" : slot.status}
                             </span>
+                            {slot.status === "available"&&<span className="mt-1 block text-[10px]">{slot.capacity} remaining</span>}
                           </button>
                         ))}
                       </div>

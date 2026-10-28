@@ -5,10 +5,10 @@ import {
   Package,
   Plus,
   Save,
-  UsersRound,
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { invalidateAvailability } from "./scheduleAvailability";
 import type { Company, CompanyLocation } from "./types";
 import { useScheduleStore } from "./useScheduleStore";
 import { inferUsTimeZone, READYOPS_TIME_ZONES } from "./timeZoneUtils";
@@ -141,9 +141,7 @@ export function AdminSchedulingManager({
   const [editingLocationId, setEditingLocationId] = useState<string | null>(
     null,
   );
-  const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([]);
   const [timezoneAuto, setTimezoneAuto] = useState(true);
-  const [savedAgentIds, setSavedAgentIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -179,8 +177,6 @@ export function AdminSchedulingManager({
   useEffect(() => {
     setEditingLocationId(null);
     setLocationDraft(blankLocation());
-    setAssignedAgentIds([]);
-    setSavedAgentIds([]);
     setMessage("");
     setError("");
   }, [companyId]);
@@ -274,28 +270,12 @@ export function AdminSchedulingManager({
     setMessage("");
     setError("");
 
-    const { data, error: assignmentError } = await supabase
-      .from("company_location_agents")
-      .select("agent_id")
-      .eq("location_id", location.id);
-
-    if (assignmentError) {
-      setAssignedAgentIds([]);
-      setSavedAgentIds([]);
-      setError(assignmentError.message);
-    } else {
-      const agentIds = (data || []).map((item) => item.agent_id);
-      setAssignedAgentIds(agentIds);
-      setSavedAgentIds(agentIds);
-    }
   }
 
   function startNewLocation() {
     setEditingLocationId(null);
     setTimezoneAuto(true);
     setLocationDraft(blankLocation());
-    setAssignedAgentIds([]);
-    setSavedAgentIds([]);
     setMessage("");
     setError("");
   }
@@ -307,14 +287,6 @@ export function AdminSchedulingManager({
         ? current.available_days.filter((value) => value !== day)
         : [...current.available_days, day],
     }));
-  }
-
-  function toggleAgent(agentId: string) {
-    setAssignedAgentIds((current) =>
-      current.includes(agentId)
-        ? current.filter((id) => id !== agentId)
-        : [...current, agentId],
-    );
   }
 
   async function saveLocation() {
@@ -360,71 +332,16 @@ export function AdminSchedulingManager({
       updated_at: new Date().toISOString(),
     };
 
-    let locationId = editingLocationId;
-    if (editingLocationId) {
-      const { error: updateError } = await supabase
-        .from("company_locations")
-        .update(payload)
-        .eq("id", editingLocationId);
-      if (updateError) {
-        setError(updateError.message);
-        setSaving(false);
-        return;
-      }
-    } else {
-      const { data, error: insertError } = await supabase
-        .from("company_locations")
-        .insert(payload)
-        .select("id")
-        .maybeSingle();
-
-      if (insertError || !data?.id) {
-        setError(insertError?.message || "Unable to create location.");
-        setSaving(false);
-        return;
-      }
-
-      locationId = data.id;
-    }
-
-    if (locationId) {
-      const agentIdsToAdd = assignedAgentIds.filter(
-        (agentId) => !savedAgentIds.includes(agentId),
-      );
-      const agentIdsToRemove = savedAgentIds.filter(
-        (agentId) => !assignedAgentIds.includes(agentId),
-      );
-      if (agentIdsToAdd.length > 0) {
-        const { error: insertAssignmentError } = await supabase
-          .from("company_location_agents")
-          .insert(
-            agentIdsToAdd.map((agentId) => ({
-              location_id: locationId,
-              agent_id: agentId,
-            })),
-          );
-
-        if (insertAssignmentError) {
-          setError(insertAssignmentError.message);
-          setSaving(false);
-          return;
-        }
-      }
-      if (agentIdsToRemove.length > 0) {
-        const { error: deleteAssignmentError } = await supabase
-          .from("company_location_agents")
-          .delete()
-          .eq("location_id", locationId)
-          .in("agent_id", agentIdsToRemove);
-        if (deleteAssignmentError) {
-          setError(deleteAssignmentError.message);
-          setSaving(false);
-          return;
-        }
-      }
-      setSavedAgentIds(assignedAgentIds);
-    }
-
+    const old=companyLocations.find(item=>item.id===editingLocationId);
+    const scheduleChanged=!old || ['start_time','end_time','slot_interval_minutes','max_per_hour','max_per_day','available_days'].some(key=>{
+      const before=old[key as keyof ManagedLocation]; const after=payload[key as keyof typeof payload];
+      return JSON.stringify(typeof before==='string'&&key.endsWith('_time')?before.slice(0,5):before)!==JSON.stringify(after);
+    });
+    if(old&&scheduleChanged&&!window.confirm('Apply these working days, hours, interval and capacity to the location’s weekly booking rules? This replaces per-day custom rules for this location. Existing appointments and agent assignments are retained.')){setSaving(false);return;}
+    const {data:saved,error:saveError}=await supabase.rpc('save_company_location_schedule',{p_company_id:companyId,p_location_id:editingLocationId,p_patch:payload,p_apply_weekly:scheduleChanged});
+    if(saveError){setError(saveError.message);setSaving(false);return;}
+    const locationId=saved.id as string;
+    invalidateAvailability();
     await store.refetch();
     setEditingLocationId(locationId);
     setMessage(
@@ -885,35 +802,6 @@ export function AdminSchedulingManager({
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-slate-200 p-4">
-                  <div className="flex items-center gap-2">
-                    <UsersRound size={15} className="text-purple-600" />
-                    <h4 className="text-xs font-black uppercase tracking-wide text-slate-600">
-                      Assigned Reps / Agents
-                    </h4>
-                  </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {store.agents.map((agent) => (
-                      <label
-                        key={agent.id}
-                        className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-bold ${
-                          assignedAgentIds.includes(agent.id)
-                            ? "border-purple-300 bg-purple-50 text-purple-700"
-                            : "border-slate-200 bg-white text-slate-600"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={assignedAgentIds.includes(agent.id)}
-                          onChange={() => toggleAgent(agent.id)}
-                          className="mr-2"
-                        />
-                        {agent.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="mt-4">
                   <TextArea
                     label="Location Notes"
@@ -923,7 +811,7 @@ export function AdminSchedulingManager({
                   />
                 </div>
 
-                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <div className="sticky bottom-0 z-10 mt-5 flex flex-wrap justify-end gap-2 border-t bg-white p-3">
                   {editingLocationId && (
                     <button
                       onClick={startNewLocation}

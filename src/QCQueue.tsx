@@ -1,3 +1,4 @@
+import {QCScheduleAvailability} from "./QCScheduleAvailability";
 import { formatDate } from './dateDisplay';
 import {
   useCallback,
@@ -1979,6 +1980,7 @@ function ReviewDialog(props: DialogProps) {
                   className="rounded-lg border p-2 text-sm"
                 />
               </div>
+              <QCScheduleAvailability companyId={props.targetCompany} locationId={props.targetLocation} date={props.targetDate} onSelect={props.setTargetTime}/>
               {completed && props.canOverrideScheduling && (
                 <div className="mt-2">
                   <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">

@@ -275,7 +275,7 @@ export function QCRecordingUpload({
   const applied=useRef('');
   const verificationCallback=useRef(onVerification);verificationCallback.current=onVerification;
   const reviewDraft=leadForm?._qc_recording_review as VerifiedDraft|undefined;
-  const currentVerification=assessment?.recording_verification;
+  const currentVerification=assessment?.recording_verification?.version===2?assessment.recording_verification:undefined;
   useEffect(()=>{
     if(!currentVerification||currentVerification.lead_id!==leadId||currentVerification.recording_url!==value||currentVerification.transcript_key!==transcriptKey(transcript))return;
     const key=`${leadId}|${value}|${JSON.stringify(currentVerification)}`;
@@ -598,6 +598,7 @@ export function QCRecordingUpload({
             <button type="button" disabled={!playbackUrl || transcribing} onClick={() => void transcribeRecording()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {transcribing ? <Loader2 size={13} className="animate-spin"/> : <Headphones size={13}/>} {transcribing ? 'Transcribing…' : 'Free AI Transcribe'}
             </button>
+            {onVerification&&<button type="button" disabled={aiQualifying||!playbackUrl} onClick={()=>void transcribeAndQualify(true,true)} className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Verify Current Recording</button>}
             <button type="button" disabled={aiQualifying || (!playbackUrl && !transcript.trim())} onClick={() => void transcribeAndQualify()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {aiQualifying ? <Loader2 size={13} className="animate-spin"/> : <Sparkles size={13}/>} {aiQualifying ? 'Transcribing & Qualifying…' : 'AI Transcribe & Qualify'}
             </button>

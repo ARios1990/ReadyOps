@@ -7,11 +7,13 @@ import ts from 'typescript';
 const require = createRequire(import.meta.url);
 const storage = new Map();
 global.window = { location: { search: '?service_needed=(Profile.Services Needed)&contract=(Profile.Contract)' }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, setInterval, clearInterval };
+window.addEventListener=()=>{};window.removeEventListener=()=>{};global.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
 const calls = [], transcriptCalls = [];
 let failTranscript = true, booked = 0;
 const day = '2030-10-14';
 const portal = { company: { company: { id: 'company', name: 'Test Roofing', slug: 'test-roofing', state: 'TX' }, settings: { timezone: 'America/Chicago', allowPublicBooking: true, formMode: 'internal', requirementsShort: '', requirementsDetail: '' }, locations: [] }, week: [{ day: 'Monday', date: day, openings: 1, booked: 0, closed: false, slots: [{ start: '18:00', end: '19:00', status: 'available', capacity: 1, bookedCount: 0 }] }] };
 const supabase = {
+  channel:()=>({on(){return this},subscribe(){return this}}),removeChannel:async()=>{},
   async rpc(name, args) {
     calls.push({ name, args });
     if (name === 'get_public_service_templates') return { data: [load('serviceTemplates').DEFAULT_SERVICE_TEMPLATES.find(item => item.id === 'roofing')] };

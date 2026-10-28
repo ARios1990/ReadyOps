@@ -201,7 +201,8 @@ Deno.serve(async (req: Request) => {
     } catch (error) { return json({ error: error instanceof Error ? error.message : 'Invalid recording' }, 400); }
     let { transcript, recordingUrl } = selected;
     let transcriptionModelUsed = transcript ? "existing_transcript" : "";
-    let originalSpeech = Boolean(savedTranscript?.transcript === transcript && /^(ai-openai|local_whisper_auto)$/.test(savedTranscript?.method || ''));
+    const savedVerification=savedTranscript?.assessment?.recording_verification as RecordingVerification|undefined;
+    let originalSpeech = Boolean(savedTranscript?.transcript === transcript && savedVerification?.version===2 && savedVerification.original_speech && savedVerification.recording_url===recordingUrl && /^(ai-openai|local_whisper_auto)$/.test(savedTranscript?.method || ''));
     if (selected.changed) {
       let attach = admin.from('portal_leads')
         .update({ recording_url: recordingUrl, updated_at: new Date().toISOString() })

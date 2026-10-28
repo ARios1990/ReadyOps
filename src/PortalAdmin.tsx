@@ -30,7 +30,6 @@ import { supabase } from "./supabase";
 import { CompanyEmailSettings } from './CompanyEmailSettings';
 import {
   copyText,
-  formatDateLong,
   formatTime,
   localDate,
   rpcError,
@@ -38,7 +37,8 @@ import {
 import { ReadyModeAgentTools } from "./ReadyModeAgentTools";
 import { AdminSchedulingManager } from "./AdminSchedulingManager";
 import { useScheduleStore } from "./useScheduleStore";
-import { TIME_SLOTS, formatTimeAmPm, type CompanyLocation } from "./types";
+import { type CompanyLocation } from "./types";
+import { AvailabilityGrid } from "./AvailabilityGrid";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { useAuth } from "./AuthContext";
@@ -324,7 +324,7 @@ export function PortalAdmin() {
           !locationFilter ||
           companyLocations.some((item) => item.id === locationFilter);
         const matchesTeam =
-          !teamFilter || companyTeams.some((team) => team.id === teamFilter);
+          !teamFilter || companyTeams.length === 0 || companyTeams.some((team) => team.id === teamFilter);
         const matchesAgent =
           !agentFilter ||
           companyLocations.some((item) =>
@@ -2206,142 +2206,9 @@ function CompanyAvailabilityGrid({
   onEditLocation: (locationId: string) => void;
   onEditCompany: () => void;
 }) {
-  const date = new Date(`${appointmentDate}T12:00:00`);
-  const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
-  const companyTeams = store.getCompanyTeams(company.company_id);
-  const teams = companyTeams.length
-    ? companyTeams
-    : [{ id: "all", name: "All Teams", abbreviation: "ALL" }];
-  const locationRows: Array<CompanyLocation | null> = locations.length
-    ? locations
-    : [null];
-  return (
-    <section
-      id={`company-availability-${company.company_id}`}
-      className="scroll-mt-24 overflow-hidden rounded-xl border bg-white shadow-sm"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <div>
-          <h3 className="font-bold">
-            Appointment Availability — {formatDateLong(appointmentDate)}
-          </h3>
-          <p className="text-xs text-slate-500">
-            Click any time cell to edit its location schedule. Schedule changes apply to all teams assigned to that location.
-          </p>
-        </div>
-        <button
-          onClick={() => locations[0]?.id ? onEditLocation(locations[0].id) : onEditCompany()}
-          className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold"
-        >
-          <CalendarDays size={13} /> Edit Schedule
-        </button>
-      </div>
-      <HorizontalScrollFrame ariaLabel="Appointment availability horizontal scroll">
-        <table className="w-full min-w-[1160px] text-xs">
-          <thead className="bg-slate-50 text-slate-500">
-            <tr>
-              <th className="w-28 p-3 text-left">Location</th>
-              <th className="w-24 text-left">Team</th>
-              {TIME_SLOTS.map((slot) => (
-                <th key={slot} className="px-1 py-3 text-center">
-                  {formatTimeAmPm(slot)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {locationRows.flatMap((location) =>
-              teams.map((team, teamIndex) => (
-                <tr
-                  key={`${location?.id || "company"}-${team.id}`}
-                  className="border-t"
-                >
-                  <td className="p-3 font-bold">
-                    {teamIndex === 0
-                      ? location?.location_label || "Company-wide"
-                      : ""}
-                  </td>
-                  <td className="font-bold text-slate-700">
-                    {team.abbreviation || team.name}
-                  </td>
-                  {TIME_SLOTS.map((slot) => {
-                    const status = availabilityStatus(
-                      company.company_id,
-                      location,
-                      appointmentDate,
-                      dayName,
-                      slot,
-                      store,
-                    );
-                    return (
-                      <td key={slot} className="px-1 py-2">
-                        <button
-                          type="button"
-                          onClick={() => location?.id ? onEditLocation(location.id) : onEditCompany()}
-                          aria-label={`Edit ${location?.location_label || 'company-wide'} schedule, ${team.name}, ${formatTimeAmPm(slot)}, ${status}`}
-                          title={`Edit schedule for ${location?.location_label || 'this company'} — ${status} at ${formatTimeAmPm(slot)}`}
-                          className={`block w-full rounded-md border px-1 py-2 text-center text-[10px] font-bold transition hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-500 ${status === "Open" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "Occupied" ? "border-blue-300 bg-blue-50 text-blue-700" : status === "Blocked" ? "border-red-300 bg-red-500 text-white" : "border-slate-300 bg-slate-100 text-slate-500"}`}
-                        >
-                          {status}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              )),
-            )}
-          </tbody>
-        </table>
-      </HorizontalScrollFrame>
-    </section>
-  );
-}
-
-function availabilityStatus(
-  companyId: string,
-  location: CompanyLocation | null,
-  appointmentDate: string,
-  dayName: string,
-  slot: string,
-  store: ScheduleStore,
-): "Open" | "Occupied" | "Blocked" | "Closed" {
-  const locationId = location?.id || null;
-  const hour = Number(slot);
-  const hour24 = hour >= 8 && hour <= 11 ? hour : hour === 12 ? 12 : hour + 12;
-  const slotStart = hour24 * 60;
-  const start = timeMinutes(location?.start_time, 9 * 60);
-  const end = timeMinutes(location?.end_time, 18 * 60);
-  const dayOpen =
-    !location?.available_days?.length ||
-    location.available_days.includes(dayName);
-  if (!dayOpen || slotStart < start || slotStart >= end) return "Closed";
-  const occupied = store.portalAppointments.some(
-    (appointment) =>
-      appointment.company_id === companyId &&
-      appointment.appointment_date === appointmentDate &&
-      appointment.start_time.slice(0, 5) ===
-        `${String(hour24).padStart(2, "0")}:00` &&
-      (appointment.location_id === null ||
-        appointment.location_id === locationId),
-  );
-  if (occupied) return "Occupied";
-  if (
-    store.isBooked(companyId, locationId, dayName, slot) ||
-    store.isScheduleExceptionBlocked(companyId, locationId, dayName, slot)
-  )
-    return "Blocked";
-  return "Open";
-}
-
-function timeMinutes(
-  value: string | null | undefined,
-  fallback: number,
-): number {
-  if (!value) return fallback;
-  const [hours, minutes] = value.split(":").map(Number);
-  return Number.isFinite(hours) && Number.isFinite(minutes)
-    ? hours * 60 + minutes
-    : fallback;
+  return <AvailabilityGrid companyId={company.company_id} locations={locations} date={appointmentDate}
+    teams={store.getCompanyTeams(company.company_id).map(team=>team.name).join(', ')||'All Teams'} canManage
+    onEdit={id=>id?onEditLocation(id):onEditCompany()}/>;
 }
 
 function LocationSection({

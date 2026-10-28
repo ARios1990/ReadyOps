@@ -1,3 +1,5 @@
+import {AvailabilityGrid} from "./AvailabilityGrid";
+import {invalidateAvailability} from "./scheduleAvailability";
 import { formatDateTime, formatDate } from './dateDisplay';
 import { LeadContactEditor } from './LeadContactEditor';
 import { downloadLeadRows } from './downloadLeadRows';
@@ -500,6 +502,7 @@ export function CompanyPortal({
   }, [load]);
 
   function notify(message: string) {
+    invalidateAvailability();
     setSuccess(message);
     window.setTimeout(() => setSuccess(""), 2500);
   }
@@ -1918,6 +1921,7 @@ export function CompanyPortal({
 
         {tab === "setup" && setupTab === "schedule" && (
           <section className="space-y-5">
+            <AvailabilityGrid companyId={data.company.id} locations={data.locations.map(l=>({...l,company_id:data.company.id,location_label:l.location_label,sort_order:0,metro_tag:null}))} date={selectedDay} onDateChange={setSelectedDay} canManage accessToken={token}/>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>

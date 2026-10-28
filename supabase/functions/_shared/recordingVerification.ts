@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -41,6 +41,7 @@ export const verificationInstructions=[
  'Flag only real supported issues: identity or property conflicts, unclear final appointment, prior no-show, existing contractor/adjuster restrictions, missing homeowner, required courtesy call, insurance conflict or inspector language request. No generic missing-data warnings.',
  'Appointment dates must be YYYY-MM-DD and final appointment time HH:mm in the property local timezone. Resolve relative dates ONLY with a supplied actual recording date and property timezone; without both, use uncertain and do not guess. Never use today, server time, upload time or lead creation time as a call date. Flag multiple unresolved appointment times.',
  'For language, explicit customer preference takes precedence: a request for a Spanish-speaking inspector means Spanish even if the call was in English. Bilingual requires clear comfort and willingness in BOTH English and Spanish, never a greeting or a few borrowed words. Never infer language from name, accent, ethnicity, location or only the agent speech. If original_speech is false, customer_speech alone is insufficient; only explicit customer preference can verify language.',
+ 'Always assess customer language. When original_speech is true and the customer has a clear substantive utterance in English or Spanish, include a language observation with basis customer_speech and an exact quote of that CUSTOMER utterance. The language need not be named aloud. A greeting, yes/no alone, unclear speaker, or translated transcript is insufficient. An explicit customer preference still overrides the spoken language. If evidence is insufficient, include an uncertain language observation rather than silently treating the saved lead language as verified.',
  'Write notes as one concise professional paragraph focused on the actual contact, inspection, supported roof/damage facts, estimates or contractors, final confirmed appointment, availability and customer requests. Do not copy lead notes as confirmed facts. Include notes_evidence quoting each supporting transcript passage. Keep review warnings out of the notes paragraph; they belong in warnings. Never invent timestamps.',
 ].join(' ');
 export function transcriptKey(text:string):string{
@@ -117,7 +118,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
  const notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
- return {version:1,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ return {version:2,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){

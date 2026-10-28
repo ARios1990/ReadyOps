@@ -73,7 +73,7 @@ export function Dashboard() {
     if (selectedTeam !== 'all') {
       rows = rows.filter(r => {
         const teamsList = store.getCompanyTeams(r.companyId);
-        return teamsList.some(t => t.id === selectedTeam);
+        return teamsList.length === 0 || teamsList.some(t => t.id === selectedTeam);
       });
     }
 
@@ -84,7 +84,7 @@ export function Dashboard() {
     if (!isAdmin && userTeam) {
       rows = rows.filter(r => {
         const teamsList = store.getCompanyTeams(r.companyId);
-        return teamsList.some(t => t.id === userTeam.id);
+        return teamsList.length === 0 || teamsList.some(t => t.id === userTeam.id);
       });
     }
 
@@ -104,7 +104,7 @@ export function Dashboard() {
     if (isAdmin) return true;
     if (!userTeam) return false;
     const teamsList = store.getCompanyTeams(companyId);
-    return teamsList.some(t => t.id === userTeam.id);
+    return teamsList.length === 0 || teamsList.some(t => t.id === userTeam.id);
   };
 
   const dayBookingCounts = DAYS.reduce((acc, day) => {
@@ -310,10 +310,10 @@ export function Dashboard() {
             </span>
           ))}
           <span className="text-[10px] px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-600 font-medium">
-            Green = Open
+            Green = Available
           </span>
           <span className="text-[10px] px-2 py-1 rounded bg-red-600 border border-red-700 text-white font-medium">
-            Red = Weekly block or current-week appointment
+            Red = Full or Blocked
           </span>
         </div>
 
@@ -333,12 +333,13 @@ export function Dashboard() {
             canEdit={canEdit}
             isAdmin={isAdmin}
             activeDay={activeDay}
+            appointmentDate={localDate(addDays(scheduleWeekAnchor,DAYS.indexOf(activeDay as typeof DAYS[number])))}
           />
         </div>
 
         <div className="mt-4 text-center text-xs text-gray-400">
           {isAdmin
-            ? 'Appointments — manage weekly availability and current-week appointment capacity.'
+            ? 'Appointments — manage current availability and shared appointment capacity.'
             : 'Agent -- book open slots for your team\'s companies. Changes sync live.'}
         </div>
       </main>
