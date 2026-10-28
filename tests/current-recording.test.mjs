@@ -92,7 +92,7 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{fr
   if(table==='company_portal_settings')return {data:null};
   if(table==='portal_leads'){
    if(update){if(lostAttach || (filter&&storedUrl!==expected))return {data:null};storedUrl=update.recording_url;return {data:{id:'lead'}};}
-   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,full_name:'Stored Name',form_data:{_qc_recording_review:{old:'STALE AI REVIEW'},recording_notes:'OLD GENERATED NOTES'}}};
+   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,full_name:'Stored Name',address:'Stored Address',language:'Stored Language',form_data:{roof_age:'66',_qc_recording_review:{old:'STALE AI REVIEW'},recording_notes:'OLD GENERATED NOTES'}}};
   }
  },async upsert(data){transcriptWrite=data;return {error:null};},then(resolve){resolve({error:null});}};
  return q;
@@ -104,7 +104,12 @@ const fakeFetch=async (url,options={})=>{
   const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));assert(body.input.includes('CURRENT CALL SUMMARY (rewrite aid only):\nFresh summary'));
   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:focusedLanguage||{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:primaryAge?['The roof age is confirmed at 6 years old.']:['Review'],qualifiers:primaryAge?{roof_age_or_damage:'no'}:{},recording_verification:{language_detection:primaryLanguage,observations:[primaryAge||{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ if(url.endsWith('/responses')){
+  const body=JSON.parse(options.body);
+  for(const storedFact of ['Stored Name','Stored Address','Stored Language','66','STALE AI REVIEW','OLD GENERATED NOTES'])assert(!body.input.includes(storedFact),'Saved lead facts must not enter the source-only call analysis');
+  assert(body.input.includes(speechText),'The primary analysis includes the current transcript');
+  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:primaryAge?['The roof age is confirmed at 6 years old.']:['Review'],qualifiers:primaryAge?{roof_age_or_damage:'no'}:{},recording_verification:{language_detection:primaryLanguage,observations:[primaryAge||{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ }
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
