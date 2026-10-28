@@ -19,34 +19,3 @@ Deployment order: apply the additive `qc_recording_verified_draft_save` migratio
 Backend rollout: migration `20261028000735_qc_recording_verified_draft_save` is applied to `vzaraqexdsimmasxsano`; `transcribe-and-qualify` version 34 is Active with JWT verification. Live privilege checks confirm the save wrapper is SECURITY INVOKER, callable by authenticated reviewers, and unavailable to anon and service_role. Existing helper RPCs continue to enforce team and owner access. Frontend publishing is tracked with the implementation PR.
 
 Storage follow-up: migration `20261028004408_qc_recording_metadata_retention` preserves contact name/role, roofing agreement qualifiers and the explicit QC draft/context/history keys through the existing service-form trigger. Unrelated service fields and unknown keys are still removed, and configured hidden fields still apply. Only authorized reviewers or maintenance workers can replace internal QC evidence; other callers retain existing evidence unchanged and cannot forge a new recording review. Integration tests exercise the actual trigger, including anonymous replacement attempts and switching away from roofing. A live, user-confirmed contact relationship was saved and read back after deployment.
-# Inspector note style
-
-New generated Notes and short summaries follow the user-provided
-`ReadyOps_Inspector_Notes_Updated_2026-10-27.xlsx`, specifically Notes Standards
-A2:B10 and the Inspector View examples. Use two to four concise sentences covering
-the actual contact/purpose, relevant confirmed age or specific damage/scope,
-special requests/access and the confirmed appointment. Omit repetitive stories,
-roof type, routine no-contract answers, property value and square footage.
-
-Unmentioned damage stays uncertain; non-roof damage does not prove roof damage.
-Preserve stated DNC requests and estimate-specific context. Keep unresolved
-identity/address conflicts and follow-up in QC warnings. Exact transcript passages
-support the generated paragraph. Existing notes and manual edits are preserved;
-the workbook is a style reference and does not backfill customer facts.
-
-Language and note extraction use a focused pass that receives only the current
-transcript and recording-date context, with the existing accessible model. Prior
-AI reviews, saved names and generated notes are excluded from that pass. Evidence
-quotes retain the original language; generated Notes are in English. Provider or
-incomplete-output errors stay visible. Unanchored today/tomorrow references and
-routine negative roofing-contract clauses are excluded from inspector Notes.
-
-The Inspector Note is a separate direct handoff, rather than a duplicate of the
-general Short Summary. It starts with “Spoke with” and the supported actual
-contact/role and specific estimate scope, combines relevant condition/insurance
-and special requests, then ends with confirmed time/address or access details.
-The focused pass receives the newly generated current-call summary as a rewrite
-aid; every retained fact must still be supported by the current transcript.
-Shed/outbuilding damage stays attached to that structure, tarp help is a customer
-request rather than a promise, and unknown main-house ages are not added to the
-outbuilding estimate. Reviewer edits and original lead Notes remain preserved.
