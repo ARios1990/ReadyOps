@@ -2050,7 +2050,7 @@ function ReviewDialog(props: DialogProps) {
               )}
               </div>
             )}
-            {props.canSend && <RoofProsFormStatus leadId={props.row.lead.id} companyId={props.row.company.id} sent={Boolean(props.row.appointment?.company_visible_at)}/>}
+            {props.canSend && <RoofProsFormStatus leadId={props.row.lead.id} companyId={props.row.company.id} sent={Boolean(props.row.appointment?.company_visible_at)} approved={status==='approved'}/>}
             {awaitingSend && (
               <div className="order-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
                 <div className="flex items-center gap-2 text-emerald-950">
