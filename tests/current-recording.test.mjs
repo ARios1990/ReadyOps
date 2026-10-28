@@ -91,24 +91,28 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{fr
   if(table==='company_portal_settings')return {data:null};
   if(table==='portal_leads'){
    if(update){if(lostAttach || (filter&&storedUrl!==expected))return {data:null};storedUrl=update.recording_url;return {data:{id:'lead'}};}
-   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,form_data:{}}};
+   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,full_name:'Stored Name',form_data:{_qc_recording_review:{old:'STALE AI REVIEW'},recording_notes:'OLD GENERATED NOTES'}}};
   }
  },async upsert(data){transcriptWrite=data;return {error:null};},then(resolve){resolve({error:null});}};
  return q;
 }};
-const fakeFetch=async url=>{
+const fakeFetch=async (url,options={})=>{
  if(url==='https://audio.invalid/current')return new Response('audio-bytes',{headers:{'content-type':'audio/mpeg'}});
- if(url.endsWith('/audio/transcriptions')){transcriptionCalls++;if(changedDuringCall)storedUrl='storage://qc-recordings/lead/newer.mp3';return Response.json({text:'FRESH SERVER AUDIO'});}
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{}})}]}]});
+ if(url.endsWith('/audio/transcriptions')){transcriptionCalls++;if(changedDuringCall)storedUrl='storage://qc-recordings/lead/newer.mp3';return Response.json({text:'What time can you get here? My roof is seven years old.'});}
+ if(url.endsWith('/responses')&&JSON.parse(options.body).text?.format?.name==='customer_language_and_inspector_notes'){
+  const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));
+  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
+ }
+ if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
-new Function('Deno','createClient','selectRecordingInput','normalizeVerification','verificationInstructions','verificationSchema','fetch',ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)({serve(fn){handler=fn;},env:{get(){return 'server-test';}}},()=>admin,selectRecordingInput,verification.normalizeVerification,verification.verificationInstructions,verification.verificationSchema,fakeFetch);
+new Function('Deno','createClient','selectRecordingInput','normalizeVerification','verificationInstructions','verificationSchema','inspectorNoteInstructions','VERIFIED_FIELDS','fetch',ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)({serve(fn){handler=fn;},env:{get(){return 'server-test';}}},()=>admin,selectRecordingInput,verification.normalizeVerification,verification.verificationInstructions,verification.verificationSchema,verification.inspectorNoteInstructions,verification.VERIFIED_FIELDS,fakeFetch);
 const reset=url=>{storedUrl=url;transcriptWrite=null;signedPath='';transcriptionCalls=0;changedDuringCall=false;lostAttach=false;};
 const request=body=>handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer reviewer'},body:JSON.stringify({lead_id:'lead',recording_url:fresh,transcript:'OLD CLIENT',...body})}));
 for(const prior of [old,null,'']){
  reset(prior);const response=await request({});assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
- assert.equal(signedPath,'lead/new.mp3');assert.equal(transcriptionCalls,1);assert.equal(transcriptWrite.transcript,'FRESH SERVER AUDIO');assert.equal(storedUrl,fresh);
+ assert.equal(signedPath,'lead/new.mp3');assert.equal(transcriptionCalls,1);assert.equal(transcriptWrite.transcript,'What time can you get here? My roof is seven years old.');assert.equal(transcriptWrite.language,'English');assert(transcriptWrite.assessment.recording_verification.notes.includes('seven years old'));assert.equal(storedUrl,fresh);
 }
 reset(fresh);assert.equal((await request({force_transcription:true})).status,200);assert.equal(transcriptionCalls,1);
 reset(old);changedDuringCall=true;assert.equal((await request({})).status,409);assert.equal(transcriptWrite,null,'Stale results cannot overwrite the newer recording');
