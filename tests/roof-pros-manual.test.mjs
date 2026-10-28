@@ -4,6 +4,7 @@ import ts from 'typescript';
 import {PGlite} from '@electric-sql/pglite';
 import {JSDOM} from 'jsdom';
 import {execFileSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {audioType,recordingBytes} from '../public/roof-pros-helper/audio.js';
 
 const root=new URL('../',import.meta.url),read=p=>fs.readFileSync(new URL(p,root),'utf8');
@@ -110,5 +111,39 @@ receiptDOM.window.eval(read('public/roof-pros-helper/form-dom.js'));assert.equal
 const manifest=JSON.parse(read('public/roof-pros-helper/manifest.json'));
 assert.ok(manifest.content_scripts[1].matches.some(s=>s.includes('/forms/u/')),'Google receipt redirects are covered');
 assert.ok(!manifest.permissions.some(p=>['cookies','debugger','tabs','scripting','unlimitedStorage'].includes(p)));
+// Exercise the actual page-side bridge, including Chrome's null-source replies.
+function bridgeFixture(){
+ const listeners=new Set();let timer=null,posted=null;
+ const browserWindow={location:{origin:'https://readyops.bolt.host'},
+  addEventListener:(name,fn)=>{assert.equal(name,'message');listeners.add(fn);},
+  removeEventListener:(name,fn)=>{assert.equal(name,'message');listeners.delete(fn);},
+  setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>{timer=null;},
+  postMessage:(data,origin)=>{assert.equal(origin,browserWindow.location.origin);posted=data;}};
+ const bridgeModule={exports:{}};
+ const code=ts.transpileModule(read('src/roofProsHelper.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ new Function('exports','window','crypto','clearTimeout',code)(bridgeModule.exports,browserWindow,{randomUUID},browserWindow.clearTimeout);
+ return {request:bridgeModule.exports.roofProsHelper,window:browserWindow,listeners,
+  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.0'},...overrides};for(const fn of [...listeners])fn(event);},
+  posted:()=>posted,expire:()=>timer?.()};
+}
+for(const withSource of [false,true]){
+ const fixture=bridgeFixture(),promise=fixture.request('ping');fixture.respond(withSource?{source:fixture.window}:{});
+ assert.equal((await promise).version,'1.0.0');assert.equal(fixture.listeners.size,0);
+}
+for(const bad of ['origin','source','requestId','channel','payload']){
+ const fixture=bridgeFixture(),promise=fixture.request('ping'),message=fixture.posted();
+ const overrides=bad==='origin'?{origin:'https://untrusted.example'}:bad==='source'?{source:{foreign:true}}:
+  {data:{channel:'readyops-roof-manual-response',requestId:message.requestId,success:true,...(bad==='requestId'?{requestId:randomUUID()}:bad==='channel'?{channel:'other-response'}:{success:false})}};
+ fixture.respond(overrides);assert.equal(fixture.listeners.size,1,`${bad} reply must be ignored`);
+ fixture.expire();await assert.rejects(promise,/not responding/);assert.equal(fixture.listeners.size,0);
+}
+const broken=bridgeFixture(),brokenPromise=broken.request('ping');
+broken.respond({data:{channel:'readyops-roof-manual-response',requestId:broken.posted().requestId,error:'Helper disabled'}});
+await assert.rejects(brokenPromise,/Helper disabled/);
+const concurrent=bridgeFixture(),firstRequest=concurrent.request('ping'),firstId=concurrent.posted().requestId,secondRequest=concurrent.request('ping'),secondId=concurrent.posted().requestId;
+concurrent.respond({data:{channel:'readyops-roof-manual-response',requestId:secondId,success:true,version:'second'}});
+assert.equal((await secondRequest).version,'second');assert.equal(concurrent.listeners.size,1);
+concurrent.respond({data:{channel:'readyops-roof-manual-response',requestId:firstId,success:true,version:'first'}});
+assert.equal((await firstRequest).version,'first');assert.equal(concurrent.listeners.size,0);
 execFileSync(process.execPath,[new URL('scripts/package-roof-helper.mjs',root).pathname.replace(/^\/([A-Za-z]:)/,'$1'),'--check'],{stdio:'inherit'});
 console.log('PASS manual approval/send gates, Admin-only tickets, exclusions, no duplicate/manual claims, stale source, audio proof, user Submit + receipt, field verification, synthetic Submit blocking, helper package.');
