@@ -522,10 +522,10 @@ ${transcript}`;
     const evidence = normalizeEvidence(parsedVerdict.evidence);
     const optionalDetails = normalizeOptionalDetails(parsedVerdict.optional_details);
     const paymentPath = normalizePaymentPath(parsedVerdict.payment_path);
-    const roofAgeDamageOverride = parsedVerdict.roof_age_damage_override === true;
+    let roofAgeDamageOverride = parsedVerdict.roof_age_damage_override === true;
     const genuineCall = normalizeGenuineCall(parsedVerdict.genuine_call);
     const confidence = normalizeConfidence(parsedVerdict.confidence);
-    const reasons = normalizeReasons(parsedVerdict.reasons);
+    let reasons = normalizeReasons(parsedVerdict.reasons);
     const verificationContext={
       leadId:lead.id,recordingUrl:recordingUrl||'',transcript,originalSpeech,
       recordedAt:actualRecordedAt,timezone:propertyTimezone,
@@ -539,7 +539,7 @@ ${transcript}`;
       ...confirmedLanguage(normalizeVerification(priorVerification,verificationContext))];
     // Reuse a cached finding only when neither current pass establishes one,
     // with exact lead/audio/transcript binding and the current evidence guards.
-    if(!languageFindings.length&&savedVerification?.version===8&&originalSpeech&&
+    if(!languageFindings.length&&savedVerification&&(savedVerification.version||0)>=8&&originalSpeech&&
       savedVerification.lead_id===lead.id&&savedVerification.recording_url===recordingUrl&&
       savedVerification.transcript_key===recordingVerification.transcript_key){
       languageFindings=confirmedLanguage(normalizeVerification(savedVerification,verificationContext));
@@ -553,6 +553,13 @@ ${transcript}`;
       else recordingVerification.warnings.push({title:'Customer Language Needs Review',
         detail:'The current call contains conflicting language findings. Review the customer quotes before selecting a language.',
         excerpt:languageChoices.map(o=>o.excerpt).join(' / ')});
+    }
+    const unconfirmedRoofAge=recordingVerification.observations.some(o=>o.field==='roof_age'&&!['confirmed','approximate'].includes(o.certainty));
+    const confirmedDamage=recordingVerification.observations.some(o=>['visible_damage','damage_type'].includes(o.field)&&o.certainty==='confirmed'&&o.confidence==='high'&&(o.field==='damage_type'||o.value==='Yes'));
+    if(unconfirmedRoofAge&&!confirmedDamage){
+      qualifiers.roof_age_or_damage='unknown';roofAgeDamageOverride=false;
+      reasons=reasons.filter(reason=>!/roof age|years? old|edad del techo|anos? de/i.test(reason));
+      reasons.push('Roof age is not established by the recording quote. Review the affected structure and qualifying damage.');
     }
     const summary=String(parsedVerdict.summary||'').trim().slice(0,8000)||recordingVerification.notes||'Recording summary needs review.';
     if(recordingVerification.observations.some(o=>['conditional_roofing_obligation','public_adjuster_agreement'].includes(o.field)&&o.value==='Yes'&&o.certainty==='confirmed'&&o.confidence==='high')){

@@ -82,7 +82,7 @@ console.log('PASS automatic pending draft correction, manual preservation, one a
 
 // Exercise the deployed handler with simulated storage/OpenAI, without real calls or lead writes.
 let handler, storedUrl, transcriptWrite, signedPath, transcriptionCalls, changedDuringCall, lostAttach;
-let speechText='What time can you get here? My roof is seven years old.', primaryLanguage, focusedLanguage;
+let speechText='What time can you get here? My roof is seven years old.', primaryLanguage, focusedLanguage, primaryAge;
 const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{from:()=>({createSignedUrl:async path=>{signedPath=path;return {data:{signedUrl:'https://audio.invalid/current'}};}})},from(table){
  let update, filter, expected;
  const q={select(){return q;},eq(key,val){if(key==='recording_url'){filter=true;expected=val;}return q;},is(key,val){filter=true;expected=val;return q;},update(data){update=data;return q;},
@@ -104,7 +104,7 @@ const fakeFetch=async (url,options={})=>{
   const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));assert(body.input.includes('CURRENT CALL SUMMARY (rewrite aid only):\nFresh summary'));
   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:focusedLanguage||{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{language_detection:primaryLanguage,observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:primaryAge?['The roof age is confirmed at 6 years old.']:['Review'],qualifiers:primaryAge?{roof_age_or_damage:'no'}:{},recording_verification:{language_detection:primaryLanguage,observations:[primaryAge||{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
@@ -155,5 +155,13 @@ primaryLanguage={...englishCustomer,excerpt:'This is a roofing company.'};focuse
 reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
 assert.equal(transcriptWrite.language,null,'The telemarketer introduction cannot verify the customer language');
 console.log('PASS language refresh preserves same-call customer evidence, rejects stale/agent evidence, honors preference and holds conflicts');
+speechText='The shed has major roof damage. The house is fine.';
+primaryAge={field:'roof_age',value:'6',excerpt:speechText,certainty:'confirmed',confidence:'high',speaker:'customer',basis:'customer_speech'};
+primaryLanguage=unknownLanguage;focusedLanguage=unknownLanguage;
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(transcriptWrite.assessment.recording_verification.observations.find(o=>o.field==='roof_age').certainty,'uncertain');
+assert.equal(transcriptWrite.assessment.qualifiers.roof_age_or_damage,'unknown','Unsubstantiated roof age cannot determine a failed qualifier');
+assert(!transcriptWrite.assessment.reasons.some(reason=>reason.includes('6 years')));
+console.log('PASS an unsupported stored age cannot become a recording correction, age disqualification or inspector fact');
 
 
