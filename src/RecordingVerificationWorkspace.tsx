@@ -46,8 +46,8 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
    {review.history.length>0&&<details className="mt-3 text-xs"><summary className="cursor-pointer font-bold">Recording correction history ({review.history.length})</summary>{review.history.map((entry,i)=><p key={i} className="mt-1">{VERIFIED_FIELDS[entry.field as VerifiedField]||entry.field}: {entry.before||'blank'} → {entry.after}</p>)}</details>}
   </div>
   <div className="rounded-xl border border-blue-200 bg-white p-3">
-   <h4 className="text-sm font-black text-slate-950">Roofing Appointment Summary</h4>
-   <p className="mt-1 text-xs text-slate-600">Edit or copy these separately. Generated narrative does not overwrite the original lead Notes.</p>
+   <h4 className="text-sm font-black text-slate-950">Inspector Note</h4>
+   <p className="mt-1 text-xs text-slate-600">Concise handoff from the call summary and recording. Edit or copy Notes separately from QC Note. Your original lead Notes are preserved.</p>
    <p className="mt-2 text-xs"><strong>App Date &amp; Time:</strong> {appointmentLabel(values)||'—'}<br/><strong>Name:</strong> {String(values.full_name||'—')}<br/><strong>Actual Contact:</strong> {String(values.contact_name||values.full_name||'—')}<br/><strong>Language:</strong> {String(values.language||'—')}</p>
    <label className="mt-3 block text-xs font-bold">Notes<textarea aria-label="Professional appointment Notes" value={draft.notes} onChange={e=>edit({notes:e.target.value})} className="mt-1 min-h-32 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal leading-5"/></label>
    <label className="mt-3 block text-xs font-bold">QC Note<textarea aria-label="Appointment QC Note" value={draft.qc_note} onChange={e=>edit({qc_note:e.target.value})} className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal leading-5"/></label>

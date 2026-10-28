@@ -269,7 +269,7 @@ export function QCRecordingUpload({
   const applied=useRef('');
   const verificationCallback=useRef(onVerification);verificationCallback.current=onVerification;
   const reviewDraft=leadForm?._qc_recording_review as VerifiedDraft|undefined;
-  const currentVerification=assessment?.recording_verification?.version===7?assessment.recording_verification:undefined;
+  const currentVerification=assessment?.recording_verification?.version===8?assessment.recording_verification:undefined;
   useEffect(()=>{
     if(!currentVerification||currentVerification.lead_id!==leadId||currentVerification.recording_url!==value||currentVerification.transcript_key!==transcriptKey(transcript))return;
     const key=`${leadId}|${value}|${JSON.stringify(currentVerification)}`;

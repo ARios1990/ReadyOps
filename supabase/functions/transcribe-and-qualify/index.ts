@@ -383,7 +383,7 @@ ${transcript}`;
           "Give concise reasons referencing which qualifiers drove the call.",
           verificationInstructions,
           inspectorNoteInstructions,
-          "Use that same note structure for summary and recording_verification.notes. Keep unknown fields and internal review concerns in warnings instead of padding the inspector paragraph. Never editorialize about roof condition, urgency or lead quality.",
+          "Keep summary as the concise factual call summary. recording_verification.notes is the separate direct inspector handoff. Keep unknown fields and internal review concerns in warnings instead of padding the inspector paragraph. Never editorialize about roof condition, urgency or lead quality.",
         ].join(" "),
         input: qualificationInput,
         text: {
@@ -481,8 +481,8 @@ ${transcript}`;
     }
 
     // Keep the customer-language and inspector-note task separate from scoring
-    // six qualifiers. This pass sees only the current transcript, never saved
-    // names, notes or earlier AI reviews that could anchor its speaker attribution.
+    // six qualifiers. The current-call summary is a rewrite aid, never proof;
+    // saved names, notes and earlier AI reviews are not supplied to this pass.
     let focused:Record<string,unknown>={};
     try {
       const focusedResponse=await fetch("https://api.openai.com/v1/responses",{
@@ -495,9 +495,9 @@ ${transcript}`;
             'Return English or Spanish with basis customer_speech only when original_speech is true and a clear customer utterance establishes it. Use explicit only for a customer request that names their preferred language. Explicit inspector-language preference overrides spoken language. Bilingual requires clear willingness in both languages. Otherwise return Unknown, low confidence, unknown basis.',
             inspectorNoteInstructions,
             'Write the final Notes in English. Every notes_evidence item must be copied VERBATIM from the original transcript, including Spanish words when the call is Spanish. Never translate an evidence quote. Do not label the telemarketer who introduces their company as the customer.',
-            'Do not use a name unless the transcript actually establishes it. When the actual recording date is unknown, do not turn tomorrow or a weekday into a calendar date; omit the unresolved date from Notes and retain a confirmed clock time if established.',
+            'Rewrite the current call summary into the inspector-note structure above. The summary is derived text, not evidence: the current transcript is authoritative. Do not use a name unless the transcript actually establishes it. When the actual recording date is unknown, do not turn tomorrow or a weekday into a calendar date; omit the unresolved date from Notes and retain a confirmed clock time if established.',
           ].join(' '),
-          input:`original_speech: ${originalSpeech}\nActual recording date: ${actualRecordedAt||'unknown'}\nProperty timezone: ${propertyTimezone||'unknown'}\nCURRENT CALL TRANSCRIPT:\n${transcript}`,
+          input:`original_speech: ${originalSpeech}\nActual recording date: ${actualRecordedAt||'unknown'}\nProperty timezone: ${propertyTimezone||'unknown'}\nCURRENT CALL SUMMARY (rewrite aid only):\n${String(parsedVerdict.summary||'').slice(0,4000)}\nCURRENT CALL TRANSCRIPT (source of truth):\n${transcript}`,
           text:{format:{type:'json_schema',name:'customer_language_and_inspector_notes',strict:true,schema:{
             type:'object',additionalProperties:false,properties:{
               language_detection:verificationSchema.properties.language_detection,
@@ -517,7 +517,6 @@ ${transcript}`;
       language_detection:focused.language_detection||{value:'Unknown',confidence:'low',excerpt:'',speaker:'unknown',basis:'unknown'},
       notes:typeof focused.notes==='string'?focused.notes:'',notes_evidence:Array.isArray(focused.notes_evidence)?focused.notes_evidence:[],
     };
-    if(typeof focused.notes==='string'&&focused.notes.trim())parsedVerdict.summary=focused.notes;
 
     const qualifiers = normalizeQualifiers(parsedVerdict.qualifiers);
     const evidence = normalizeEvidence(parsedVerdict.evidence);
@@ -531,7 +530,7 @@ ${transcript}`;
       leadId:lead.id,recordingUrl:recordingUrl||'',transcript,originalSpeech,
       recordedAt:actualRecordedAt,timezone:propertyTimezone,
     });
-    const summary=recordingVerification.notes||'Recording summary needs review.';
+    const summary=String(parsedVerdict.summary||'').trim().slice(0,8000)||recordingVerification.notes||'Recording summary needs review.';
     if(recordingVerification.observations.some(o=>['conditional_roofing_obligation','public_adjuster_agreement'].includes(o.field)&&o.value==='Yes'&&o.certainty==='confirmed'&&o.confidence==='high')){
       qualifiers.no_existing_contract='unknown';
       reasons.push('Review the stated adjuster agreement or contractor-selection restrictions before booking.');
