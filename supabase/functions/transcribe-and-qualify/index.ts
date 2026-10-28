@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { selectRecordingInput } from "./recordingSelection.ts";
-import { normalizeVerification, verificationInstructions, verificationSchema, inspectorNoteInstructions, type RecordingVerification } from '../_shared/recordingVerification.ts';
+import { normalizeVerification, verificationInstructions, verificationSchema, inspectorNoteInstructions, VERIFIED_FIELDS, type RecordingVerification } from '../_shared/recordingVerification.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -335,6 +335,9 @@ Deno.serve(async (req: Request) => {
     const leadType = normalizeLeadType(
       leadForm.lead_type ?? leadForm.leadType ?? leadForm.campaign_type ?? (lead as Record<string, unknown>).lead_type,
     );
+    // Prior AI reviews and generated notes are not source evidence. Feeding the
+    // nested review back into the next request made old attribution errors repeat.
+    const comparisonFields=Object.fromEntries([...Object.keys(VERIFIED_FIELDS),'service_needed','insurance_name_other'].filter(key=>leadForm[key]!==undefined).map(key=>[key,leadForm[key]]));
 
     const qualificationInput = `COMPANY REQUIREMENTS:
 ${requirementsText}
@@ -342,8 +345,7 @@ ${requirementsText}
 LEAD ON FILE:
 Name: ${lead.full_name ?? "unknown"}
 Lead lane: ${leadType}
-Existing notes: ${lead.notes ?? "none"}
-Existing structured fields (comparison only, never transcript evidence): ${JSON.stringify({...leadForm,full_name:lead.full_name,address:lead.address,city:lead.city,state:lead.state,zip_code:lead.zip_code,language:lead.language})}
+Existing structured fields (comparison only, never transcript evidence): ${JSON.stringify({...comparisonFields,full_name:lead.full_name,address:lead.address,city:lead.city,state:lead.state,zip_code:lead.zip_code,language:lead.language})}
 Actual recording date for this exact recording: ${actualRecordedAt || 'unknown'}
 Property timezone: ${propertyTimezone || 'unknown'}
 original_speech: ${originalSpeech}
