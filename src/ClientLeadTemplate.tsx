@@ -324,7 +324,7 @@ export function ClientLeadTemplate({
     `2nd Address: ${copyValue(formValue(copyLead, 'second_address', 'other_address'))}`,
   ].join('\n');
   const generatedCopyText = serviceSnapshot?.form_schema ? buildUniversalLeadTemplate(serviceSnapshot, { ...copyLead.form_data, ...copyLead, appointment_date: appointment.appointment_date, appointment_time: appointment.start_time }) : legacyCopyText;
-  const copyText = recordingNotesOnly ? generatedCopyText.split('\n').filter(line => !/^Notes:/.test(line)).join('\n') + `\nNotes from the recording: ${String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')}` : generatedCopyText;
+  const copyText = recordingNotesOnly ? generatedCopyText.split('\n').filter(line => !/^Notes:/.test(line)).join('\n') + `\nNotes: ${String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')}` : generatedCopyText;
 
   async function copyLeadTemplate() {
     await navigator.clipboard.writeText(copyText);
@@ -384,8 +384,6 @@ export function ClientLeadTemplate({
             <Row label="Insurance Name:" field="insurance_name" value={formValue(lead, 'insurance_name')} editValue={editValue('insurance_name', formValue(lead, 'insurance_name'))} onChange={onChange} />
             <Row label="Contract:" field="contract" value={formValue(lead, 'contract')} editValue={editValue('contract', formValue(lead, 'contract'))} onChange={onChange} />
             <Row label="Homeowner Status:" field="homeowner_authority" value={formValue(lead, 'homeowner_authority')} editValue={editValue('homeowner_authority', formValue(lead, 'homeowner_authority'))} onChange={onChange} />
-            <Row label="Public Adjuster Agreement:" field="public_adjuster_agreement" value={formValue(lead, 'public_adjuster_agreement')} editValue={editValue('public_adjuster_agreement', formValue(lead, 'public_adjuster_agreement'))} options={['Yes','No']} onChange={onChange} />
-            <Row label="Conditional Roofing Obligation:" field="conditional_roofing_obligation" value={formValue(lead, 'conditional_roofing_obligation')} editValue={editValue('conditional_roofing_obligation', formValue(lead, 'conditional_roofing_obligation'))} options={['Yes','No']} onChange={onChange} />
             <Row label="Home Value:" field="home_value" value={homeValue} editValue={editValue('home_value', rawHomeValue)} onChange={onChange} />
             <Row label="SQ FT:" field="sq_ft" value={squareFeet} editValue={editValue('sq_ft', rawSquareFeet)} onChange={onChange} />
             <Row label="Web Link:" field="web_url" inputType="url" value={webLink} editValue={editValue('web_url', webLink)} href={webLink || undefined} onChange={onChange} />
@@ -407,7 +405,7 @@ export function ClientLeadTemplate({
           </>}
         </div>
 
-        {recordingNotesOnly && <div className="px-3 pb-3"><Section title="Notes"><Row label="Notes from the recording:" field="recording_notes" multiline value={String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')} onChange={onChange} /><p className="mt-2 text-xs text-slate-500">Use the recording transcript to capture what was actually said. Blank means recording notes have not been saved.</p></Section></div>}
+        {recordingNotesOnly && <div className="px-3 pb-3"><Section title="Notes"><Row label="Notes:" field="recording_notes" multiline value={String(editValues?.recording_notes ?? lead.form_data?.recording_notes ?? '')} onChange={onChange} /><p className="mt-2 text-xs text-slate-500">Use the recording transcript to capture what was actually said. Blank means recording notes have not been saved.</p></Section></div>}
         {editable && (
           <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-3">
             <button

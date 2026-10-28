@@ -55,8 +55,11 @@ act(() => { renderer = TestRenderer.create(React.createElement(ClientLeadTemplat
 const qcText = JSON.stringify(renderer.toJSON());
 assert.ok(qcText.includes('My roof is seven years old.'));
 assert.ok(!qcText.includes('AUTO NOTE SHOULD NOT APPEAR'));
-assert.equal(renderer.root.findAllByType('textarea').filter(node => node.props['aria-label'] === 'Notes').length, 0);
-assert.equal(renderer.root.findAllByType('textarea').filter(node => node.props['aria-label'] === 'Notes from the recording').length, 1);
+assert.ok(!qcText.includes('Notes from the recording:'));
+assert.ok(!qcText.includes('Public Adjuster Agreement'));
+assert.ok(!qcText.includes('Conditional Roofing Obligation'));
+assert.equal(renderer.root.findAllByType('textarea').filter(node => node.props['aria-label'] === 'Notes').length, 1);
+assert.equal(renderer.root.findAllByType('textarea').filter(node => node.props['aria-label'] === 'Notes from the recording').length, 0);
 act(() => renderer.unmount());
 const savedCustomer = { full_name: 'Test Homeowner', phone_number: '5551234567', address: '17650 Pheasant Lane, Country Club Hills, IL 60478 · Building B, upstairs unit with a very long address', city: 'Country Club Hills', state: 'IL', zip_code: '60478', language: 'English', email: 'test@example.com', service_needed: '(Profile.Services Needed)', form_data: { _service_template: template } };
 let savedValues;
