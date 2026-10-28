@@ -69,6 +69,27 @@ export function transcriptKey(text:string):string{
 }
 const normalize=(text:unknown)=>String(text??'').normalize('NFKC').toLowerCase().replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,' ').trim();
 const supported=(quote:unknown,transcript:string)=>typeof quote==='string'&&quote.trim().length>=4&&normalize(transcript).includes(normalize(quote));
+function clearCustomerLanguage(transcript:string,originalSpeech:boolean):Record<string,unknown>|undefined{
+ if(!originalSpeech)return;
+ // These are substantive customer questions/property statements, not names,
+ // greetings, location-based assumptions, or the caller's inspection offer.
+ const en=transcript.match(/\bWhat time can you (?:get here|come|arrive)\??|\bAre you licensed in [^.!?]{2,60}\??/i)?.[0];
+ const es=transcript.match(/\baqu[íi] vivo [^.!?]{3,90}[.!?]?|\byo salgo hasta [^.!?]{3,90}[.!?]?|\byo ya estoy aqu[íi][^.!?]{0,50}[.!?]?/i)?.[0];
+ if(Boolean(en)===Boolean(es))return;
+ return {field:'language',value:en?'English':'Spanish',excerpt:en||es,certainty:'confirmed',confidence:'high',speaker:'customer',basis:'customer_speech'};
+}
+function notesFromVerifiedFields(observations:Observation[],transcript:string):string{
+ const get=(field:VerifiedField)=>observations.find(o=>o.field===field&&o.confidence==='high'&&['confirmed','approximate'].includes(o.certainty)&&['customer','both'].includes(o.speaker));
+ const purpose=/roof\s+inspection|inspecci[oó]n(?:es)?[^.!?]{0,90}tech/i.test(transcript)?'a roof inspection':'the requested visit';
+ const result=[`Spoke with the customer regarding ${purpose}.`];
+ const age=get('roof_age');
+ if(age){const value=age.value.replace(/\s*years?$/i,'').trim().replace(/^~/,'approximately ');result.push(`The roof was described as ${age.certainty==='approximate'&&!/approximately|about|around/i.test(value)?'approximately ':''}${value} years old.`);}
+ const damage=get('damage_type');
+ if(damage&&get('visible_damage')?.value==='Yes'&&supported(damage.value,damage.excerpt))result.push(`Reported damage: ${damage.value}.`);
+ const time=get('appointment_time');
+ if(time&&/^([01]\d|2[0-3]):[0-5]\d$/.test(time.value)){const [h,m]=time.value.split(':').map(Number);result.push(`Visit time confirmed for ${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}.`);}
+ return result.length>1?result.slice(0,4).join(' '):'';
+}
 function recordingDay(recordedAt?:string,timezone?:string):string{
  if(!recordedAt||!timezone)return '';
  try{
@@ -109,6 +130,10 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   candidates=candidates.filter(item=>item?.field!=='language');
   candidates.push(preference||{...language,field:'language',certainty:language.value==='Unknown'?'uncertain':'confirmed'});
  }
+ const clearLanguage=clearCustomerLanguage(context.transcript,context.originalSpeech);
+ if(clearLanguage&&!candidates.some(item=>item?.field==='language'&&item.basis==='explicit'&&/\benglish\b|\bspanish\b|ingl[eé]s|espa[ñn]ol|biling[uü]/i.test(String(item.excerpt)))){
+  candidates=candidates.filter(item=>item?.field!=='language');candidates.push(clearLanguage);
+ }
  for(const item of candidates){
   if(!item||!Object.prototype.hasOwnProperty.call(VERIFIED_FIELDS,item.field)||!supported(item.excerpt,context.transcript)||typeof item.value!=='string'||!item.value.trim())continue;
   const obs={...item,value:item.value.trim().slice(0,1500),timestamp:null} as Observation;
@@ -122,7 +147,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
    (!context.originalSpeech&&obs.basis!=='explicit')))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.basis==='customer_speech'&&obs.excerpt.trim().split(/\s+/).length<4)obs.certainty='uncertain';
   if(obs.field==='language'&&obs.basis==='explicit'&&!/\benglish\b|\bspanish\b|ingl[eé]s|espa[ñn]ol|biling[uü]/i.test(obs.excerpt))obs.certainty='uncertain';
-  if(obs.field==='language'&&/this is (?:a |the )?(?:roofing|construction) company|we(?:'re|'ll| are| will be).*conducting.*inspections/i.test(obs.excerpt))obs.certainty='uncertain';
+  if(obs.field==='language'&&/this is (?:a |the )?(?:roofing|construction) company|we(?:'re|'ll| are| will be).*conducting.*inspections|le marcamos de|mi nombre es|inspecci[oó]n es completamente gratis/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.value==='Bilingual'&&!/\bbilingual\b|\b(?:both|either)\b.*\b(?:english|spanish)\b|\b(?:ambos|cualquiera)\b.*\b(?:idiomas|inglés|ingles|español)\b/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='appointment_date'&&obs.basis==='relative_date'){
    const resolved=anchor?relativeDate(obs.excerpt,anchor):'';
@@ -146,11 +171,13 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
  let notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
+ if(!notes)notes=notesFromVerifiedFields(observations,context.transcript);
  // An inspector reading an older call must not interpret its "tomorrow" as
  // tomorrow from today. Keep the supported clock time while QC reviews the date.
- if(!anchor)notes=notes.replace(/\b(?:today|tomorrow|hoy|ma[ñn]ana)\b/gi,'').replace(/\s+/g,' ').replace(/\s+([,.])/g,'$1').trim();
+ if(!anchor)notes=notes.replace(/\b(?:today|tomorrow|hoy|ma[ñn]ana)\b/gi,'').replace(/\bfor\s+at\b/gi,'at').replace(/\s+/g,' ').replace(/\s+([,.])/g,'$1').trim();
  // Routine negative contract answers belong in form fields, not repeated notes.
  notes=notes.replace(/\s+and\s+(?:(?:they|he|she|the customer)\s+)?(?:has|have)\s+no\s+(?:current\s+)?(?:signed\s+)?roofing\s+contract\b/gi,'');
+ notes=notes.replace(/,?\s+with no (?:active|current|signed) contract with (?:any|another) roofing company\b/gi,'');
  return {version:6,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }

@@ -59,6 +59,17 @@ assert.equal(requiredLanguage.observations[0].value,'English','Required language
 assert.equal(requiredLanguage.observations[0].certainty,'confirmed');
 const agentLanguage=normalizeVerification({observations:[observation('language','English','Yes, this is a roofing company, sir.')]},{...context,transcript:'Yes, this is a roofing company, sir.'});
 assert.equal(agentLanguage.observations[0].certainty,'uncertain','Company introduction is not evidence of the customer language or a named preference');
+const spanishCustomerText='La inspección es completamente gratis. Sí, aquí vivo en Dallas yo. Pues yo salgo hasta la una.';
+const spanishCustomer=normalizeVerification({language_detection:{value:'Spanish',excerpt:'La inspección es completamente gratis.',confidence:'high',speaker:'customer',basis:'customer_speech'}},{...context,transcript:spanishCustomerText});
+assert.equal(spanishCustomer.observations[0].value,'Spanish');
+assert.equal(spanishCustomer.observations[0].certainty,'confirmed');
+assert(spanishCustomer.observations[0].excerpt.includes('vivo'),'Language evidence uses the substantive property answer instead of the inspection offer');
+const translatedSpanish=normalizeVerification({language_detection:{value:'Spanish',excerpt:'La inspección es completamente gratis.',confidence:'high',speaker:'customer',basis:'customer_speech'}},{...context,transcript:spanishCustomerText,originalSpeech:false});
+assert.equal(translatedSpanish.observations[0].certainty,'uncertain','Fallback cannot establish original language from translated speech');
+const groundedNotes=normalizeVerification({notes:'Invented summary.',notes_evidence:['Not in the call'],observations:[observation('roof_age','about 22','My roof is about 22 years old',{certainty:'approximate'}),observation('roof_type','Shingle','My roof is about 22 years old, shingle, one story.')]},context);
+assert.match(groundedNotes.notes,/about 22 years old/);
+assert(!/shingle|one story|193400|Alex Example|Invented/i.test(groundedNotes.notes),'Fallback includes only relevant grounded observations and no source-form or invented details');
+assert.equal(normalizeVerification({notes:'Invented summary.',notes_evidence:['Not in the call'],observations:[]},context).notes,'','Missing supported facts remains blank');
 const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
 assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
 assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');
