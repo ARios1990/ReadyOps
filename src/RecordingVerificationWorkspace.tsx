@@ -11,6 +11,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
 }){
  const [draft,setDraft]=useState<AppointmentSummaryDraft>(()=>savedDraft?.lead_id===leadId?savedDraft:{lead_id:leadId,notes:'',qc_note:'',generated_notes:'',generated_qc_note:''});
  const changeRef=useRef(onDraftChange);changeRef.current=onDraftChange;
+ const [copyStatus,setCopyStatus]=useState('');
  const source=JSON.stringify(review.verification);
  const warnings=review.warnings.map(w=>`${w.title}: ${w.detail}`).join('\n');
  useEffect(()=>{
@@ -34,7 +35,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
   ...[['home_value','Home Value'],['sq_ft','SQ FT'],['web_url','Web Link']].map(([key,label])=>`${label}: ${display(key)}`),
   `Notes: ${draft.notes}`,draft.qc_note?`QC Note: ${draft.qc_note}`:'',
  ].filter(Boolean).join('\n');
- const copy=(text:string)=>void navigator.clipboard.writeText(text);
+ const copy=async(text:string)=>{try{await navigator.clipboard.writeText(text);setCopyStatus('Copied to clipboard.');}catch{setCopyStatus('Clipboard access is unavailable. Select the text to copy it.');}};
  return <RecordingVerificationContext.Provider value={review}><section className="mt-4 space-y-4" aria-label="Recording verification workspace">
   <div className="rounded-xl border border-blue-200 bg-white p-3">
    <h4 className="text-sm font-black text-slate-950">Recording Verification / QC Review</h4>
@@ -53,6 +54,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
     <button type="button" disabled={busy} onClick={onRegenerate} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold"><RefreshCw size={12}/>Regenerate Summary</button>
     <button type="button" onClick={()=>edit({notes:draft.generated_notes,qc_note:draft.generated_qc_note})} className="rounded-lg border px-2 py-1.5 text-xs font-bold">Reset to Generated</button>
    </div>
+   {copyStatus&&<p role="status" className="mt-2 text-xs text-slate-600">{copyStatus}</p>}
   </div>
  </section></RecordingVerificationContext.Provider>;
 }
