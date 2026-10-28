@@ -34,6 +34,20 @@ export const verificationSchema={type:'object',additionalProperties:false,proper
  notes:{type:'string'},notes_evidence:{type:'array',items:{type:'string'}},
  contract_kind:{type:'string',enum:['none','roofing_company','public_adjuster','conditional_roofing','multiple_estimates','nonperforming_contractor','unknown']},
 },required:['language_detection','observations','warnings','notes','notes_evidence','contract_kind']};
+// User-provided ReadyOps_Inspector_Notes_Updated_2026-10-27.xlsx,
+// Notes Standards!A2:B10 and Inspector View!I2:J7. Rules are applied to new
+// summaries only; workbook examples never overwrite live lead facts.
+export const inspectorNoteInstructions=[
+ 'Write Notes and short inspector summaries as one natural paragraph of TWO TO FOUR concise sentences with normal capitalization.',
+ 'Follow this order where supported: actual contact and visit purpose; relevant confirmed roof age or specific damage/estimate scope; special requests or who will meet the inspector; final confirmed appointment date/time and necessary access instructions. Combine sentences to avoid repetition.',
+ 'State only facts established in the call. Use the actual contact name only if stated or separately confirmed; otherwise say the homeowner or customer. A named homeowner in the form is not proof that this person spoke. Preserve approximate ages and ranges.',
+ 'Describe damage only as reported. Damage Yes requires an explicit report and the actual affected part. Damage No requires a clear statement of no known damage. Uncertain or unmentioned damage stays Not Sure or is omitted; never turn missing discussion into no damage. Siding, doors, carports, drywall and tree issues do not establish roof damage.',
+ 'Omit stories, roof type, routine no-contract status, property value, square footage, generic lead-lane framing and other repetitive form details. Mention insurance, claims or contractor/adjuster restrictions only when relevant and explicitly established. A public-adjuster agreement is not proof that a claim is filed or approved.',
+ 'Preserve service scope, second-property locations, requested photos, courtesy calls, gate/visitor-pass instructions and who will attend when stated. Leave unknown age, damage, insurance, claims and appointment times blank rather than inventing them.',
+ 'Keep unresolved name/address/recording/form conflicts and specific follow-up in QC warnings; never silently resolve a mismatch. Later explicit human confirmation takes precedence over an older unresolved workbook example.',
+ 'Retain any explicit DNC request and its context, including later acceptance of a specific estimate. Never erase the DNC request or interpret that acceptance as blanket consent to unrelated sales calls; flag review for unauthorized sales follow-up. Do not claim a legal determination.',
+ 'Notes must be supported by notes_evidence containing exact contiguous transcript passages for every factual statement. Keep internal QC follow-up separate from the clean inspector paragraph unless it is a concrete visit/compliance instruction the inspector needs.',
+].join(' ');
 export const verificationInstructions=[
  'Also produce recording_verification. Extract the final customer-confirmed value for each discussed field; omit unmentioned fields.',
  'Every observation and warning must include an EXACT contiguous transcript excerpt with enough context to identify the customer confirmation. Never use lead data or an agent question as proof.',
@@ -46,7 +60,7 @@ export const verificationInstructions=[
  'Appointment dates must be YYYY-MM-DD and final appointment time HH:mm in the property local timezone. Resolve relative dates ONLY with a supplied actual recording date and property timezone; without both, use uncertain and do not guess. Never use today, server time, upload time or lead creation time as a call date. Flag multiple unresolved appointment times.',
  'For language, explicit customer preference takes precedence: a request for a Spanish-speaking inspector means Spanish even if the call was in English. Bilingual requires clear comfort and willingness in BOTH English and Spanish, never a greeting or a few borrowed words. Never infer language from name, accent, ethnicity, location or only the agent speech. If original_speech is false, customer_speech alone is insufficient; only explicit customer preference can verify language.',
  'The required language_detection object must assess the CUSTOMER language on every call. When original_speech is true and the customer has a clear substantive utterance in English or Spanish, return that language, high confidence, basis customer_speech and an exact quote of that CUSTOMER utterance. Quote the customer asking a question about the visit or answering about THEIR property; never quote the caller introducing the roofing company or offering inspections. The language need not be named aloud: ordinary spoken English is basis customer_speech, NEVER basis explicit. A greeting, yes/no alone, unclear speaker, or translated transcript is insufficient: return Unknown with low confidence and basis unknown. An explicit customer preference overrides spoken language: use basis explicit ONLY when the quote actually names the language they want. Never copy the saved lead language as evidence. Also include the corresponding language observation.',
- 'Write notes as one concise professional paragraph focused on the actual contact, inspection, supported roof/damage facts, estimates or contractors, final confirmed appointment, availability and customer requests. Do not copy lead notes as confirmed facts. Include notes_evidence quoting each supporting transcript passage. Keep review warnings out of the notes paragraph; they belong in warnings. Never invent timestamps.',
+ inspectorNoteInstructions,
 ].join(' ');
 export function transcriptKey(text:string):string{
  // Cache identity only; never used as an authentication or permission check.
