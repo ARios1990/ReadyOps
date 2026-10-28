@@ -558,6 +558,34 @@ ${transcript}`;
       reasons=reasons.filter(reason=>!/roof age|years? old|edad del techo|anos? de/i.test(reason));
       reasons.push('Roof age is not established by the recording quote. Review the affected structure and qualifying damage.');
     }
+    if(!recordingVerification.notes){
+      // Repair once using the transcript alone. A rejected derived summary must
+      // not keep contaminating the next attempt or silently leave Notes empty.
+      try{
+        const repairResponse=await fetch('https://api.openai.com/v1/responses',{
+          method:'POST',headers:{Authorization:`Bearer ${openaiKey}`,'Content-Type':'application/json'},
+          body:JSON.stringify({model:RECORDING_REVIEW_MODEL,store:false,max_output_tokens:1800,
+            instructions:[inspectorNoteInstructions,
+              'The first draft failed source verification. Read only this current transcript and write a fresh inspector handoff. Do not reconstruct the rejected draft.',
+              'Never include a roof age unless the allowed roof-age fact below is present. Ages suggested in the telemarketer questions are not customer answers. Damage to a shed is not damage to the house.',
+              'Copy notes_evidence as exact CONTIGUOUS substrings of this transcript, preserving filler words and grammar. Do not shorten, paraphrase, translate or join separate passages inside a quote. Include an exact quote for each retained fact.',
+              'Write the final Notes in English. If the actual call date is unknown, omit unresolved tomorrow/weekday dates and retain only a confirmed clock time. Return empty Notes only if the transcript truly lacks enough visit facts.',
+            ].join(' '),
+            input:`Actual recording date: ${actualRecordedAt||'unknown'}\nProperty timezone: ${propertyTimezone||'unknown'}\nAllowed roof-age fact: ${recordingVerification.observations.filter(o=>o.field==='roof_age'&&o.confidence==='high'&&['confirmed','approximate'].includes(o.certainty)).map(o=>o.value).join(', ')||'NONE; omit age'}\nCURRENT CALL TRANSCRIPT:\n${transcript}`,
+            text:{format:{type:'json_schema',name:'inspector_notes_repair',strict:true,schema:{type:'object',additionalProperties:false,
+              properties:{notes:{type:'string'},notes_evidence:{type:'array',items:{type:'string'}}},required:['notes','notes_evidence']}}},
+          }),
+        });
+        if(repairResponse.ok){
+          const output=extractOutputText(await repairResponse.json());
+          const repaired=output?JSON.parse(output):{};
+          const checked=normalizeVerification({...repaired,observations:recordingVerification.observations,contract_kind:recordingVerification.contract_kind},verificationContext);
+          if(checked.notes)recordingVerification.notes=checked.notes;
+        }
+      }catch{ /* Preserve valid field findings and make the note failure explicit below. */ }
+      if(!recordingVerification.notes)recordingVerification.warnings.push({title:'Inspector Notes Need Review',
+        detail:'An automatic inspector note could not be verified against this recording. Review the call and write or keep the saved Notes.',excerpt:transcript.slice(0,300)});
+    }
     const summary=String(parsedVerdict.summary||'').trim().slice(0,8000)||recordingVerification.notes||'Recording summary needs review.';
     if(recordingVerification.observations.some(o=>['conditional_roofing_obligation','public_adjuster_agreement'].includes(o.field)&&o.value==='Yes'&&o.certainty==='confirmed'&&o.confidence==='high')){
       qualifiers.no_existing_contract='unknown';
