@@ -4,7 +4,6 @@ import { CheckCircle2, ClipboardCopy, ExternalLink, FileText, Headphones, HelpCi
 import { supabase } from './supabase';
 import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { getLane } from './leadTypes';
-import { buildInspectorNote } from './inspectorNote';
 import { recordingNotes } from './recordingImport';
 import {transcriptKey,type RecordingVerification,type VerifiedDraft} from '../supabase/functions/_shared/recordingVerification';
 import {RecordingVerificationWorkspace,type AppointmentSummaryDraft} from './RecordingVerificationWorkspace';
@@ -215,11 +214,6 @@ export function QCRecordingUpload({
   appointmentDate,
   appointmentTime,
   appointmentTimezone,
-  address,
-  city,
-  state,
-  zipCode,
-  homeownerName,
   leadType,
   leadForm,
   onRecordingNotesChange,
@@ -275,7 +269,7 @@ export function QCRecordingUpload({
   const applied=useRef('');
   const verificationCallback=useRef(onVerification);verificationCallback.current=onVerification;
   const reviewDraft=leadForm?._qc_recording_review as VerifiedDraft|undefined;
-  const currentVerification=assessment?.recording_verification?.version===2?assessment.recording_verification:undefined;
+  const currentVerification=assessment?.recording_verification?.version===8?assessment.recording_verification:undefined;
   useEffect(()=>{
     if(!currentVerification||currentVerification.lead_id!==leadId||currentVerification.recording_url!==value||currentVerification.transcript_key!==transcriptKey(transcript))return;
     const key=`${leadId}|${value}|${JSON.stringify(currentVerification)}`;
@@ -304,8 +298,6 @@ export function QCRecordingUpload({
     setTranscriptStatus(previous.leadId === leadId ? 'Recording replaced. Transcribe the current audio to generate a new transcript.' : '');
   }, [leadId, value]);
 
-  const appointmentInfo = { date: appointmentDate, time: appointmentTime, address, city, state, zipCode };
-  const inspectorNote = assessment ? buildInspectorNote(assessment, appointmentInfo, { homeownerName, leadType, form: leadForm }) : '';
 
   useEffect(() => {
     let active = true;
@@ -660,13 +652,7 @@ export function QCRecordingUpload({
               </div>
             )}
 
-            {inspectorNote && (
-              <div className="mt-3">
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500">Brief Note to Inspector</label>
-                <p className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-800">{inspectorNote}</p>
-                <button type="button" onClick={() => void navigator.clipboard.writeText(inspectorNote)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"><ClipboardCopy size={12}/> Copy Note to Inspector</button>
-              </div>
-            )}
+
           </div>
         )}
         <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify transcribes the currently selected recording, then evaluates the call against company requirements. Without audio, it uses the pasted or saved transcript.</p>
@@ -677,12 +663,7 @@ export function QCRecordingUpload({
           <button type="button" disabled={!transcript} onClick={() => void navigator.clipboard.writeText(transcript)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Transcript</button>
         </div>
 
-        <label className="mt-4 block text-[10px] font-black uppercase tracking-wide text-slate-500">Notes from the recording</label>
-        <textarea value={summary} onChange={event => setSummary(event.target.value)} placeholder="Passages quoted from the transcript. Listen to the recording and edit these notes as needed." className="mt-1 min-h-28 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800"/>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" disabled={!summary} onClick={() => void navigator.clipboard.writeText(summary)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Summary</button>
-          {transcriptStatus && <span className="text-[11px] font-semibold text-slate-500">{transcriptStatus}</span>}
-        </div>
+        <p className="mt-2 text-[10px] font-semibold text-slate-400">{transcriptStatus}</p>
       </div>
 
       <label className="mt-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-white p-3 text-xs font-semibold text-slate-700">
