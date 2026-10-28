@@ -83,6 +83,7 @@ console.log('PASS automatic pending draft correction, manual preservation, one a
 // Exercise the deployed handler with simulated storage/OpenAI, without real calls or lead writes.
 let handler, storedUrl, transcriptWrite, signedPath, transcriptionCalls, changedDuringCall, lostAttach;
 let speechText='What time can you get here? My roof is seven years old.', primaryLanguage, focusedLanguage, primaryAge;
+let repairCalls=0,repairNote='',repairQuotes=[],repairHttpError=false;
 const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{from:()=>({createSignedUrl:async path=>{signedPath=path;return {data:{signedUrl:'https://audio.invalid/current'}};}})},from(table){
  let update, filter, expected;
  const q={select(){return q;},eq(key,val){if(key==='recording_url'){filter=true;expected=val;}return q;},is(key,val){filter=true;expected=val;return q;},update(data){update=data;return q;},
@@ -92,7 +93,7 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'reviewer'}}})},storage:{fr
   if(table==='company_portal_settings')return {data:null};
   if(table==='portal_leads'){
    if(update){if(lostAttach || (filter&&storedUrl!==expected))return {data:null};storedUrl=update.recording_url;return {data:{id:'lead'}};}
-   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,full_name:'Stored Name',form_data:{_qc_recording_review:{old:'STALE AI REVIEW'},recording_notes:'OLD GENERATED NOTES'}}};
+   return {data:{id:'lead',company_id:'company',recording_url:storedUrl,full_name:'Stored Name',address:'Stored Address',language:'Stored Language',form_data:{roof_age:'66',_qc_recording_review:{old:'STALE AI REVIEW'},recording_notes:'OLD GENERATED NOTES'}}};
   }
  },async upsert(data){transcriptWrite=data;return {error:null};},then(resolve){resolve({error:null});}};
  return q;
@@ -104,12 +105,23 @@ const fakeFetch=async (url,options={})=>{
   const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));assert(body.input.includes('CURRENT CALL SUMMARY (rewrite aid only):\nFresh summary'));
   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:focusedLanguage||{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
- if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:primaryAge?['The roof age is confirmed at 6 years old.']:['Review'],qualifiers:primaryAge?{roof_age_or_damage:'no'}:{},recording_verification:{language_detection:primaryLanguage,observations:[primaryAge||{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ if(url.endsWith('/responses')&&JSON.parse(options.body).text?.format?.name==='inspector_notes_repair'){
+  repairCalls++;const body=JSON.parse(options.body);
+  assert(body.input.includes(speechText));
+  for(const derived of ['Fresh summary','Stored Name','Stored Address','OLD GENERATED NOTES'])assert(!body.input.includes(derived),'The repair uses only the current transcript and validated call context');
+  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({notes:repairNote,notes_evidence:repairQuotes})}]}]},{status:repairHttpError?503:200});
+ }
+ if(url.endsWith('/responses')){
+  const body=JSON.parse(options.body);
+  for(const storedFact of ['Stored Name','Stored Address','Stored Language','66','STALE AI REVIEW','OLD GENERATED NOTES'])assert(!body.input.includes(storedFact),'Saved lead facts must not enter the source-only call analysis');
+  assert(body.input.includes(speechText),'The primary analysis includes the current transcript');
+  return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:primaryAge?['The roof age is confirmed at 6 years old.']:['Review'],qualifiers:primaryAge?{roof_age_or_damage:'no'}:{},recording_verification:{language_detection:primaryLanguage,observations:[primaryAge||{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
+ }
  throw Error(`Unexpected fetch ${url}`);
 };
 const edge=fs.readFileSync(new URL('../supabase/functions/transcribe-and-qualify/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 new Function('Deno','createClient','selectRecordingInput','normalizeVerification','verificationInstructions','verificationSchema','inspectorNoteInstructions','VERIFIED_FIELDS','fetch',ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)({serve(fn){handler=fn;},env:{get(){return 'server-test';}}},()=>admin,selectRecordingInput,verification.normalizeVerification,verification.verificationInstructions,verification.verificationSchema,verification.inspectorNoteInstructions,verification.VERIFIED_FIELDS,fakeFetch);
-const reset=url=>{storedUrl=url;transcriptWrite=null;signedPath='';transcriptionCalls=0;changedDuringCall=false;lostAttach=false;};
+const reset=url=>{storedUrl=url;transcriptWrite=null;signedPath='';transcriptionCalls=0;changedDuringCall=false;lostAttach=false;repairCalls=0;};
 const request=body=>handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer reviewer'},body:JSON.stringify({lead_id:'lead',recording_url:fresh,transcript:'OLD CLIENT',...body})}));
 for(const prior of [old,null,'']){
  reset(prior);const response=await request({});assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
@@ -163,5 +175,22 @@ assert.equal(transcriptWrite.assessment.recording_verification.observations.find
 assert.equal(transcriptWrite.assessment.qualifiers.roof_age_or_damage,'unknown','Unsubstantiated roof age cannot determine a failed qualifier');
 assert(!transcriptWrite.assessment.reasons.some(reason=>reason.includes('6 years')));
 console.log('PASS an unsupported stored age cannot become a recording correction, age disqualification or inspector fact');
+speechText='The shed has major roof damage. The shed is insured. Please straighten the tarp during the visit. One in the afternoon works at 123 Example Drive.';
+primaryAge=undefined;primaryLanguage=unknownLanguage;
+focusedLanguage={value:'English',confidence:'high',excerpt:'The shed has major roof damage.',speaker:'customer',basis:'customer_speech'};
+repairNote='Spoke with the customer regarding a free estimate for major roof damage to the shed. The shed is insured, and the customer requested help straightening the tarp. Appointment confirmed for 1:00 PM at 123 Example Drive.';
+repairQuotes=['The shed has major roof damage.','The shed is insured.','Please straighten the tarp during the visit.','One in the afternoon works at 123 Example Drive.'];
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(repairCalls,1);assert.equal(transcriptWrite.assessment.recording_verification.notes,repairNote,'A rejected note gets one independently grounded repair');
+assert.equal(transcriptWrite.language,'English');
+repairQuotes=['Not in this recording'];
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(repairCalls,1);assert.equal(transcriptWrite.assessment.recording_verification.notes,'');
+assert(transcriptWrite.assessment.recording_verification.warnings.some(w=>w.title==='Inspector Notes Need Review'),'A rejected repair is explicit rather than silently blank');
+repairHttpError=true;
+reset(fresh);assert.equal((await request({force_transcription:true,verify_only:true})).status,200);
+assert.equal(repairCalls,1);assert.equal(transcriptWrite.language,'English','A note-only service failure does not erase verified language');
+assert(transcriptWrite.assessment.recording_verification.warnings.some(w=>w.title==='Inspector Notes Need Review'));
+console.log('PASS one source-only inspector-note repair, independent evidence validation and explicit failure without losing language');
 
 
