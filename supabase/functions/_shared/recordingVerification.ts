@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1|2|3|4|5|6|7;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2|3|4|5|6|7|8;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -38,7 +38,10 @@ export const verificationSchema={type:'object',additionalProperties:false,proper
 // Notes Standards!A2:B10 and Inspector View!I2:J7. Rules are applied to new
 // summaries only; workbook examples never overwrite live lead facts.
 export const inspectorNoteInstructions=[
- 'Write Notes and short inspector summaries as one natural paragraph of TWO TO FOUR concise sentences with normal capitalization.',
+ 'Write the inspector Notes as one natural paragraph of TWO TO FOUR concise sentences with normal capitalization. This is a direct handoff for the inspector, separate from the general call summary.',
+ 'Use this sentence structure where supported: "Spoke with [actual contact], [confirmed role], regarding [visit purpose and specific affected property]. [Relevant insurance or condition] and [special request or visit instruction]. Appointment confirmed for [time] at [address]." Omit unsupported clauses and combine naturally; never output brackets or placeholders. Use a stated Mr./Mrs./Ms. only when supported, never infer an honorific or gender.',
+ 'Begin with "Spoke with" and end with the supported appointment or access details. Avoid report-style openings such as "The purpose of the contact was", "The customer confirmed that", and "The appointment was set". Rewrite the current call summary into the concise inspector handoff; verify every retained fact against the current transcript.',
+ 'Preserve the exact affected structure and requested work: roof damage to a shed or detached building is not damage to the main house. Include a stated request to adjust a tarp or another specific onsite request, without promising the inspector will perform it. Insurance on that structure is relevant when explicitly confirmed. Do not add a roof age for the main house to a shed estimate unless the call establishes that age applies to the shed.',
  'Follow this order where supported: actual contact and visit purpose; relevant confirmed roof age or specific damage/estimate scope; special requests or who will meet the inspector; final confirmed appointment date/time and necessary access instructions. Combine sentences to avoid repetition.',
  'State only facts established in the call. Use the actual contact name only if stated or separately confirmed; otherwise say the homeowner or customer. A named homeowner in the form is not proof that this person spoke. Preserve approximate ages and ranges.',
  'Describe damage only as reported. Damage Yes requires an explicit report and the actual affected part. Damage No requires a clear statement of no known damage. Uncertain or unmentioned damage stays Not Sure or is omitted; never turn missing discussion into no damage. Siding, doors, carports, drywall and tree issues do not establish roof damage.',
@@ -189,7 +192,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
  // Routine negative contract answers belong in form fields, not repeated notes.
  notes=notes.replace(/\s+and\s+(?:(?:they|he|she|the customer)\s+)?(?:has|have)\s+no\s+(?:current\s+)?(?:signed\s+)?roofing\s+contract\b/gi,'');
  notes=notes.replace(/,?\s+with no (?:active|current|signed) contract with (?:any|another) roofing company\b/gi,'');
- return {version:7,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ return {version:8,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){

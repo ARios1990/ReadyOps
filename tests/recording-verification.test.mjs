@@ -77,6 +77,11 @@ const inventedAge=normalizeVerification({observations:[observation('appointment_
 assert(!/10 years/i.test(inventedAge.notes),'An age needs an established age observation as well as source quotes');
 const dncPreserved=normalizeVerification({observations:[],notes:'Routine single-story home.',notes_evidence:['Do not call me again.']},{...context,transcript:'Do not call me again. I only agreed to the requested estimate.'});
 assert(dncPreserved.warnings.some(w=>w.title==='Do Not Call Request'&&w.excerpt.includes('Do not call')),'Rejected narrative cannot erase a stop-call request');
+const shedTranscript='I am Mr. Smith, the homeowner. The shed has major roof damage; the house is fine. The shed is insured. Please straighten the tarp during the visit. One in the afternoon works at 123 Example Drive.';
+const shedNote='Spoke with Mr. Smith, the homeowner, regarding a free estimate for major roof damage to his shed. The shed is insured, and he requested assistance straightening the tarp during the visit. Appointment confirmed for 1:00 PM at 123 Example Drive.';
+const shedVerification=normalizeVerification({notes:shedNote,notes_evidence:['I am Mr. Smith, the homeowner.','The shed has major roof damage; the house is fine.','The shed is insured.','Please straighten the tarp during the visit.','One in the afternoon works at 123 Example Drive.'],observations:[observation('visible_damage','Yes','The shed has major roof damage; the house is fine.')]},{...context,transcript:shedTranscript});
+assert.equal(shedVerification.notes,shedNote,'Inspector prose preserves the affected outbuilding, relevant insurance, requested tarp help and confirmed visit details');
+assert(!shedVerification.notes.includes('years old'),'No unrelated main-house roof age is added to an outbuilding estimate');
 const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
 assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
 assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');

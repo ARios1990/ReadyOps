@@ -100,7 +100,7 @@ const fakeFetch=async (url,options={})=>{
  if(url==='https://audio.invalid/current')return new Response('audio-bytes',{headers:{'content-type':'audio/mpeg'}});
  if(url.endsWith('/audio/transcriptions')){transcriptionCalls++;if(changedDuringCall)storedUrl='storage://qc-recordings/lead/newer.mp3';return Response.json({text:'What time can you get here? My roof is seven years old.'});}
  if(url.endsWith('/responses')&&JSON.parse(options.body).text?.format?.name==='customer_language_and_inspector_notes'){
-  const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));
+  const body=JSON.parse(options.body);assert(!body.input.includes('Stored Name'));assert(!body.input.includes('STALE AI REVIEW'));assert(!body.input.includes('OLD GENERATED NOTES'));assert(body.input.includes('CURRENT CALL SUMMARY (rewrite aid only):\nFresh summary'));
   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({language_detection:{value:'English',confidence:'high',excerpt:'What time can you get here?',speaker:'customer',basis:'customer_speech'},notes:'The customer stated the roof is seven years old. The customer asked about arrival time.',notes_evidence:['What time can you get here?','My roof is seven years old.']})}]}]});
  }
  if(url.endsWith('/responses'))return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({summary:'Fresh summary',reasons:['Review'],qualifiers:{},recording_verification:{observations:[{field:'roof_age',value:'7',excerpt:'My roof is seven years old.',certainty:'confirmed',confidence:'high',speaker:'customer',basis:'explicit'}]}})}]}]});
@@ -112,7 +112,7 @@ const reset=url=>{storedUrl=url;transcriptWrite=null;signedPath='';transcription
 const request=body=>handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer reviewer'},body:JSON.stringify({lead_id:'lead',recording_url:fresh,transcript:'OLD CLIENT',...body})}));
 for(const prior of [old,null,'']){
  reset(prior);const response=await request({});assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
- assert.equal(signedPath,'lead/new.mp3');assert.equal(transcriptionCalls,1);assert.equal(transcriptWrite.transcript,'What time can you get here? My roof is seven years old.');assert.equal(transcriptWrite.language,'English');assert(transcriptWrite.assessment.recording_verification.notes.includes('seven years old'));assert.equal(storedUrl,fresh);
+ assert.equal(signedPath,'lead/new.mp3');assert.equal(transcriptionCalls,1);assert.equal(transcriptWrite.transcript,'What time can you get here? My roof is seven years old.');assert.equal(transcriptWrite.language,'English');assert(transcriptWrite.assessment.recording_verification.notes.includes('seven years old'));assert.equal(transcriptWrite.summary,'Fresh summary','General call summary remains separate from the inspector handoff');assert.equal(storedUrl,fresh);
 }
 reset(fresh);assert.equal((await request({force_transcription:true})).status,200);assert.equal(transcriptionCalls,1);
 reset(old);changedDuringCall=true;assert.equal((await request({})).status,409);assert.equal(transcriptWrite,null,'Stale results cannot overwrite the newer recording');
