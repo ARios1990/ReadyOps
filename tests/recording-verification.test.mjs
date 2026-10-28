@@ -59,6 +59,9 @@ assert.equal(requiredLanguage.observations[0].value,'English','Required language
 assert.equal(requiredLanguage.observations[0].certainty,'confirmed');
 const agentLanguage=normalizeVerification({observations:[observation('language','English','Yes, this is a roofing company, sir.')]},{...context,transcript:'Yes, this is a roofing company, sir.'});
 assert.equal(agentLanguage.observations[0].certainty,'uncertain','Company introduction is not evidence of the customer language or a named preference');
+const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
+assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
+assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');
 assert.equal(language('English','My roof is about 22 years old','customer_speech',false).observations[0].certainty,'uncertain','Translated or unverified text cannot establish customer speech language');
 assert.equal(language('Spanish','I need a Spanish-speaking inspector.','explicit',false).observations[0].certainty,'confirmed');
 assert.equal(language('Bilingual','My roof is about 22 years old').observations[0].certainty,'uncertain');

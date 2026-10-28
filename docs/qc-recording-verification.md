@@ -33,3 +33,10 @@ Preserve stated DNC requests and estimate-specific context. Keep unresolved
 identity/address conflicts and follow-up in QC warnings. Exact transcript passages
 support the generated paragraph. Existing notes and manual edits are preserved;
 the workbook is a style reference and does not backfill customer facts.
+
+Language and note extraction use a focused pass that receives only the current
+transcript and recording-date context, with the existing accessible model. Prior
+AI reviews, saved names and generated notes are excluded from that pass. Evidence
+quotes retain the original language; generated Notes are in English. Provider or
+incomplete-output errors stay visible. Unanchored today/tomorrow references and
+routine negative roofing-contract clauses are excluded from inspector Notes.

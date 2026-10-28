@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1|2|3|4;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2|3|4|5|6;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -122,7 +122,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
    (!context.originalSpeech&&obs.basis!=='explicit')))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.basis==='customer_speech'&&obs.excerpt.trim().split(/\s+/).length<4)obs.certainty='uncertain';
   if(obs.field==='language'&&obs.basis==='explicit'&&!/\benglish\b|\bspanish\b|ingl[eé]s|espa[ñn]ol|biling[uü]/i.test(obs.excerpt))obs.certainty='uncertain';
-  if(obs.field==='language'&&/this is (?:a |the )?(?:roofing|construction) company|we(?:'re| are| will be).*conducting.*inspections/i.test(obs.excerpt))obs.certainty='uncertain';
+  if(obs.field==='language'&&/this is (?:a |the )?(?:roofing|construction) company|we(?:'re|'ll| are| will be).*conducting.*inspections/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.value==='Bilingual'&&!/\bbilingual\b|\b(?:both|either)\b.*\b(?:english|spanish)\b|\b(?:ambos|cualquiera)\b.*\b(?:idiomas|inglés|ingles|español)\b/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='appointment_date'&&obs.basis==='relative_date'){
    const resolved=anchor?relativeDate(obs.excerpt,anchor):'';
@@ -145,8 +145,13 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   .filter(w=>w&&typeof w.title==='string'&&typeof w.detail==='string'&&supported(w.excerpt,context.transcript))
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
- const notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
- return {version:4,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ let notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
+ // An inspector reading an older call must not interpret its "tomorrow" as
+ // tomorrow from today. Keep the supported clock time while QC reviews the date.
+ if(!anchor)notes=notes.replace(/\b(?:today|tomorrow|hoy|ma[ñn]ana)\b/gi,'').replace(/\s+/g,' ').replace(/\s+([,.])/g,'$1').trim();
+ // Routine negative contract answers belong in form fields, not repeated notes.
+ notes=notes.replace(/\s+and\s+(?:(?:they|he|she|the customer)\s+)?(?:has|have)\s+no\s+(?:current\s+)?(?:signed\s+)?roofing\s+contract\b/gi,'');
+ return {version:6,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){
