@@ -76,6 +76,7 @@ for (const file of [
   "20261009123458_approved_portal_contact_editing.sql",
   "20261009124839_preserve_portal_optional_answers.sql",
   "20261012035000_preserve_recording_notes.sql",
+  "20261028004408_qc_recording_metadata_retention.sql",
 ]) {
   const sql = fs
     .readFileSync(
@@ -306,6 +307,32 @@ await test("approved roofing qualifiers and edited notes survive the server save
   const row = (await db.query('insert into public.portal_leads(company_id,agent_id,form_data) values($1,$2,$3) returning form_data', [uid(21),uid(11),JSON.stringify(payload)])).rows[0];
   for (const key of ['meeting_name','visitor_authority','access_instructions','insurance','insurance_name_other','claim_filed','claim_status','summary_notes','recording_notes']) assert.equal(row.form_data[key], payload[key]);
   assert.equal(row.form_data.forged_unrelated_field, undefined);
+});
+await test('QC recording context, contact roles and review drafts survive real service-trigger saves', async () => {
+  await asUser(null, 'postgres');
+  const payload={_universal_template:true,service_type:'roofing',full_name:'Primary Customer',phone_number:'555',address:'Test Address',service_needed:'Inspection',contact_name:'Spouse Contact',contact_role:'Wife / spouse',public_adjuster_agreement:'Yes',conditional_roofing_obligation:'Yes',_qc_recording_review:{lead_id:uid(34),recording_url:'recording-a'},_qc_recording_history:[{field:'roof_age',before:'10',after:'~15'}],_qc_manual_fields:['contact_name','contact_role'],_qc_summary_draft:{notes:'Reviewed summary',qcNote:'Keep the primary name'},_qc_recording_context:{call_date:'2026-10-27',timezone:'America/Chicago'},_qc_contact_confirmation:{source:'Direct user clarification'},_qc_forged:'must drop',vehicle_year:'must drop'};
+  await db.query('insert into public.portal_leads(id,company_id,agent_id,form_data) values($1,$2,$3,$4)',[uid(34),uid(21),uid(11),JSON.stringify(payload)]);
+  await db.query(`update public.portal_leads set form_data=form_data||'{"roof_age":"~15","unrelated_field":"must drop"}' where id='${uid(34)}'`);
+  let row=(await db.query(`select form_data from public.portal_leads where id='${uid(34)}'`)).rows[0].form_data;
+  for(const key of ['contact_name','contact_role','public_adjuster_agreement','conditional_roofing_obligation','_qc_recording_review','_qc_recording_history','_qc_manual_fields','_qc_summary_draft','_qc_recording_context','_qc_contact_confirmation'])assert.deepEqual(row[key],payload[key],key);
+  assert.equal(row.full_name,'Primary Customer');assert.equal(row.roof_age,'~15');
+  for(const key of ['_qc_forged','vehicle_year','unrelated_field'])assert.equal(row[key],undefined,key);
+  // This isolated fixture allows anonymous updates so the trigger's own evidence
+  // protection can be exercised independently of the real app's stricter RLS.
+  await db.exec(`grant select,insert,update on public.portal_leads to anon;create policy recording_fixture_anon on public.portal_leads for all to anon using(id in ('${uid(34)}','${uid(35)}')) with check(id in ('${uid(34)}','${uid(35)}'))`);
+  await asUser(null,'anon');
+  await db.query(`update public.portal_leads set form_data=form_data||'{"_qc_summary_draft":{"notes":"forged"},"_qc_recording_review":{"forged":true},"_qc_manual_fields":[]}' where id='${uid(34)}'`);
+  await db.query('insert into public.portal_leads(id,company_id,agent_id,form_data) values($1,$2,$3,$4)',[uid(35),uid(21),uid(11),JSON.stringify(payload)]);
+  await asUser(null,'postgres');
+  row=(await db.query(`select form_data from public.portal_leads where id='${uid(34)}'`)).rows[0].form_data;
+  for(const key of ['_qc_summary_draft','_qc_recording_review','_qc_manual_fields'])assert.deepEqual(row[key],payload[key],'Anonymous caller cannot replace '+key);
+  const publicDraft=(await db.query(`select form_data from public.portal_leads where id='${uid(35)}'`)).rows[0].form_data;
+  for(const key of Object.keys(payload).filter(key=>key.startsWith('_qc_')))assert.equal(publicDraft[key],undefined,'Public booking cannot create '+key);
+  await db.exec('drop policy recording_fixture_anon on public.portal_leads;revoke select,insert,update on public.portal_leads from anon');
+  await db.query(`update public.portal_leads set form_data=form_data||'{"service_type":"tree_service","public_adjuster_agreement":"Yes","conditional_roofing_obligation":"Yes"}' where id='${uid(34)}'`);
+  row=(await db.query(`select form_data from public.portal_leads where id='${uid(34)}'`)).rows[0].form_data;
+  assert.equal(row.public_adjuster_agreement,undefined);assert.equal(row.conditional_roofing_obligation,undefined);
+  assert.equal(row.contact_name,payload.contact_name);
 });
 await test("automatic release deduplicates and uses profile email list", async () => {
   await asUser(null, "postgres");
