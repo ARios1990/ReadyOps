@@ -9,13 +9,14 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
  leadId:string;review:VerifiedDraft;values:Record<string,unknown>;savedDraft?:AppointmentSummaryDraft;
  onDraftChange?:(draft:AppointmentSummaryDraft)=>void;onRegenerate:()=>void;busy:boolean;
 }){
- const [draft,setDraft]=useState<AppointmentSummaryDraft>(()=>savedDraft?.lead_id===leadId?savedDraft:{lead_id:leadId,notes:'',qc_note:'',generated_notes:'',generated_qc_note:''});
+ const initialDraft=():AppointmentSummaryDraft=>savedDraft?.lead_id===leadId?savedDraft:{lead_id:leadId,notes:String(values.recording_notes||values.summary_notes||'').trim(),qc_note:'',generated_notes:'',generated_qc_note:''};
+ const [draft,setDraft]=useState<AppointmentSummaryDraft>(initialDraft);
  const changeRef=useRef(onDraftChange);changeRef.current=onDraftChange;
  const [copyStatus,setCopyStatus]=useState('');
  const source=JSON.stringify(review.verification);
  const warnings=review.warnings.map(w=>`${w.title}: ${w.detail}`).join('\n');
  useEffect(()=>{
-  const old=draft.lead_id===leadId?draft:savedDraft?.lead_id===leadId?savedDraft:undefined;
+  const old=draft.lead_id===leadId?draft:initialDraft();
   const generatedNotes=review.verification.notes;
   const next={lead_id:leadId,generated_notes:generatedNotes,generated_qc_note:warnings,
    notes:old&&old.notes!==old.generated_notes?old.notes:generatedNotes,

@@ -121,4 +121,9 @@ act(()=>{view=TestRenderer.create(React.createElement(RecordingVerificationWorks
 assert.equal(text('Professional appointment Notes').props.value,cached.notes,'Saved per-lead draft reloads');
 assert.equal(verification.transcript_key,transcriptKey(transcript));
 act(()=>view.unmount());
+act(()=>{view=TestRenderer.create(React.createElement(RecordingVerificationWorkspace,{...props,values:{...values,recording_notes:shedNote},review:{...draft,verification:{...verification,notes:''}}}));});
+assert.equal(text('Professional appointment Notes').props.value,shedNote,'Existing saved inspector prose remains visible when generation cannot establish a new paragraph');
+act(()=>view.update(React.createElement(RecordingVerificationWorkspace,{...props,values:{...values,recording_notes:shedNote},review:{...draft,verification:{...verification,notes:'New AI handoff.'}}})));
+assert.equal(text('Professional appointment Notes').props.value,shedNote,'Regeneration preserves the saved reviewer wording');
+act(()=>view.unmount());
 console.log('PASS independent editable/copyable notes, regeneration/reset behavior and per-lead draft restoration');
