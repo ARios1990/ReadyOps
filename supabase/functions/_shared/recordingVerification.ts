@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1|2|3;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2|3|4;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -45,7 +45,7 @@ export const verificationInstructions=[
  'Flag only real supported issues: identity or property conflicts, unclear final appointment, prior no-show, existing contractor/adjuster restrictions, missing homeowner, required courtesy call, insurance conflict or inspector language request. No generic missing-data warnings.',
  'Appointment dates must be YYYY-MM-DD and final appointment time HH:mm in the property local timezone. Resolve relative dates ONLY with a supplied actual recording date and property timezone; without both, use uncertain and do not guess. Never use today, server time, upload time or lead creation time as a call date. Flag multiple unresolved appointment times.',
  'For language, explicit customer preference takes precedence: a request for a Spanish-speaking inspector means Spanish even if the call was in English. Bilingual requires clear comfort and willingness in BOTH English and Spanish, never a greeting or a few borrowed words. Never infer language from name, accent, ethnicity, location or only the agent speech. If original_speech is false, customer_speech alone is insufficient; only explicit customer preference can verify language.',
- 'The required language_detection object must assess the CUSTOMER language on every call. When original_speech is true and the customer has a clear substantive utterance in English or Spanish, return that language, high confidence, basis customer_speech and an exact quote of that CUSTOMER utterance. The language need not be named aloud. A greeting, yes/no alone, unclear speaker, or translated transcript is insufficient: return Unknown with low confidence and basis unknown. An explicit customer preference overrides spoken language: use basis explicit and quote the preference. Never copy the saved lead language as evidence. Also include the corresponding language observation.',
+ 'The required language_detection object must assess the CUSTOMER language on every call. When original_speech is true and the customer has a clear substantive utterance in English or Spanish, return that language, high confidence, basis customer_speech and an exact quote of that CUSTOMER utterance. Quote the customer asking a question about the visit or answering about THEIR property; never quote the caller introducing the roofing company or offering inspections. The language need not be named aloud: ordinary spoken English is basis customer_speech, NEVER basis explicit. A greeting, yes/no alone, unclear speaker, or translated transcript is insufficient: return Unknown with low confidence and basis unknown. An explicit customer preference overrides spoken language: use basis explicit ONLY when the quote actually names the language they want. Never copy the saved lead language as evidence. Also include the corresponding language observation.',
  'Write notes as one concise professional paragraph focused on the actual contact, inspection, supported roof/damage facts, estimates or contractors, final confirmed appointment, availability and customer requests. Do not copy lead notes as confirmed facts. Include notes_evidence quoting each supporting transcript passage. Keep review warnings out of the notes paragraph; they belong in warnings. Never invent timestamps.',
 ].join(' ');
 export function transcriptKey(text:string):string{
@@ -88,9 +88,13 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
  const input=(raw&&typeof raw==='object'?raw:{}) as Record<string,unknown>;
  const anchor=recordingDay(context.recordedAt,context.timezone);
  const observations:Observation[]=[];
- const candidates=[...(Array.isArray(input.observations)?input.observations:[])];
+ let candidates=[...(Array.isArray(input.observations)?input.observations:[])];
  const language=input.language_detection as Record<string,unknown>|undefined;
- if(language&&typeof language==='object'&&!candidates.some(item=>item?.field==='language'))candidates.push({...language,field:'language',certainty:language.value==='Unknown'?'uncertain':'confirmed'});
+ if(language&&typeof language==='object'){
+  const preference=candidates.find(item=>item?.field==='language'&&item.basis==='explicit'&&/\benglish\b|\bspanish\b|ingl[eé]s|espa[ñn]ol|biling[uü]/i.test(String(item.excerpt)));
+  candidates=candidates.filter(item=>item?.field!=='language');
+  candidates.push(preference||{...language,field:'language',certainty:language.value==='Unknown'?'uncertain':'confirmed'});
+ }
  for(const item of candidates){
   if(!item||!Object.prototype.hasOwnProperty.call(VERIFIED_FIELDS,item.field)||!supported(item.excerpt,context.transcript)||typeof item.value!=='string'||!item.value.trim())continue;
   const obs={...item,value:item.value.trim().slice(0,1500),timestamp:null} as Observation;
@@ -103,6 +107,8 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   if(obs.field==='language'&&(!['English','Spanish','Bilingual'].includes(obs.value)||
    (!context.originalSpeech&&obs.basis!=='explicit')))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.basis==='customer_speech'&&obs.excerpt.trim().split(/\s+/).length<4)obs.certainty='uncertain';
+  if(obs.field==='language'&&obs.basis==='explicit'&&!/\benglish\b|\bspanish\b|ingl[eé]s|espa[ñn]ol|biling[uü]/i.test(obs.excerpt))obs.certainty='uncertain';
+  if(obs.field==='language'&&/this is (?:a |the )?(?:roofing|construction) company|we(?:'re| are| will be).*conducting.*inspections/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='language'&&obs.value==='Bilingual'&&!/\bbilingual\b|\b(?:both|either)\b.*\b(?:english|spanish)\b|\b(?:ambos|cualquiera)\b.*\b(?:idiomas|inglés|ingles|español)\b/i.test(obs.excerpt))obs.certainty='uncertain';
   if(obs.field==='appointment_date'&&obs.basis==='relative_date'){
    const resolved=anchor?relativeDate(obs.excerpt,anchor):'';
@@ -126,7 +132,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
  const notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
- return {version:3,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ return {version:4,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){

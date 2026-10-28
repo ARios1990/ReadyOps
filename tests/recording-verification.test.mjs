@@ -57,6 +57,8 @@ const language=(value,excerpt,basis='customer_speech',originalSpeech=true)=>norm
 const requiredLanguage=normalizeVerification({observations:[],language_detection:{value:'English',excerpt:'My roof is about 22 years old',confidence:'high',speaker:'customer',basis:'customer_speech'}},context);
 assert.equal(requiredLanguage.observations[0].value,'English','Required language assessment becomes a field finding even when the general observation list omits it');
 assert.equal(requiredLanguage.observations[0].certainty,'confirmed');
+const agentLanguage=normalizeVerification({observations:[observation('language','English','Yes, this is a roofing company, sir.')]},{...context,transcript:'Yes, this is a roofing company, sir.'});
+assert.equal(agentLanguage.observations[0].certainty,'uncertain','Company introduction is not evidence of the customer language or a named preference');
 assert.equal(language('English','My roof is about 22 years old','customer_speech',false).observations[0].certainty,'uncertain','Translated or unverified text cannot establish customer speech language');
 assert.equal(language('Spanish','I need a Spanish-speaking inspector.','explicit',false).observations[0].certainty,'confirmed');
 assert.equal(language('Bilingual','My roof is about 22 years old').observations[0].certainty,'uncertain');
