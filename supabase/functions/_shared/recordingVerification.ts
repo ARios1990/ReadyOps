@@ -12,7 +12,7 @@ export type Observation={field:VerifiedField;value:string;certainty:'confirmed'|
  confidence:'high'|'medium'|'low';excerpt:string;speaker:'customer'|'both'|'agent'|'unknown';
  basis:'explicit'|'customer_speech'|'relative_date'|'unknown';timestamp:number|null};
 export type VerificationWarning={title:string;detail:string;excerpt:string};
-export type RecordingVerification={version:1|2|3|4|5|6|7|8;lead_id:string;recording_url:string;transcript_key:string;
+export type RecordingVerification={version:1|2|3|4|5|6|7|8|9;lead_id:string;recording_url:string;transcript_key:string;
  observations:Observation[];warnings:VerificationWarning[];notes:string;contract_kind:string;original_speech:boolean};
 export type FieldFinding={status:'confirmed'|'review'|'lead_only'|'mismatch';excerpt?:string;timestamp?:number|null;
  original?:string;value?:string;updated?:boolean;detail?:string};
@@ -72,6 +72,17 @@ export function transcriptKey(text:string):string{
 }
 const normalize=(text:unknown)=>String(text??'').normalize('NFKC').toLowerCase().replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\s+/g,' ').trim();
 const supported=(quote:unknown,transcript:string)=>typeof quote==='string'&&quote.trim().length>=4&&normalize(transcript).includes(normalize(quote));
+function quotedRoofAge(value:string,excerpt:string):boolean{
+ let text=normalize(excerpt).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ if(!/\byears?\b|\banos?\b|\bold\b|\bage\b|\bedad\b/.test(text))return false;
+ const units:Record<string,number>={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,cero:0,uno:1,un:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29};
+ const tens:Record<string,number>={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,veinte:20,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90};
+ text=text.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ]+(?:and )?(one|two|three|four|five|six|seven|eight|nine))?\b/g,(_,t,u)=>String(tens[t]+(units[u]||0)))
+  .replace(/\b(veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)(?: y (uno|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve))?\b/g,(_,t,u)=>String(tens[t]+(units[u]||0)))
+  .replace(/\b[a-z]+\b/g,word=>Object.prototype.hasOwnProperty.call(units,word)?String(units[word]):word);
+ const expected=value.match(/\d+/g)||[],quoted=new Set(text.match(/\d+/g)||[]);
+ return expected.length>0&&expected.every(number=>quoted.has(number));
+}
 function clearCustomerLanguage(transcript:string,originalSpeech:boolean):Record<string,unknown>|undefined{
  if(!originalSpeech)return;
  // These are substantive customer questions/property statements, not names,
@@ -164,17 +175,21 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
   if(obs.field==='appointment_time'&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(obs.value))obs.certainty='uncertain';
   if(['insurance','contract','claim_filed','public_adjuster_agreement','conditional_roofing_obligation'].includes(obs.field)&&!['Yes','No'].includes(obs.value))obs.certainty='uncertain';
   if(obs.field==='roof_age'&&!/^(?:~?\d+(?:\+|-\d+)?|(?:approximately|about|around|approx\.?)\s*\d+)(?:\s*years?)?$/i.test(obs.value))obs.certainty='uncertain';
+  if(obs.field==='roof_age'&&!quotedRoofAge(obs.value,obs.excerpt))obs.certainty='uncertain';
   // Multiple contradictory candidates without a single final answer are held.
   const prior=observations.find(x=>x.field===obs.field);
   if(prior){if(normalize(prior.value)!==normalize(obs.value)){prior.certainty='conflicting';obs.certainty='conflicting';}else continue;}
   observations.push(obs);
  }
+ const established=(field:VerifiedField)=>observations.some(o=>o.field===field&&o.confidence==='high'&&['confirmed','approximate'].includes(o.certainty));
  const warnings:VerificationWarning[]=(Array.isArray(input.warnings)?input.warnings:[])
   .filter(w=>w&&typeof w.title==='string'&&typeof w.detail==='string'&&supported(w.excerpt,context.transcript))
+  .filter(w=>!(/roof age|edad del techo/i.test(w.title+' '+w.detail)&&!established('roof_age')))
   .map(w=>({title:w.title.slice(0,100),detail:w.detail.slice(0,1500),excerpt:w.excerpt.slice(0,2000)}));
+ const unconfirmedAge=observations.find(o=>o.field==='roof_age'&&!['confirmed','approximate'].includes(o.certainty));
+ if(unconfirmedAge)warnings.push({title:'Roof Age Needs Review',detail:'The quoted recording does not establish this roof age. Keep the saved lead value unconfirmed and review the affected structure and damage.',excerpt:unconfirmedAge.excerpt});
  const noteQuotes=Array.isArray(input.notes_evidence)?input.notes_evidence:[];
  let notes=typeof input.notes==='string'&&noteQuotes.length&&noteQuotes.every(q=>supported(q,context.transcript))?input.notes.replace(/\s+/g,' ').trim().slice(0,8000):'';
- const established=(field:VerifiedField)=>observations.some(o=>o.field===field&&o.confidence==='high'&&['confirmed','approximate'].includes(o.certainty));
  const repetitive=/\b(?:single[- ]story|two[- ]story|one[- ]story|\d+[- ]stor(?:y|ies)|square feet|sq\.?\s*ft|property value|roof type|shingle roof|metal roof|tile roof)\b|\bno (?:current |active |signed )?(?:roofing )?contract\b/i.test(notes);
  const unsupportedAge=/\broof\b[^.!?]{0,80}\b(?:years? old|older than|age)\b/i.test(notes)&&!established('roof_age');
  const unsupportedDamage=/\b(?:missing shingles|eave damage|no (?:known )?damage|reported[^.!?]{0,60}damage)\b/i.test(notes)&&!established('visible_damage')&&!established('damage_type');
@@ -192,7 +207,7 @@ export function normalizeVerification(raw:unknown,context:{leadId:string;recordi
  // Routine negative contract answers belong in form fields, not repeated notes.
  notes=notes.replace(/\s+and\s+(?:(?:they|he|she|the customer)\s+)?(?:has|have)\s+no\s+(?:current\s+)?(?:signed\s+)?roofing\s+contract\b/gi,'');
  notes=notes.replace(/,?\s+with no (?:active|current|signed) contract with (?:any|another) roofing company\b/gi,'');
- return {version:8,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
+ return {version:9,lead_id:context.leadId,recording_url:context.recordingUrl,transcript_key:transcriptKey(context.transcript),
   observations,warnings,notes,contract_kind:String(input.contract_kind||'unknown'),original_speech:context.originalSpeech};
 }
 function addressKey(value:string){

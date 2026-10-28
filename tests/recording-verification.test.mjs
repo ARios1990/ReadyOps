@@ -82,6 +82,16 @@ const shedNote='Spoke with Mr. Smith, the homeowner, regarding a free estimate f
 const shedVerification=normalizeVerification({notes:shedNote,notes_evidence:['I am Mr. Smith, the homeowner.','The shed has major roof damage; the house is fine.','The shed is insured.','Please straighten the tarp during the visit.','One in the afternoon works at 123 Example Drive.'],observations:[observation('visible_damage','Yes','The shed has major roof damage; the house is fine.')]},{...context,transcript:shedTranscript});
 assert.equal(shedVerification.notes,shedNote,'Inspector prose preserves the affected outbuilding, relevant insurance, requested tarp help and confirmed visit details');
 assert(!shedVerification.notes.includes('years old'),'No unrelated main-house roof age is added to an outbuilding estimate');
+const unsupportedShedAge=normalizeVerification({observations:[observation('roof_age','6','The shed has major roof damage; the house is fine.')],warnings:[{title:'Roof age below minimum requirement',detail:'The roof age is confirmed at 6 years.',excerpt:'The shed has major roof damage; the house is fine.'}],notes:'The roof is six years old.',notes_evidence:['The shed has major roof damage; the house is fine.']},{...context,transcript:shedTranscript});
+assert.equal(unsupportedShedAge.observations[0].certainty,'uncertain','A real quote about damage cannot substantiate an unrelated numeric roof age');
+assert.equal(applyVerifiedFields({roof_age:'12'},unsupportedShedAge).values.roof_age,'12','Unsupported age never corrects the lead');
+assert(!unsupportedShedAge.warnings.some(w=>w.detail.includes('confirmed at 6')),'Unsupported age cannot drive a false minimum-age warning');
+assert(unsupportedShedAge.warnings.some(w=>w.title==='Roof Age Needs Review'));
+assert(!unsupportedShedAge.notes.includes('six years'),'Unconfirmed age is excluded from the inspector handoff');
+for(const [value,quote] of [['6','The roof is six years old.'],['22','My roof is twenty-two years old.'],['22','El techo tiene veintidós años.'],['32','El techo tiene treinta y dos años.'],['7-8','The roof is seven or eight years old.']]){
+ assert.equal(normalizeVerification({observations:[observation('roof_age',value,quote)]},{...context,transcript:quote}).observations[0].certainty,'confirmed','Spoken English/Spanish ages and ranges remain supported');
+}
+assert.equal(normalizeVerification({observations:[observation('roof_age','6','My roof is twenty-two years old.')]},{...context,transcript:'My roof is twenty-two years old.'}).observations[0].certainty,'uncertain','The age value must match the number in the quote');
 const cleanNotes=normalizeVerification({...raw,notes:'The customer requested an inspection tomorrow at 11. The property is insured and has no current roofing contract.',notes_evidence:['Tomorrow at 11 works.','Yes, I have insurance with Universal.']},context);
 assert(!cleanNotes.notes.includes('tomorrow'),'Inspector notes do not reinterpret an unanchored older call date');
 assert(!cleanNotes.notes.includes('roofing contract'),'Routine negative contract answer stays in form fields');
