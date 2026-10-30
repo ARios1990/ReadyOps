@@ -253,6 +253,9 @@ export function QCRecordingUpload({
   const [summary, setSummary] = useState('');
   const [transcribing, setTranscribing] = useState(false);
   const [savingTranscript, setSavingTranscript] = useState(false);
+  const saveRequest = useRef(0);
+  const saveInFlight = useRef(false);
+  const [manualCopy, setManualCopy] = useState('');
   const [transcriptStatus, setTranscriptStatus] = useState('');
   const [aiQualifying, setAiQualifying] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -294,6 +297,7 @@ export function QCRecordingUpload({
     previousRecording.current = { leadId, value };
     if (previous.leadId === leadId && previous.value === value) return;
     manualTranscript.current=false;
+    saveRequest.current++; saveInFlight.current=false; setSavingTranscript(false); setManualCopy('');
     setTranscript(''); setSummary(''); setAssessment(null); setAiResult(null); setAiError('');
     setTranscriptStatus(previous.leadId === leadId ? 'Recording replaced. Transcribe the current audio to generate a new transcript.' : '');
   }, [leadId, value]);
@@ -362,21 +366,46 @@ export function QCRecordingUpload({
   }
 
   async function saveTranscript(nextTranscript = transcript, nextSummary = summary, method = 'manual') {
+    if (saveInFlight.current) return;
+    if (!nextTranscript.trim()) { setTranscriptStatus('Add transcript text before saving.'); return; }
+    const source = { leadId, value };
+    const request = ++saveRequest.current;
+    const isCurrent = () => request === saveRequest.current && currentRecording.current.leadId === source.leadId && currentRecording.current.value === source.value;
+    saveInFlight.current = true;
     setSavingTranscript(true);
     setTranscriptStatus('Saving transcript...');
-    const { data: userData } = await supabase.auth.getUser();
-    const { error: saveError } = await supabase.from('qc_lead_transcripts').upsert({
-      lead_id: leadId,
-      transcript: nextTranscript.trim(),
-      summary: nextSummary.trim(),
-      language: assessment?.recording_verification?.observations.find(o=>o.field==='language'&&o.certainty==='confirmed')?.value||null,
-      method,
-      updated_by: userData.user?.id || null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'lead_id' });
-    if (saveError) setTranscriptStatus(`Could not save transcript: ${saveError.message}`);
-    else { setTranscriptStatus('Transcript and recording notes saved to QC.'); onRecordingNotesChange?.(nextSummary.trim()); }
-    setSavingTranscript(false);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (!isCurrent()) return;
+      if (userError || !userData.user) throw new Error('Your ReadyOps session expired. Sign in again, then retry Save Transcript.');
+      const { error: saveError } = await supabase.from('qc_lead_transcripts').upsert({
+        lead_id: source.leadId,
+        transcript: nextTranscript.trim(),
+        summary: nextSummary.trim(),
+        language: assessment?.recording_verification?.observations.find(o=>o.field==='language'&&o.certainty==='confirmed')?.value||null,
+        method,
+        updated_by: userData.user.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'lead_id' });
+      if (!isCurrent()) return;
+      if (saveError) throw new Error(saveError.message);
+      setTranscriptStatus('Transcript and recording notes saved to QC.');
+      onRecordingNotesChange?.(nextSummary.trim());
+    } catch (saveError) {
+      if (isCurrent()) setTranscriptStatus(`Could not save transcript: ${saveError instanceof Error ? saveError.message : 'Connection failed. Please retry.'}`);
+    } finally {
+      if (isCurrent()) { saveInFlight.current = false; setSavingTranscript(false); }
+    }
+  }
+
+  async function copyTranscript() {
+    try {
+      await navigator.clipboard.writeText(transcript);
+      setManualCopy(''); setTranscriptStatus('Transcript copied to clipboard.');
+    } catch {
+      setManualCopy(transcript);
+      setTranscriptStatus('Clipboard access is unavailable. Copy the selected text below with Ctrl+C (or Command+C).');
+    }
   }
 
   async function ensureLocalSpeechPack(ctor: BrowserSpeechRecognitionConstructor, lang: string): Promise<void> {
@@ -656,14 +685,15 @@ export function QCRecordingUpload({
           </div>
         )}
         <p className="mt-2 text-[11px] text-slate-500">Free AI Transcribe runs local Whisper in supported browsers with no per-minute API charge. AI Transcribe &amp; Qualify transcribes the currently selected recording, then evaluates the call against company requirements. Without audio, it uses the pasted or saved transcript.</p>
-        <textarea value={transcript} onChange={event => {manualTranscript.current=true;analyzed.current.clear();analysisGeneration.current++;setTranscript(event.target.value);setAssessment(null);onVerificationStale?.();}} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
+        <textarea value={transcript} onChange={event => {manualTranscript.current=true;analyzed.current.clear();analysisGeneration.current++;setTranscript(event.target.value);setSummary(recordingNotes(event.target.value));setAssessment(null);setManualCopy('');setTranscriptStatus('Transcript edited. Click Save Transcript to keep your changes.');onVerificationStale?.();}} placeholder="Transcript will appear here, or paste/type it manually." className="mt-3 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-800"/>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={rebuildSummary} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"><RefreshCw size={12}/> Use recording passages</button>
-          <button type="button" disabled={savingTranscript} onClick={() => void saveTranscript()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{savingTranscript ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Save Transcript</button>
-          <button type="button" disabled={!transcript} onClick={() => void navigator.clipboard.writeText(transcript)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Transcript</button>
+          <button type="button" disabled={savingTranscript||!transcript.trim()} onClick={() => void saveTranscript()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{savingTranscript ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Save Transcript</button>
+          <button type="button" disabled={!transcript.trim()} onClick={() => void copyTranscript()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"><ClipboardCopy size={12}/> Copy Transcript</button>
         </div>
 
-        <p className="mt-2 text-[10px] font-semibold text-slate-400">{transcriptStatus}</p>
+        <p role="status" className="mt-2 text-[10px] font-semibold text-slate-500">{transcriptStatus}</p>
+        {manualCopy&&<textarea key={manualCopy} aria-label="Transcript text to copy manually" readOnly autoFocus value={manualCopy} onFocus={event=>event.currentTarget.select()} className="mt-2 min-h-36 w-full rounded-lg border border-slate-200 p-3 text-xs"/>}
       </div>
 
       <label className="mt-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-white p-3 text-xs font-semibold text-slate-700">
