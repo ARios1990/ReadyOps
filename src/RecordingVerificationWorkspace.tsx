@@ -13,6 +13,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
  const [draft,setDraft]=useState<AppointmentSummaryDraft>(initialDraft);
  const changeRef=useRef(onDraftChange);changeRef.current=onDraftChange;
  const [copyStatus,setCopyStatus]=useState('');
+ const [manualCopy,setManualCopy]=useState('');
  const source=JSON.stringify(review.verification);
  const warnings=review.warnings.map(w=>`${w.title}: ${w.detail}`).join('\n');
  useEffect(()=>{
@@ -37,7 +38,7 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
   ...[['home_value','Home Value'],['sq_ft','SQ FT'],['web_url','Web Link']].map(([key,label])=>`${label}: ${display(key)}`),
   `Notes: ${draft.notes}`,draft.qc_note?`QC Note: ${draft.qc_note}`:'',
  ].filter(Boolean).join('\n');
- const copy=async(text:string)=>{try{await navigator.clipboard.writeText(text);setCopyStatus('Copied to clipboard.');}catch{setCopyStatus('Clipboard access is unavailable. Select the text to copy it.');}};
+ const copy=async(text:string)=>{try{await navigator.clipboard.writeText(text);setManualCopy('');setCopyStatus('Copied to clipboard.');}catch{setManualCopy(text);setCopyStatus('Clipboard access is unavailable. Copy the selected text below with Ctrl+C (or Command+C).');}};
  return <RecordingVerificationContext.Provider value={review}><section className="mt-4 space-y-4" aria-label="Recording verification workspace">
   <div className="rounded-xl border border-blue-200 bg-white p-3">
    <h4 className="text-sm font-black text-slate-950">Recording Verification / QC Review</h4>
@@ -52,11 +53,13 @@ export function RecordingVerificationWorkspace({leadId,review,values,savedDraft,
    <p className="mt-2 text-xs"><strong>App Date &amp; Time:</strong> {appointmentLabel(values)||'—'}<br/><strong>Name:</strong> {String(values.full_name||'—')}<br/><strong>Actual Contact:</strong> {String(values.contact_name||values.full_name||'—')}<br/><strong>Language:</strong> {String(values.language||'—')}</p>
    <label className="mt-3 block text-xs font-bold">Notes<textarea aria-label="Professional appointment Notes" value={draft.notes} onChange={e=>edit({notes:e.target.value})} className="mt-1 min-h-32 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal leading-5"/></label>
    <label className="mt-3 block text-xs font-bold">QC Note<textarea aria-label="Appointment QC Note" value={draft.qc_note} onChange={e=>edit({qc_note:e.target.value})} className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal leading-5"/></label>
-   <div className="mt-2 flex flex-wrap gap-2">{[['Copy Full Summary',fullSummary],['Copy Notes Only',draft.notes],['Copy QC Note',draft.qc_note]].map(([label,text])=><button key={label} type="button" onClick={()=>copy(text)} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold"><ClipboardCopy size={12}/>{label}</button>)}
-    <button type="button" disabled={busy} onClick={onRegenerate} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold"><RefreshCw size={12}/>Regenerate Summary</button>
-    <button type="button" onClick={()=>edit({notes:draft.generated_notes,qc_note:draft.generated_qc_note})} className="rounded-lg border px-2 py-1.5 text-xs font-bold">Reset to Generated</button>
+   <div className="mt-2 flex flex-wrap gap-2">{[['Copy Full Summary',fullSummary],['Copy Notes Only',draft.notes],['Copy QC Note',draft.qc_note]].map(([label,text])=><button key={label} type="button" disabled={!text.trim()} onClick={()=>copy(text)} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold disabled:opacity-50"><ClipboardCopy size={12}/>{label}</button>)}
+    <button type="button" disabled={busy} onClick={onRegenerate} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-bold"><RefreshCw size={12}/>{busy?'Regenerating…':'Regenerate Summary'}</button>
+    <button type="button" disabled={busy} onClick={()=>{edit({notes:draft.generated_notes,qc_note:draft.generated_qc_note});setManualCopy('');setCopyStatus('Restored the latest generated Notes and QC Note.');}} className="rounded-lg border px-2 py-1.5 text-xs font-bold disabled:opacity-50">Reset to Generated</button>
    </div>
+   <p className="mt-2 text-[11px] text-slate-500">Regenerate checks the current transcript again and keeps your edits. Reset to Generated replaces both boxes with the latest generated text.</p>
    {copyStatus&&<p role="status" className="mt-2 text-xs text-slate-600">{copyStatus}</p>}
+   {manualCopy&&<textarea key={manualCopy} aria-label="Summary text to copy manually" readOnly autoFocus value={manualCopy} onFocus={event=>event.currentTarget.select()} className="mt-2 min-h-32 w-full rounded-lg border p-2 text-xs"/>}
   </div>
  </section></RecordingVerificationContext.Provider>;
 }
