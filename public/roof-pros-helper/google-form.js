@@ -42,8 +42,14 @@
     for(const [el,value]of dom.textFields(data.fields))dom.set(el,value);
     dom.set(document.querySelector('[aria-label="Hour"]'),data.fields.hour);
     dom.set(document.querySelector('[aria-label="Minute"]'),data.fields.minute);
-    const list=dom.question('Appointment Time').querySelector('[role="listbox"]');list.click();
-    const option=await wait(()=>[...list.querySelectorAll('[role="option"]')].find(e=>dom.label(e)===data.fields.ampm));option.click();
+    const timeQuestion=dom.question('Appointment Time');
+    const list=timeQuestion.querySelector('[role="listbox"]');
+    if(!list)throw Error('Google appointment time selector changed.');
+    list.click();
+    // Google renders the open AM/PM menu in a page-level overlay, not reliably inside the listbox.
+    const option=await wait(()=>dom.option(data.fields.ampm));
+    option.click();
+    await wait(()=>dom.selectedOption(timeQuestion)===data.fields.ampm);
     const contract=dom.question('Roofing Contract');
     if(data.fields.contract)contract.querySelector(`[role="radio"][data-value="${data.fields.contract}"]`).click();
     else {const clear=dom.button(contract,'Clear selection');if(clear)clear.click();}
