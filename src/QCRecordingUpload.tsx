@@ -378,12 +378,26 @@ export function QCRecordingUpload({
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (!isCurrent()) return;
       if (userError || !userData.user) throw new Error('Your ReadyOps session expired. Sign in again, then retry Save Transcript.');
+      let savedMethod = method;
+      let savedLanguage = assessment?.recording_verification?.observations.find(o=>o.field==='language'&&o.certainty==='confirmed')?.value || null;
+      if (method === 'manual') {
+        const { data, error: readError } = await supabase.from('qc_lead_transcripts').select('transcript,method,language,assessment').eq('lead_id', source.leadId).maybeSingle();
+        if (!isCurrent()) return;
+        if (readError) throw new Error(readError.message);
+        const stored = data as TranscriptRow | null;
+        const proof = stored?.assessment?.recording_verification;
+        // Saving unedited recording text must not turn its speech evidence into a manual paste.
+        if (stored?.transcript?.trim() === nextTranscript.trim() && stored.method && proof?.lead_id === source.leadId && proof.recording_url === source.value && proof.transcript_key === transcriptKey(nextTranscript)) {
+          savedMethod = stored.method;
+          savedLanguage = stored.language;
+        }
+      }
       const { error: saveError } = await supabase.from('qc_lead_transcripts').upsert({
         lead_id: source.leadId,
         transcript: nextTranscript.trim(),
         summary: nextSummary.trim(),
-        language: assessment?.recording_verification?.observations.find(o=>o.field==='language'&&o.certainty==='confirmed')?.value||null,
-        method,
+        language: savedLanguage,
+        method: savedMethod,
         updated_by: userData.user.id,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'lead_id' });
