@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ReadyOps Roof Pros Manual Review",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Prepare one approved Roof Pros lead and its recording. You review and click Submit yourself.",
   "permissions": ["alarms"],
   "host_permissions": ["https://vzaraqexdsimmasxsano.supabase.co/*"],

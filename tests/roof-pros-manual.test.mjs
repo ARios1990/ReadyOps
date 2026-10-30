@@ -23,11 +23,11 @@ await db.exec(`create schema private;create schema auth;create role anon;create 
  create table public.portal_leads(id uuid primary key,company_id uuid,qc_status text,agent_id uuid,agent_name text,lead_code text,full_name text,phone_number text,email text,address text,city text,state text,zip_code text,form_data jsonb default '{}',notes text,recording_url text,updated_at timestamptz default now());
  create table public.agents(id uuid,name text);
  create table public.portal_appointments(id uuid primary key default gen_random_uuid(),lead_id uuid,company_visible_at timestamptz,appointment_date date,start_time time,inspector_notes text,created_at timestamptz default now(),updated_at timestamptz default now());`);
-for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql'])await db.exec(read('supabase/migrations/'+migration));
+for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql','20261030202552_roof_pros_manual_recovery.sql'])await db.exec(read('supabase/migrations/'+migration));
 const scalar=async sql=>(await db.query(sql)).rows[0].value;
 const rejects=sql=>assert.rejects(()=>db.query(sql));
 await db.exec(`select set_config('test.uid','${id(99)}',false);select set_config('test.role','admin',false);`);
-for(let n=1;n<=7;n++){
+for(let n=1;n<=8;n++){
  await db.query(`insert into portal_leads(id,company_id,qc_status,full_name,address,city,state,zip_code,form_data,recording_url)values($1,$2,$3,'Test Homeowner','100 Example St','Example City','Florida','32500','{"roof_age":"15+","roof_type":"Shingle"}',$4)`,[id(n),n===3?id(98):roof,n===2?'pending':'approved',n===4?'':`storage://qc-recordings/${id(n)}/current.mp3`]);
  await db.query(`insert into portal_appointments(lead_id,appointment_date,start_time,company_visible_at)values($1,'2026-11-01','13:00',$2)`,[id(n),n===5?null:'2026-10-28T00:00:00Z']);
 }
@@ -55,9 +55,12 @@ await assert.rejects(()=>exchange('context'),'Stale source is rejected');
 await db.exec(`update portal_leads set updated_at=(select source_updated_at::timestamptz from private.roof_pros_manual_sessions where id='${ticket.id}') where id='${id(1)}'`);
 await exchange('ready',{filename:`${id(1)}.mp3`,sha256:'a'.repeat(64),bytes:100});
 assert.equal(await scalar(`select status value from roof_pros_form_deliveries where lead_id='${id(1)}'`),'manual_review');
+await exchange('ready',{filename:`${id(1)}.mp3`,sha256:'a'.repeat(64),bytes:100});
+assert.equal(await scalar(`select status value from roof_pros_form_deliveries where lead_id='${id(1)}'`),'manual_review','A restored tab can reattach before Submit');
 assert.equal(await scalar('select private.claim_roof_pros_form() value'),null);
 await assert.rejects(()=>exchange('receipt',{receipt:'Your response has been recorded.'}),'Receipt alone cannot claim a user clicked Submit');
 await exchange('user_submit');
+await rejects(`select roof_pros_manual_recover('${id(1)}')`);
 await assert.rejects(()=>exchange('receipt',{receipt:'Maybe sent'}));
 await exchange('receipt',{receipt:'Your response has been recorded.'});
 await exchange('receipt',{receipt:'Your response has been recorded.'});
@@ -74,6 +77,11 @@ const expired=await scalar(`select roof_pros_manual_prepare('${id(7)}') value`);
 await db.exec(`update private.roof_pros_manual_sessions set expires_at=now()-interval '1 minute' where id='${expired.id}'`);
 await assert.rejects(()=>db.query('select roof_pros_manual_exchange($1,$2,$3)',[expired.id,expired.token,'context']));
 assert.equal(await scalar('select private.claim_roof_pros_form() value'),null,'Expired manual sessions and uncertain outcomes never requeue');
+const lost=await scalar(`select roof_pros_manual_prepare('${id(8)}') value`);
+const recovered=await scalar(`select roof_pros_manual_recover('${id(8)}') value`);
+await assert.rejects(()=>db.query('select roof_pros_manual_exchange($1,$2,$3)',[lost.id,lost.token,'context']),'Recovery invalidates the lost browser ticket');
+assert.equal((await db.query('select roof_pros_manual_exchange($1,$2,$3) value',[recovered.id,recovered.token,'context'])).rows[0].value.payload.lead_id,id(8));
+assert.equal(await scalar(`select status value from roof_pros_form_deliveries where lead_id='${id(8)}'`),'manual_preparing');
 await db.close();
 
 const mod={exports:{}};
@@ -128,9 +136,12 @@ dom.window.close();
 const receiptDOM=new JSDOM('<div>Your response has been recorded.</div>',{url:'https://docs.google.com/forms/u/0/d/e/test/formResponse',runScripts:'outside-only'});
 receiptDOM.window.eval(read('public/roof-pros-helper/form-dom.js'));assert.equal(receiptDOM.window.RoofProsFormDOM.hasReceipt(),true);receiptDOM.window.close();
 const manifest=JSON.parse(read('public/roof-pros-helper/manifest.json'));
-assert.equal(manifest.version,'1.0.1');
+assert.equal(manifest.version,'1.0.2');
 assert.ok(manifest.content_scripts[1].matches.some(s=>s.includes('/forms/u/')),'Google receipt redirects are covered');
 assert.ok(!manifest.permissions.some(p=>['cookies','debugger','tabs','scripting','unlimitedStorage'].includes(p)));
+const background=read('public/roof-pros-helper/background.js');
+assert.match(background,/\['prepared','uploading','ready'\]\.includes\(existing\.phase\)/,'Closed pre-Submit tabs are recoverable');
+assert.match(background,/chrome\.tabs\.create\(\{url:FORM,active:true\}\)/,'Recovery opens a replacement form tab');
 // Exercise the actual page-side bridge, including Chrome's null-source replies.
 function bridgeFixture(){
  const listeners=new Set();let timer=null,posted=null;
@@ -143,12 +154,12 @@ function bridgeFixture(){
  const code=ts.transpileModule(read('src/roofProsHelper.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  new Function('exports','window','crypto','clearTimeout',code)(bridgeModule.exports,browserWindow,{randomUUID},browserWindow.clearTimeout);
  return {request:bridgeModule.exports.roofProsHelper,window:browserWindow,listeners,
-  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.1'},...overrides};for(const fn of [...listeners])fn(event);},
+  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.2'},...overrides};for(const fn of [...listeners])fn(event);},
   posted:()=>posted,expire:()=>timer?.()};
 }
 for(const withSource of [false,true]){
  const fixture=bridgeFixture(),promise=fixture.request('ping');fixture.respond(withSource?{source:fixture.window}:{});
- assert.equal((await promise).version,'1.0.1');assert.equal(fixture.listeners.size,0);
+ assert.equal((await promise).version,'1.0.2');assert.equal(fixture.listeners.size,0);
 }
 for(const bad of ['origin','source','requestId','channel','payload']){
  const fixture=bridgeFixture(),promise=fixture.request('ping'),message=fixture.posted();

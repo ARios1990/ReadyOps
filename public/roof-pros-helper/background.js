@@ -23,9 +23,19 @@ async function handle(m,sender) {
   const u=new URL(sender.url || 'https://invalid.local');
   if(['ping','prepare','resume'].includes(m.type)) {
     if(u.origin!==ORIGIN || sender.frameId!==0)throw Error('ReadyOps access required.');
-    if(m.type==='ping')return {success:true,version:'1.0.1'};
-    const existing=(await jobs()).find(j=>j.delivery_id===(m.deliveryId || m.ticket?.delivery_id)&&j.phase!=='failed');
-    if(existing) {await chrome.tabs.update(existing.tabId,{active:true});return {success:true};}
+    if(m.type==='ping')return {success:true,version:'1.0.2'};
+    let existing=(await jobs()).find(j=>j.delivery_id===(m.deliveryId || m.ticket?.delivery_id)&&j.phase!=='failed');
+    // A recovered server ticket supersedes any browser-local capability for the same delivery.
+    if(existing&&m.type==='prepare'&&existing.id!==m.ticket?.id){await remove(existing.id);existing=null;}
+    if(existing) {
+      try {if(existing.tabId){await chrome.tabs.update(existing.tabId,{active:true});return {success:true};}} catch {/* The original tab was closed. */}
+      if(m.type==='resume'&&['prepared','uploading','ready'].includes(existing.phase)&&existing.fields&&existing.bytes?.length){
+        // No Submit was observed. Rebuild the form and reattach the stored recording in a fresh tab.
+        existing.phase='prepared';existing.tabId=null;
+        const tab=await chrome.tabs.create({url:FORM,active:true});existing.tabId=tab.id;await save(existing);
+        return {success:true,recovered:true};
+      }
+    }
     if(m.type==='resume')throw Error('The original prepared tab is unavailable in this Chrome profile. Review its outcome before preparing another form.');
     const ticket=m.ticket;
     if(!ticket || !['id','token','delivery_id','lead_id'].every(k=>UUID.test(ticket[k]||'')) || EXCLUDED.has(ticket.lead_id))throw Error('Invalid or protected lead.');
