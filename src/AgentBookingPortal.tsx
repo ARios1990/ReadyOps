@@ -1002,6 +1002,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
             <DynamicLeadForm
               schema={selectedTemplate?.form_schema || []}
               values={formValues}
+              recordingUploadSlug={slug}
               appointmentSummary={reservation ? appointmentLabel({ appointment_date: reservation.appointment_date, appointment_time: reservation.start_time }) : 'Choose an available appointment time above'}
               automaticSummary={automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation?.appointment_date, appointment_time: reservation?.start_time })}
               submitDisabled={!reservation}

@@ -207,11 +207,13 @@ export function QCQueue() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const loadGeneration = useRef(0);
   const startDate = localDate(week);
   const endDate = localDate(new Date(week.getTime() + 6 * DAY_MS));
 
   const load = useCallback(
     async (quiet = false) => {
+      const generation = ++loadGeneration.current;
       if (!quiet) setLoading(true);
       setError("");
       const allHistorySearch = Boolean(search) && searchScope === "all_history";
@@ -247,6 +249,7 @@ export function QCQueue() {
             })
           : Promise.resolve({ data: null, error: null }),
       ]);
+      if (generation !== loadGeneration.current) return;
       if (calendarResult.error || refsResult.error || globalResult.error)
         setError(
           rpcError(
@@ -1066,11 +1069,14 @@ export function QCQueue() {
         <Download size={14} /> Export
       </button>
       <button
+        type="button"
         className="readyops-ref-secondary"
+        disabled={loading}
         onClick={() => void load()}
         aria-label="Refresh"
+        title={loading ? "Refreshing QC Queue" : "Refresh QC Queue"}
       >
-        <RefreshCw size={14} />
+        <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
       </button>
     </>
   );

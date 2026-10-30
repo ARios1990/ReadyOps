@@ -3839,6 +3839,7 @@ function CompanyAppointmentsDashboard({
               : "Not configured"}
           </strong>
           <button
+            type="button"
             disabled
             className="mt-8 w-full rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
           >
@@ -3856,6 +3857,7 @@ function CompanyAppointmentsDashboard({
             </p>
           </div>
           <button
+            type="button"
             disabled
             title="Configure a Google Sheets connection in ReadyOps Admin"
             className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"
@@ -3867,6 +3869,7 @@ function CompanyAppointmentsDashboard({
             Sync Google Sheets
           </button>
           <button
+            type="button"
             disabled
             title="Configure an Excel connection in ReadyOps Admin"
             className="rounded-lg border px-3 py-2 text-xs font-bold opacity-60"

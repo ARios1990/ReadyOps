@@ -6,9 +6,9 @@ import TestRenderer, { act } from 'react-test-renderer';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
 const storage = new Map();
-global.window = { location: { search: '?service_needed=(Profile.Services Needed)&contract=(Profile.Contract)' }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, setInterval, clearInterval };
+global.window = { location: { pathname: '/readymode', search: '?service_needed=(Profile.Services Needed)&contract=(Profile.Contract)' }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, setInterval, clearInterval };
 window.addEventListener=()=>{};window.removeEventListener=()=>{};global.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
-const calls = [], transcriptCalls = [];
+const calls = [], transcriptCalls = [], uploadCalls = [];
 let failTranscript = true, booked = 0;
 const day = '2030-10-14';
 const portal = { company: { company: { id: 'company', name: 'Test Roofing', slug: 'test-roofing', state: 'TX' }, settings: { timezone: 'America/Chicago', allowPublicBooking: true, formMode: 'internal', requirementsShort: '', requirementsDetail: '' }, locations: [] }, week: [{ day: 'Monday', date: day, openings: 1, booked: 0, closed: false, slots: [{ start: '18:00', end: '19:00', status: 'available', capacity: 1, bookedCount: 0 }] }] };
@@ -23,7 +23,15 @@ const supabase = {
     if (name === 'submit_public_appointment') return { data: { lead_id: 'new-lead', lead_code: 'TEST-NEW', manage_token: 'management', appointment_date: day, start_time: '18:00', form_data: args.p_form_data, qc_status: 'pending' } };
     throw new Error(`Unexpected RPC ${name}`);
   },
-  functions: { async invoke(name, args) { transcriptCalls.push({ name, args }); return failTranscript ? { error: new Error('Temporary failure') } : { data: { saved: true } }; } },
+  storage: { from: bucket => ({ async uploadToSignedUrl(path, token, file, options) { uploadCalls.push({ bucket, path, token, file, options }); return { error: null }; } }) },
+  functions: { async invoke(name, args) {
+    if (name === 'agent-recording-upload-token') {
+      uploadCalls.push({ name, args });
+      return { data: { path: 'company/agent/reservation/current.mp3', token: 'signed-upload-token', recording_url: 'storage://qc-recordings/company/agent/reservation/current.mp3' } };
+    }
+    transcriptCalls.push({ name, args });
+    return failTranscript ? { error: new Error('Temporary failure') } : { data: { saved: true } };
+  } },
 };
 const cache = new Map();
 function load(name) {
@@ -60,6 +68,12 @@ assert.equal(select('Signed with another contractor?').props.value, 'No');
 assert.ok(select('Signed with another contractor?').findAllByType('option').every(node => node.props.value));
 const slot = renderer.root.findAllByType('button').find(node => node.findAllByType('span').some(span => span.children.join('') === 'Available'));
 await settle(() => slot.props.onClick());
+const recordingInput = renderer.root.findAllByType('input').find(node => node.props.type === 'file' && String(node.props.accept).includes('.mp3'));
+assert(recordingInput, 'The booking form must expose the private recording upload');
+await settle(() => recordingInput.props.onChange({ target: { files: [{ name: 'current.mp3', type: 'audio/mpeg' }] }, currentTarget: { value: 'current.mp3' } }));
+assert.equal(uploadCalls[0].args.body.slug, 'test-roofing', 'ReadyMode must pass the resolved company slug to the upload token function');
+assert.equal(uploadCalls[0].args.body.session_id.length > 0, true);
+assert.equal(uploadCalls[1].bucket, 'qc-recordings');
 await settle(() => renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }));
 assert.equal(calls.filter(call => call.name === 'submit_public_appointment').length, 0, 'Service Requested cannot be submitted blank');
 await settle(() => select('Service Requested').props.onChange({ target: { value: 'Roof Repair' } }));
@@ -69,6 +83,7 @@ const submissions = () => calls.filter(call => call.name === 'submit_public_appo
 assert.equal(submissions().length, 1);
 assert.equal(submissions()[0].args.p_form_data.service_needed, 'Roof Repair');
 assert.equal(submissions()[0].args.p_form_data.contract, 'Yes');
+assert.equal(submissions()[0].args.p_form_data.recording_url, 'storage://qc-recordings/company/agent/reservation/current.mp3');
 assert.equal(submissions()[0].args.p_form_data.address, '12 Oak St, Converse, TX 78109');
 assert.equal(submissions()[0].args.p_agent_name, 'Test Agent');
 assert.equal(booked, 1);
@@ -89,4 +104,4 @@ await settle(() => { renderer = TestRenderer.create(React.createElement(AgentBoo
 assert.equal(select('Service Requested').props.value, 'Roof Estimate');
 assert.equal(select('Signed with another contractor?').props.value, 'Yes');
 act(() => renderer.unmount());
-console.log('PASS required single service dropdown, saved profile preselection, contractor default/override, new booking payload, private transcript and safe retry');
+console.log('PASS required service, ReadyMode private recording upload, saved profile preselection, contractor override, booking payload, transcript and safe retry');

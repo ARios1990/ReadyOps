@@ -23,6 +23,6 @@ export function LeadContactEditor({ appointmentId, token, companyId, representat
   return <form className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); void save(); }}>
     <label className="text-xs font-bold">Phone Number<input type="tel" required value={draftPhone} onChange={event => setPhone(event.target.value)} className="mt-1 w-full rounded-md border px-2 py-1.5 font-normal" /></label>
     <label className="text-xs font-bold">Email<input type="email" value={draftEmail} onChange={event => setEmail(event.target.value)} className="mt-1 w-full rounded-md border px-2 py-1.5 font-normal" /></label>
-    <div className="flex items-center gap-2 sm:col-span-2"><button disabled={busy} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white">{busy ? 'Saving…' : 'Save Contact'}</button><span role="status" className="text-xs">{message}</span></div>
+    <div className="flex items-center gap-2 sm:col-span-2"><button type="submit" disabled={busy} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white">{busy ? 'Saving…' : 'Save Contact'}</button><span role="status" className="text-xs">{message}</span></div>
   </form>;
 }

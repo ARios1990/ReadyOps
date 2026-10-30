@@ -159,6 +159,7 @@ export function CompanyOnboarding({
           </label>
         </div>
         <button
+          type="submit"
           disabled={busy}
           className="mt-6 w-full rounded-xl bg-blue-600 py-3 font-bold text-white disabled:opacity-50"
         >
