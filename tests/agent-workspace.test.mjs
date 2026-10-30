@@ -15,6 +15,13 @@ function loadLocal(name) {
   return localCache[name] = result.exports;
 }
 const { AgentStatusLabel, agentStatusStyle } = loadLocal('AgentStatusLabel.tsx');
+for (const qcStatus of ['denied', 'QC_DENIED', 'QC Denied']) {
+  for (const storedInspectorStatus of ['pending', 'good', 'no_show']) {
+    assert.deepEqual(agentStatusStyle(storedInspectorStatus, 'inspector', qcStatus), {label:'QC Denied',color:'#DC2626'});
+  }
+}
+assert.equal(agentStatusStyle('good', 'inspector', 'approved').label,'Good','Approval restores the inspector outcome display');
+assert.equal(agentStatusStyle('pending', 'inspector', 'needs_correction').label,'Pending','A correction request is not a denial');
 for (const [status, kind, label, color] of [
   ['approved','qc','QC Approved','#15803D'], ['QC_DENIED','qc','QC Denied','#DC2626'],
   ['No Show','inspector','No Show','#1F2937'], ['pending','inspector','Pending','#0284C7'],
@@ -43,6 +50,9 @@ const text=node=>node.children.map(c=>typeof c==='string'?c:text(c)).join('');
 const click=label=>act(()=>renderer.root.findAllByType('button').find(n=>text(n)===label).props.onClick());
 click('View unsuccessful leads');
 assert.equal(renderer.root.findAllByProps({className:'aw-lead'}).length,4);
+const deniedCard=renderer.root.findAllByProps({className:'aw-lead'}).find(n=>n.findByType('h3').children[0]==='denied');
+assert(text(deniedCard).includes('Inspector: QC Denied'),'Denied agent cards must not show a pending or old inspector outcome');
+assert.equal(rows.find(row=>row.lead_id==='denied').client_status,'no_show','Presentation preserves the stored inspection history');
 act(()=>renderer.root.findByProps({'aria-label':'Lead status'}).props.onChange({target:{value:'no_show'}}));
 assert.equal(renderer.root.findAllByProps({className:'aw-lead'}).length,1);
 act(()=>renderer.root.findByProps({'aria-label':'Lead status'}).props.onChange({target:{value:'needs_correction'}}));

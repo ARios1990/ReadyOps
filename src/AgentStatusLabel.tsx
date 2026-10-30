@@ -13,8 +13,9 @@ const styles: Record<string, { label: string; color: string }> = {
   signed_contract: { label: 'Signed Contract', color: '#15803D' },
 };
 
-export function agentStatusStyle(status: string, kind: 'qc' | 'inspector') {
-  const key = normalizeLeadStatus(status);
+export function agentStatusStyle(status: string, kind: 'qc' | 'inspector', qcStatus?: string) {
+  const denied = ['denied', 'qc_denied'].includes(normalizeLeadStatus(qcStatus));
+  const key = kind === 'inspector' && denied ? 'qc_denied' : normalizeLeadStatus(status);
   const displayKey = kind === 'inspector' ? normalizeLeadDisposition(key) || key : key;
   if (styles[displayKey]) return styles[displayKey];
   const label = displayKey === 'manager_approved' ? 'Awaiting Final QC'
@@ -23,9 +24,9 @@ export function agentStatusStyle(status: string, kind: 'qc' | 'inspector') {
 }
 
 // Agent-only presentation: never changes the stored status or outcome logic.
-export function AgentStatusLabel({ status, kind, className = '' }: {
-  status: string; kind: 'qc' | 'inspector'; className?: string;
+export function AgentStatusLabel({ status, kind, qcStatus, className = '' }: {
+  status: string; kind: 'qc' | 'inspector'; qcStatus?: string; className?: string;
 }) {
-  const { label, color } = agentStatusStyle(status, kind);
+  const { label, color } = agentStatusStyle(status, kind, qcStatus);
   return <span className={`agent-status-label ${className}`.trim()} style={{ color, fontWeight: 700 }}>{label}</span>;
 }
