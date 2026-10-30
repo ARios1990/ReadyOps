@@ -31,6 +31,8 @@ import {
   Save,
   Search,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   X,
 } from "lucide-react";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
@@ -678,6 +680,18 @@ export function AdminLeadCRM() {
           tone="blue"
           label="Sent to Client"
           value={data.summary?.sent_to_client || 0}
+        />
+        <Metric
+          icon={<ThumbsUp />}
+          tone="green"
+          label="Good"
+          value={data.summary?.good || 0}
+        />
+        <Metric
+          icon={<ThumbsDown />}
+          tone="red"
+          label="Bad"
+          value={data.summary?.bad || 0}
         />
         <Metric
           icon={<Home />}
