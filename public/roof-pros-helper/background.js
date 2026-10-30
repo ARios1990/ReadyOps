@@ -23,7 +23,7 @@ async function handle(m,sender) {
   const u=new URL(sender.url || 'https://invalid.local');
   if(['ping','prepare','resume'].includes(m.type)) {
     if(u.origin!==ORIGIN || sender.frameId!==0)throw Error('ReadyOps access required.');
-    if(m.type==='ping')return {success:true,version:'1.0.0'};
+    if(m.type==='ping')return {success:true,version:'1.0.1'};
     const existing=(await jobs()).find(j=>j.delivery_id===(m.deliveryId || m.ticket?.delivery_id)&&j.phase!=='failed');
     if(existing) {await chrome.tabs.update(existing.tabId,{active:true});return {success:true};}
     if(m.type==='resume')throw Error('The original prepared tab is unavailable in this Chrome profile. Review its outcome before preparing another form.');

@@ -3,9 +3,13 @@ import {ExternalLink,FileCheck2} from 'lucide-react';
 import {supabase} from './supabase';
 import {roofProsHelper, type ManualTicket} from './roofProsHelper';
 export const ROOF_PROS_COMPANY_ID='d12e8b8c-fd25-45c0-8d43-9b4aecdcda0c';
+const REQUIRED_HELPER_VERSION='1.0.1';
 const excluded=new Set(['44f9d82b-2247-4185-bae6-44ca6a2aa013','c1fc6f84-4c9f-469e-a036-8d08e7c4b53d','52123081-6cc7-48d0-bad8-8fc96ebf0141','9f158006-8bce-4928-aa13-8c686d00d91a']);
 const labels:Record<string,string>={queued:'Waiting for Google Form preparation',preparing:'Preparing Google Form',submitting:'Submitting Google Form',submitted:'Google Form submitted',needs_info:'Details or recording needed',uncertain:'Submission needs review',manual_preparing:'Preparing your manual review form',manual_review:'Ready for you to review and Submit in Google',manual_submitting:'Your Submit was clicked — waiting for Google confirmation'};
 type Delivery={id:string;status:string;submitted_at?:string;error_message?:string};
+function requireCurrentHelper(connection:{version?:string}) {
+ if(connection.version!==REQUIRED_HELPER_VERSION)throw Error(`Update the Roof Pros Chrome helper to version ${REQUIRED_HELPER_VERSION}, then reload the extension and ReadyOps.`);
+}
 export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:string;companyId:string;sent:boolean;approved:boolean}){
  const [job,setJob]=useState<Delivery|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[needsHelper,setNeedsHelper]=useState(false);
  const applicable=companyId===ROOF_PROS_COMPANY_ID;
@@ -22,7 +26,7 @@ export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:stri
  async function prepare(){
   setBusy(true);setError('');setMessage('');
   try {
-   try{await roofProsHelper('ping');setNeedsHelper(false);}catch{setNeedsHelper(true);throw Error('Install the Roof Pros Chrome helper once, then reload ReadyOps.');}
+   try{const connection=await roofProsHelper('ping');requireCurrentHelper(connection);setNeedsHelper(false);}catch(failure){setNeedsHelper(true);throw failure instanceof Error?failure:Error('Install the Roof Pros Chrome helper once, then reload ReadyOps.');}
    const {data,error:failure}=await supabase.rpc('roof_pros_manual_prepare',{p_lead_id:leadId});
    if(failure)throw failure;
    await roofProsHelper('prepare',data as ManualTicket);
@@ -31,7 +35,7 @@ export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:stri
   finally{setBusy(false);await refresh();}
  }
  async function resume(){setBusy(true);setError('');try{await roofProsHelper('resume',job?.id);}catch(failure){setError(failure instanceof Error?failure.message:'Unable to reopen the original draft.');}finally{setBusy(false);}}
- async function checkHelper(){setBusy(true);setError('');try{const connection=await roofProsHelper('ping');setNeedsHelper(false);setMessage(`Roof Pros helper connected${connection.version?' (version '+connection.version+')':''}. Preparation is available after approval and Send.`);}catch(failure){setNeedsHelper(true);setError(failure instanceof Error?failure.message:'Install the helper, then reload ReadyOps.');}finally{setBusy(false);}}
+ async function checkHelper(){setBusy(true);setError('');try{const connection=await roofProsHelper('ping');requireCurrentHelper(connection);setNeedsHelper(false);setMessage(`Roof Pros helper connected (version ${connection.version}). Preparation is available after approval and Send.`);}catch(failure){setNeedsHelper(true);setError(failure instanceof Error?failure.message:'Install the helper, then reload ReadyOps.');}finally{setBusy(false);}}
  if(!applicable)return null;
  const held=job?.status.startsWith('manual_');
  const showPrepare=!excluded.has(leadId)&&(!job||['queued','needs_info'].includes(job.status))&&!job?.error_message?.startsWith('MANUAL_REVIEW_HOLD:');
@@ -49,6 +53,6 @@ export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:stri
    <button type="button" disabled={busy||loading} onClick={()=>void refresh()} className="rounded border bg-white px-3 py-1 text-xs font-bold">Refresh form status</button>
   </div>
   {!approved||!sent?<p className="mt-2 text-xs text-slate-600">Available after QC approval and Send Lead.</p>:null}
-  <details className="mt-3 text-xs text-slate-700" open={needsHelper||undefined}><summary className="cursor-pointer font-bold">One-time Chrome helper setup</summary><ol className="mt-2 list-decimal space-y-2 pl-5"><li><a className="font-bold text-blue-700 underline" href="/roof-pros-helper.zip" download>Download the Roof Pros helper</a> and extract the ZIP to a folder you will keep.</li><li>Open Chrome’s Extensions page, turn on Developer mode, choose Load unpacked, and select the extracted folder containing manifest.json.</li><li>Reload ReadyOps in that same Chrome profile. Sign in to Google as mastersreadyservices2025@gmail.com.</li></ol><button type="button" disabled={busy} onClick={()=>void checkHelper()} className="mt-2 rounded border bg-white px-3 py-1 font-bold">Check helper connection</button><p className="mt-2">The helper only prepares the Roof Pros form when you press the button. Codex does not need to be open. Chrome must remain online through your review and Google’s receipt.</p></details>
+  <details className="mt-3 text-xs text-slate-700" open={needsHelper||undefined}><summary className="cursor-pointer font-bold">Chrome helper setup or update</summary><ol className="mt-2 list-decimal space-y-2 pl-5"><li><a className="font-bold text-blue-700 underline" href="/roof-pros-helper.zip" download>Download Roof Pros helper version {REQUIRED_HELPER_VERSION}</a> and extract the ZIP to a folder you will keep.</li><li>Open Chrome’s Extensions page. Remove the older ReadyOps Roof Pros helper if present, turn on Developer mode, choose Load unpacked, and select the newly extracted folder containing manifest.json.</li><li>Reload ReadyOps in that same Chrome profile. Sign in to Google as mastersreadyservices2025@gmail.com.</li></ol><button type="button" disabled={busy} onClick={()=>void checkHelper()} className="mt-2 rounded border bg-white px-3 py-1 font-bold">Check helper connection</button><p className="mt-2">The helper only prepares the Roof Pros form when you press the button. Codex does not need to be open. Chrome must remain online through your review and Google’s receipt.</p></details>
  </section>;
 }

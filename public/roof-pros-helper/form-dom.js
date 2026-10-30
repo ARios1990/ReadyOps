@@ -17,13 +17,15 @@
   };
   const fieldNames = {telemarketer:'Telemarketer Name',name:'Customer Name',address:'Customer Address',phone:'Customer Phone',email:'Customer Email',roof_type:'Roof Type',date:'Appointment Date',roof_age:'Age of Roof',insurance:'Property Insurance',notes:'NOTES:'};
   const visible = e => !e.closest('[aria-hidden="true"]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden';
+  const option = value => [...document.querySelectorAll('[role="option"]')].find(e => visible(e) && label(e) === value);
+  const selectedOption = root => label(root.querySelector('[role="option"][aria-selected="true"]'));
   const button = (root, name) => [...root.querySelectorAll('[role="button"],button')].find(e => visible(e) && (e.getAttribute('aria-label') === name || label(e) === name));
   const textFields = fields => Object.entries(fieldNames).map(([key,name]) => [input(name), String(fields[key] || '')]);
   const verify = (fields, filename) => {
     if (fields.telemarketer !== 'Horacio') throw Error('Telemarketer must be Horacio.');
     for (const [el,value] of textFields(fields)) if (el.value !== value) throw Error('A Google Form value changed. Refresh the ReadyOps details before submitting.');
     if (document.querySelector('[aria-label="Hour"]')?.value !== fields.hour || document.querySelector('[aria-label="Minute"]')?.value !== fields.minute) throw Error('Verify appointment time.');
-    if (label(question('Appointment Time').querySelector('[role="option"][aria-selected="true"]')) !== fields.ampm) throw Error('Verify AM / PM.');
+    if (selectedOption(question('Appointment Time')) !== fields.ampm) throw Error('Verify AM / PM.');
     const selected = question('Roofing Contract').querySelector('[role="radio"][aria-checked="true"]');
     if ((selected?.getAttribute('data-value') || '') !== fields.contract) throw Error('Verify roofing contract selection.');
     const recording = question('Customer Recording');
@@ -33,5 +35,5 @@
     return true;
   };
   const hasReceipt = () => /\/formResponse$/.test(location.pathname) && !document.querySelector('[role="listitem"] input:not([type="hidden"])') && [...document.querySelectorAll('div,p')].some(e=>!e.closest('#readyops-manual-review,[role="listitem"]')&&e.textContent.trim()==='Your response has been recorded.'&&visible(e));
-  globalThis.RoofProsFormDOM = {label, question, input, set, button, textFields, verify, hasReceipt};
+  globalThis.RoofProsFormDOM = {label, question, input, set, button, textFields, visible, option, selectedOption, verify, hasReceipt};
 })();

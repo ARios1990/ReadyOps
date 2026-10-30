@@ -81,6 +81,21 @@ new Function('exports',ts.transpileModule(read('supabase/functions/_shared/roofP
 const payload={lead_id:id(1),company_id:roof,qc_status:'approved',sent_at:'2026-10-28',name:'Test Homeowner',address:'100 Example St',city:'Example City',state:'Florida',zip:'32500',date:'2026-11-01',time:'13:05:00',roof_type:'Shingle',roof_age:'15+',notes:'Inspect the shed.',contract:'No'};
 const fields=mod.exports.manualFields(payload);
 assert.equal(fields.telemarketer,'Horacio');assert.equal(fields.hour,'1');assert.equal(fields.ampm,'PM');assert.equal(fields.minute,'05');assert.match(fields.notes,/stated minimum 15/);
+for(const [time,expected] of [
+ ['00:00:00',{hour:'12',minute:'00',ampm:'AM'}],
+ ['10:15:00',{hour:'10',minute:'15',ampm:'AM'}],
+ ['12:00:00',{hour:'12',minute:'00',ampm:'PM'}],
+ ['14:00:00',{hour:'2',minute:'00',ampm:'PM'}],
+ ['23:59:00',{hour:'11',minute:'59',ampm:'PM'}],
+ ['10:15 AM',{hour:'10',minute:'15',ampm:'AM'}],
+ ['02:00 PM',{hour:'2',minute:'00',ampm:'PM'}],
+ ['2:00 p.m.',{hour:'2',minute:'00',ampm:'PM'}],
+]) {
+ assert.deepEqual(mod.exports.appointmentTimeFields(time),expected,`${time} preserves its meridiem`);
+ const mapped=mod.exports.manualFields({...payload,time});
+ assert.deepEqual({hour:mapped.hour,minute:mapped.minute,ampm:mapped.ampm},expected);
+}
+for(const time of ['24:00','13:00 PM','0:30 AM','2 PM','02:60','02:00 afternoon'])assert.throws(()=>mod.exports.appointmentTimeFields(time));
 assert.equal(mod.exports.manualFields({...payload,roof_age:'~6'}).roof_age,'6');
 assert.match(mod.exports.manualFields({...payload,roof_age:'~6'}).notes,/approximately 6 years/);
 for(const age of ['old','unknown','10-4','1500','6 or 20'])assert.throws(()=>mod.exports.manualFields({...payload,roof_age:age}));
@@ -94,6 +109,10 @@ w.eval(read('public/roof-pros-helper/form-dom.js'));
 const logic=w.RoofProsFormDOM;
 for(const [el,value]of logic.textFields(fields))logic.set(el,value);
 logic.set(w.document.querySelector('[aria-label="Hour"]'),fields.hour);logic.set(w.document.querySelector('[aria-label="Minute"]'),fields.minute);
+const selectedMeridiem=w.document.querySelector('[role="listbox"] [role="option"]');selectedMeridiem.textContent='AM';
+const overlayOption=w.document.createElement('div');overlayOption.setAttribute('role','option');overlayOption.textContent='PM';w.document.body.append(overlayOption);
+assert.equal(logic.option('PM'),overlayOption,'AM / PM choices rendered in Google page overlays are found');
+selectedMeridiem.textContent='PM';overlayOption.remove();
 assert.equal(logic.verify(fields,`${id(1)}.mp3`),true);
 logic.set(logic.input('Telemarketer Name'),'Actual Agent');assert.throws(()=>logic.verify(fields,`${id(1)}.mp3`));logic.set(logic.input('Telemarketer Name'),'Horacio');
 assert.throws(()=>logic.verify(fields,`${id(2)}.mp3`));
@@ -109,6 +128,7 @@ dom.window.close();
 const receiptDOM=new JSDOM('<div>Your response has been recorded.</div>',{url:'https://docs.google.com/forms/u/0/d/e/test/formResponse',runScripts:'outside-only'});
 receiptDOM.window.eval(read('public/roof-pros-helper/form-dom.js'));assert.equal(receiptDOM.window.RoofProsFormDOM.hasReceipt(),true);receiptDOM.window.close();
 const manifest=JSON.parse(read('public/roof-pros-helper/manifest.json'));
+assert.equal(manifest.version,'1.0.1');
 assert.ok(manifest.content_scripts[1].matches.some(s=>s.includes('/forms/u/')),'Google receipt redirects are covered');
 assert.ok(!manifest.permissions.some(p=>['cookies','debugger','tabs','scripting','unlimitedStorage'].includes(p)));
 // Exercise the actual page-side bridge, including Chrome's null-source replies.
@@ -123,12 +143,12 @@ function bridgeFixture(){
  const code=ts.transpileModule(read('src/roofProsHelper.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  new Function('exports','window','crypto','clearTimeout',code)(bridgeModule.exports,browserWindow,{randomUUID},browserWindow.clearTimeout);
  return {request:bridgeModule.exports.roofProsHelper,window:browserWindow,listeners,
-  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.0'},...overrides};for(const fn of [...listeners])fn(event);},
+  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.1'},...overrides};for(const fn of [...listeners])fn(event);},
   posted:()=>posted,expire:()=>timer?.()};
 }
 for(const withSource of [false,true]){
  const fixture=bridgeFixture(),promise=fixture.request('ping');fixture.respond(withSource?{source:fixture.window}:{});
- assert.equal((await promise).version,'1.0.0');assert.equal(fixture.listeners.size,0);
+ assert.equal((await promise).version,'1.0.1');assert.equal(fixture.listeners.size,0);
 }
 for(const bad of ['origin','source','requestId','channel','payload']){
  const fixture=bridgeFixture(),promise=fixture.request('ping'),message=fixture.posted();
