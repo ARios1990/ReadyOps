@@ -1628,7 +1628,7 @@ function CompanyGroup({
                     <td>
                       <StatusPill
                         status={
-                          row.appointment.canonical_status ||
+                          ["denied", "qc_denied"].includes(status) ? "qc_denied" : row.appointment.canonical_status ||
                           row.appointment.status
                         }
                       />

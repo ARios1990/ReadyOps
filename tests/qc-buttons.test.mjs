@@ -9,10 +9,10 @@ import ts from 'typescript';
 
 // Click the real components with a simulated clipboard and database. No live leads are written.
 const require=createRequire(import.meta.url),root=fileURLToPath(new URL('../',import.meta.url)),cache=new Map();
-let savedRow,writeError,authError,authWait,writeWait,writes=[],invocations=[],clipboard=[],notes=[];
+let savedRow,readError,writeError,authError,authWait,writeWait,writes=[],invocations=[],clipboard=[],notes=[];
 const supabase={auth:{getUser:async()=>{if(authWait)await authWait;return {data:{user:authError?null:{id:'reviewer'}},error:authError};},getSession:async()=>({data:{session:{access_token:'fixture'}}})},
  storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:'https://audio.invalid/current.mp3'}})})},
- from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:savedRow}),upsert:async(row,options)=>{writes.push({row,options});if(writeWait)await writeWait;if(writeError instanceof Error)throw writeError;return {error:writeError};}}),
+ from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:savedRow,error:readError}),upsert:async(row,options)=>{writes.push({row,options});if(writeWait)await writeWait;if(writeError instanceof Error)throw writeError;return {error:writeError};}}),
  functions:{invoke:async(name,options)=>{invocations.push({name,...options});return {data:{transcript:savedRow.transcript,assessment:savedRow.assessment,qualification_status:'needs_review',reasons:[]}};}}};
 function load(file){
  const full=['','.ts','.tsx'].map(ext=>path.resolve(root,file+ext)).find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
@@ -65,6 +65,12 @@ try {
  await click('Reset to Generated');assert.equal(draft.notes,'Latest generated handoff.');assert.equal(draft.qc_note,review.warnings.map(w=>`${w.title}: ${w.detail}`).join('\n'));assert.equal(values.notes,'Original lead notes');
  await click('Use recording passages');assert(rendered().includes('Recording passages selected. Click Save Transcript.'));
  await click('Save Transcript');assert.equal(writes.at(-1).row.transcript,transcript);assert.equal(writes.at(-1).row.summary,recordingNotes(transcript));assert.equal(writes.at(-1).row.lead_id,'fixture');assert.equal(writes.at(-1).row.updated_by,'reviewer');assert.deepEqual(writes.at(-1).options,{onConflict:'lead_id'});assert.equal(notes.at(-1),recordingNotes(transcript));assert(rendered().includes('saved to QC.'));
+ savedRow.method='ai-openai';savedRow.language='English';
+ await click('Save Transcript');assert.equal(writes.at(-1).row.method,'ai-openai','An unchanged, source-verified transcript keeps recording provenance');assert.equal(writes.at(-1).row.language,'English','An unchanged save preserves verified language');
+ savedRow.assessment={recording_verification:{...verification,recording_url:'storage://qc-recordings/fixture/different.mp3'}};
+ await click('Save Transcript');assert.equal(writes.at(-1).row.method,'manual','Different audio cannot inherit recording provenance');
+ savedRow.assessment={recording_verification:verification};
+ readError={message:'Could not verify the saved transcript'};const beforeReadFailure=writes.length;await click('Save Transcript');assert.equal(writes.length,beforeReadFailure);assert(rendered().includes(readError.message));assert(!button('Save Transcript').props.disabled);readError=null;
  for(const failure of [{message:'Storage rejected the save'},new Error('Network disconnected')]){
   writeError=failure;const callbacks=notes.length;await click('Save Transcript');assert(rendered().includes(failure.message));assert(!button('Save Transcript').props.disabled);assert.equal(notes.length,callbacks,'Failures never report notes as saved');
  }
@@ -82,7 +88,7 @@ try {
  await act(async()=>{releaseWrite();await Promise.resolve();});writeWait=null;assert.equal(notes.length,beforeLate);assert(!rendered().includes('saved to QC.'));
  // Current edits are saved rather than an old transcript/summary pair; blank saves are disabled.
  const edited='Customer: The roof is seven years old. The gate code is 1234.';
- act(()=>transcriptField().props.onChange({target:{value:edited}}));await click('Save Transcript');assert.equal(writes.at(-1).row.transcript,edited);assert.equal(writes.at(-1).row.summary,recordingNotes(edited));
+ act(()=>transcriptField().props.onChange({target:{value:edited}}));await click('Save Transcript');assert.equal(writes.at(-1).row.transcript,edited);assert.equal(writes.at(-1).row.summary,recordingNotes(edited));assert.equal(writes.at(-1).row.method,'manual','Edited text does not inherit speech provenance');assert.equal(writes.at(-1).row.language,null,'Edited text requires language verification again');
  act(()=>transcriptField().props.onChange({target:{value:'  '}}));assert(button('Save Transcript').props.disabled);assert(button('Copy Transcript').props.disabled);
  console.log('PASS all eight QC buttons: exact copies, clipboard fallback, regenerate/reset, selected passages, save payload, failures, auth and stale source protection');
 } finally {
