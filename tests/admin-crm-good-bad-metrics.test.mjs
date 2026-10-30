@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 
 const db=new PGlite();
-await db.exec(`
+const deployedFunction=`
 create role anon;
 create role authenticated;
 create schema private;
@@ -33,7 +33,8 @@ begin
   );
 end;
 $function$;
-`);
+`;
+await db.exec(deployedFunction.replace(/\n/g,'\r\n'));
 
 const migration=fs.readFileSync(new URL('../supabase/migrations/20261030191649_admin_crm_good_bad_metrics.sql',import.meta.url),'utf8');
 await db.exec(migration);

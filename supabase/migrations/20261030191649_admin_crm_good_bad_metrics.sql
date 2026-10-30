@@ -13,11 +13,10 @@ BEGIN
     RETURN;
   END IF;
 
-  v_updated := replace(
+  v_updated := regexp_replace(
     v_definition,
-    $find$          'signed_contracts', count(*) FILTER (WHERE sales_outcome = 'signed_contract' OR canonical_status = 'signed_contract'),
-          'revenue',$find$,
-    $replace$          'good', count(*) FILTER (
+    $find$'signed_contracts', count\(\*\) FILTER \(WHERE sales_outcome = 'signed_contract' OR canonical_status = 'signed_contract'\),[[:space:]]+'revenue',$find$,
+    $replace$'good', count(*) FILTER (
             WHERE client_status IN ('good', 'inspected', 'good_inspected')
                OR canonical_status = 'good_inspected'
                OR sales_outcome IN ('good', 'good_inspected')
