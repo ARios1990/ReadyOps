@@ -22,15 +22,16 @@ assert.equal(selectRecordingInput({...base,savedRecordingUrl:'',requestedRecordi
 assert.equal(selectRecordingInput({...base,savedRecordingUrl:''}).recordingUrl,fresh);
 for(const url of ['storage://qc-recordings/other/new.mp3','storage://qc-recordings/lead/../other.mp3','https://unrelated.invalid/audio.mp3']) assert.throws(()=>selectRecordingInput({...base,requestedRecordingUrl:url}));
 
-let invoked, localAudio, view;
+let invoked, localAudio, view, finishUpload, changedRecording;
+const uploadStates=[];
 const saved={transcript:'OLD SAVED',summary:'OLD SUMMARY',method:'manual',assessment:null};
 const supabase={auth:{getSession:async()=>({data:{session:{access_token:'test'}}}),getUser:async()=>({data:{user:{id:'reviewer'}}})},
- storage:{from:()=>({createSignedUrl:async path=>({data:{signedUrl:`https://audio.invalid/${path}`}})})},
+ storage:{from:()=>({upload:()=>new Promise(resolve=>{finishUpload=resolve;}),createSignedUrl:async path=>({data:{signedUrl:`https://audio.invalid/${path}`}})})},
  from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:saved}),upsert:async()=>({error:null})}),
  functions:{invoke:async(name,options)=>{invoked=options.body;return {data:{transcript:'NEW AUDIO TRANSCRIPT',summary:'NEW SUMMARY',qualification_status:'needs_review',reasons:[]}};}}};
 const mod={exports:{}};
 new Function('exports','require','module',compile(fs.readFileSync(new URL('../src/QCRecordingUpload.tsx',import.meta.url),'utf8')))(mod.exports,id=>id.includes('recordingVerification')?verification:id==='./RecordingVerificationWorkspace'?{RecordingVerificationWorkspace:()=>null}:id==='./supabase'?{supabase}:id==='./localWhisperClient'?{transcribeWithLocalWhisper:async url=>{localAudio=url;return 'NEW LOCAL AUDIO';}}:id==='./leadTypes'?{getLane:()=>({})}:id==='./inspectorNote'?{buildInspectorNote:()=>''}:id==='./recordingImport'?{recordingNotes:text=>text}:require(id),mod);
-const props={leadId:'lead',value:old,onChange(){}};
+const props={leadId:'lead',value:old,onChange(value){changedRecording=value;},onUploadStateChange:value=>uploadStates.push(value)};
 await act(async()=>{view=TestRenderer.create(React.createElement(mod.exports.QCRecordingUpload,props));});
 assert.equal(view.root.findAllByType('textarea')[0].props.value,'OLD SAVED');
 await act(async()=>{view.update(React.createElement(mod.exports.QCRecordingUpload,{...props,value:fresh}));});
@@ -44,7 +45,19 @@ assert.equal(view.root.findAllByType('textarea')[0].props.value,'NEW AUDIO TRANS
 await act(async()=>{await view.root.findAllByType('button').find(n=>label(n).trim()==='Free AI Transcribe').props.onClick();});
 assert.equal(localAudio,'https://audio.invalid/lead/new.mp3');
 assert.equal(view.root.findAllByType('textarea')[0].props.value,'NEW LOCAL AUDIO');
-view.unmount();
+const uploadInput=()=>view.root.findAllByType('input').find(node=>node.props.type==='file');
+await act(async()=>{uploadInput().props.onChange({target:{files:[new File(['audio'],'fresh.mp3',{type:'audio/mpeg'})]},currentTarget:{value:''}});});
+assert.equal(uploadStates.at(-1),true,'QC must know when a file is still uploading');
+assert.equal(changedRecording,undefined);
+await act(async()=>finishUpload({error:null}));
+assert.equal(uploadStates.at(-1),false);
+assert.ok(changedRecording.endsWith('-fresh.mp3'));
+const lastRecording=changedRecording;
+await act(async()=>{uploadInput().props.onChange({target:{files:[new File(['audio'],'late.mp3',{type:'audio/mpeg'})]},currentTarget:{value:''}});});
+await act(async()=>view.unmount());
+await act(async()=>finishUpload({error:null}));
+assert.equal(changedRecording,lastRecording,'An upload finishing after the review closes must not update another draft');
+
 console.log('PASS replacement audio selection, forced fresh transcript, same-lead storage validation, cleared old UI and both transcription actions');
 
 // Automatic verification fills the caller's draft and ignores a late result for replaced audio.

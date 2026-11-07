@@ -9,7 +9,7 @@ const storage = new Map();
 global.window = { location: { pathname: '/readymode', search: '?service_needed=(Profile.Services Needed)&contract=(Profile.Contract)' }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, setInterval, clearInterval };
 window.addEventListener=()=>{};window.removeEventListener=()=>{};global.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
 const calls = [], transcriptCalls = [], uploadCalls = [];
-let failTranscript = true, booked = 0;
+let failTranscript = true, booked = 0, uploadGate = null, uploadFailure = false;
 const day = '2030-10-14';
 const portal = { company: { company: { id: 'company', name: 'Test Roofing', slug: 'test-roofing', state: 'TX' }, settings: { timezone: 'America/Chicago', allowPublicBooking: true, formMode: 'internal', requirementsShort: '', requirementsDetail: '' }, locations: [] }, week: [{ day: 'Monday', date: day, openings: 1, booked: 0, closed: false, slots: [{ start: '18:00', end: '19:00', status: 'available', capacity: 1, bookedCount: 0 }] }] };
 const supabase = {
@@ -23,7 +23,7 @@ const supabase = {
     if (name === 'submit_public_appointment') return { data: { lead_id: 'new-lead', lead_code: 'TEST-NEW', manage_token: 'management', appointment_date: day, start_time: '18:00', form_data: args.p_form_data, qc_status: 'pending' } };
     throw new Error(`Unexpected RPC ${name}`);
   },
-  storage: { from: bucket => ({ async uploadToSignedUrl(path, token, file, options) { uploadCalls.push({ bucket, path, token, file, options }); return { error: null }; } }) },
+  storage: { from: bucket => ({ async uploadToSignedUrl(path, token, file, options) { uploadCalls.push({ bucket, path, token, file, options }); if (uploadGate) await uploadGate; return { error: uploadFailure ? new Error('Upload failed') : null }; } }) },
   functions: { async invoke(name, args) {
     if (name === 'agent-recording-upload-token') {
       uploadCalls.push({ name, args });
@@ -73,6 +73,7 @@ assert(recordingInput, 'The booking form must expose the private recording uploa
 await settle(() => recordingInput.props.onChange({ target: { files: [{ name: 'current.mp3', type: 'audio/mpeg' }] }, currentTarget: { value: 'current.mp3' } }));
 assert.equal(uploadCalls[0].args.body.slug, 'test-roofing', 'ReadyMode must pass the resolved company slug to the upload token function');
 assert.equal(uploadCalls[0].args.body.session_id.length > 0, true);
+assert.equal(uploadCalls[0].args.body.reservation_token, 'reservation', 'Uploads must use the selected reservation, not another active tab');
 assert.equal(uploadCalls[1].bucket, 'qc-recordings');
 await settle(() => renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }));
 assert.equal(calls.filter(call => call.name === 'submit_public_appointment').length, 0, 'Service Requested cannot be submitted blank');
@@ -104,4 +105,27 @@ await settle(() => { renderer = TestRenderer.create(React.createElement(AgentBoo
 assert.equal(select('Service Requested').props.value, 'Roof Estimate');
 assert.equal(select('Signed with another contractor?').props.value, 'Yes');
 act(() => renderer.unmount());
-console.log('PASS required service, ReadyMode private recording upload, saved profile preselection, contractor override, booking payload, transcript and safe retry');
+// Imported audio must reach the booking payload before a lead is created.
+calls.length = 0; uploadCalls.length = 0;
+const originalAudio = new File(['audio bytes'], 'imported.mp3', {type:'audio/mpeg'});
+const audioDraft = {...draft, recordingFile:originalAudio, values:{...draft.values, service_needed:'Roof Repair'}};
+await settle(() => { renderer = TestRenderer.create(React.createElement(AgentBookingPortal, {slug:'test-roofing', importedDraft:audioDraft, bookingAgentName:'Test Agent'})); });
+await settle(() => renderer.root.findAllByType('button').find(node => node.findAllByType('span').some(span => span.children.join('') === 'Available')).props.onClick());
+let releaseUpload;
+uploadGate = new Promise(resolve => { releaseUpload = resolve; });
+const formSubmit = renderer.root.findByType('form').props.onSubmit;
+await settle(() => { formSubmit({preventDefault(){}}); formSubmit({preventDefault(){}}); });
+assert.equal(uploadCalls.filter(call => call.file).length, 1, 'Double submit must not upload or book twice');
+assert.equal(uploadCalls.find(call => call.file).file, originalAudio, 'The original audio file must be uploaded');
+assert.equal(submissions().length, 0, 'The booking must wait for the audio');
+uploadFailure = true;
+await settle(() => releaseUpload());
+assert.equal(submissions().length, 0, 'A failed audio upload must not create an audio-less lead');
+assert.ok(JSON.stringify(renderer.toJSON()).includes('Upload failed'));
+uploadGate = null; uploadFailure = false;
+await settle(() => renderer.root.findByType('form').props.onSubmit({preventDefault(){}}));
+assert.equal(submissions().length, 1);
+assert.equal(submissions()[0].args.p_form_data.recording_url, 'storage://qc-recordings/company/agent/reservation/current.mp3');
+assert.equal(submissions()[0].args.p_form_data.recordingFile, undefined);
+act(() => renderer.unmount());
+console.log('PASS retained imported audio, upload failure/retry, double-submit guard, required service, ReadyMode private recording upload, saved profile preselection, contractor override, booking payload, transcript and safe retry');

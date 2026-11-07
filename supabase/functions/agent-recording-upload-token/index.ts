@@ -17,6 +17,7 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const sessionId = String(body?.session_id || "").trim();
+    const reservationToken = String(body?.reservation_token || "").trim();
     const slug = String(body?.slug || "").trim();
     const filename = safeName(String(body?.filename || "recording.mp3"));
 
@@ -36,7 +37,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (settingsError || !settings) return json({ error: "Company booking portal is unavailable" }, 404);
 
-    const { data: reservations, error: reservationError } = await admin
+    let reservationQuery = admin
       .from("appointment_reservations")
       .select("id,company_id,session_id,status,expires_at")
       .eq("session_id", sessionId)
@@ -46,6 +47,8 @@ Deno.serve(async (req: Request) => {
       .order("created_at", { ascending: false })
       .limit(1);
 
+    if (reservationToken) reservationQuery = reservationQuery.eq("reservation_token", reservationToken);
+    const { data: reservations, error: reservationError } = await reservationQuery;
     const reservation = reservations?.[0];
     if (reservationError || !reservation) return json({ error: "Select an appointment time before uploading the recording" }, 409);
 

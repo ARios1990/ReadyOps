@@ -18,9 +18,15 @@ The four permanently excluded, manually completed leads remain blocked at the UI
 
 ## Implementation and verification
 
-- `roof_pros_manual_prepare` requires a current authenticated Admin, current approval/Send, an own-folder private recording, a valid source payload and a claimable delivery. A row lock prevents overlap with the automatic claim.
+- `roof_pros_manual_prepare` requires a current authenticated Admin, current approval/Send, a private recording in the lead folder or its exact converted booking reservation, a valid source payload and a claimable delivery. A row lock prevents overlap with the automatic claim.
 - The private session stores a SHA-256 hash of the random ticket, source freshness, creator and expiry. The service-role-only `roof_pros_manual_exchange` verifies the capability, source, matching attachment proof, user-submit transition and exact receipt text.
 - `roof-pros-manual-review` signs the private recording for five minutes and returns normalized fields. It authenticates the scoped capability itself; it does not accept a staff session from the extension.
 - The helper uses Google's normal DOM and file input through its upload picker. There are no private Google endpoints or raw formResponse submissions.
 - Package sources live in `public/roof-pros-helper/`. Run `node scripts/package-roof-helper.mjs` after editing them; the build and test suite verify the deterministic ZIP matches those sources.
 - `tests/roof-pros-manual.test.mjs` covers permissions, current approval/Send, wrong-company/excluded/completed leads, worker isolation, stale source, audio proof and limits, receipt gates, exact field values, untrusted Submit events and packaged contents. It uses disposable local PGlite data and DOM fixtures; it never creates a production lead or submits a live test form.
+
+## Recording handoff deployment
+
+Apply `20261107050055_booking_recording_referral_ownership.sql`, deploy `roof-pros-form-recording` and `agent-recording-upload-token`, then deploy the frontend. The migration accepts a booking upload only when its reservation was converted into an appointment for the same lead and the storage object exists. The path resolver is service-role-only; approval, Send, manual exclusions and user Submit/receipt checks remain in place. Existing valid reservation uploads need no file copy or public bucket access.
+
+This change does not recover audio previously used only for local transcription; those files must be selected again. It does not automatically submit Google Forms or alter existing held/submitted deliveries. Google picker timeouts are a separate browser-helper problem and require checking the existing draft in the Chrome profile that runs the helper.

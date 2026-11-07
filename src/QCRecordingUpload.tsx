@@ -6,7 +6,7 @@ import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { getLane } from './leadTypes';
 import { recordingNotes } from './recordingImport';
 import {transcriptKey,type RecordingVerification,type VerifiedDraft} from '../supabase/functions/_shared/recordingVerification';
-import {RecordingVerificationWorkspace,type AppointmentSummaryDraft} from './RecordingVerificationWorkspace';
+import {RecordingVerificationWorkspace} from './RecordingVerificationWorkspace';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -219,9 +219,9 @@ export function QCRecordingUpload({
   onRecordingNotesChange,
   importedTranscript,
   onVerification,
-  onSummaryDraftChange,
   onVerificationStale,
   onRecordingContextChange,
+  onUploadStateChange,
 }: {
   leadId: string;
   value: string;
@@ -242,11 +242,14 @@ export function QCRecordingUpload({
   onRecordingNotesChange?: (value: string) => void;
   importedTranscript?: string;
   onVerification?: (verification:RecordingVerification)=>void;
-  onSummaryDraftChange?: (draft:AppointmentSummaryDraft)=>void;
+  onUploadStateChange?: (uploading: boolean)=>void;
   onVerificationStale?: ()=>void;
   onRecordingContextChange?: (context:Record<string,unknown>)=>void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const uploadInFlight = useRef(false);
+  const uploadMounted = useRef(false);
+  useEffect(() => { uploadMounted.current = true; return () => { uploadMounted.current = false; onUploadStateChange?.(false); }; }, [onUploadStateChange]);
   const [playbackUrl, setPlaybackUrl] = useState('');
   const [error, setError] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -348,21 +351,31 @@ export function QCRecordingUpload({
   }, [leadId, importedTranscript]);
 
   async function upload(file: File) {
+    if (uploadInFlight.current) return;
     setError('');
-    if (file.size > MAX_BYTES) {
-      setError('Recording is too large. Maximum file size is 100 MB.');
+    if (file.size === 0 || file.size > MAX_BYTES) {
+      setError(file.size === 0 ? 'The recording is empty.' : 'Recording is too large. Maximum file size is 100 MB.');
       return;
     }
+    const sourceLead = leadId;
+    uploadInFlight.current = true;
+    onUploadStateChange?.(true);
     setUploading(true);
-    const path = `${leadId}/${Date.now()}-${safeName(file.name || 'recording')}`;
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: '3600',
-      contentType: file.type || 'application/octet-stream',
-      upsert: false,
-    });
-    if (uploadError) setError(uploadError.message);
-    else onChange(`${STORAGE_PREFIX}${path}`);
-    setUploading(false);
+    try {
+      const path = `${leadId}/${Date.now()}-${safeName(file.name || 'recording')}`;
+      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
+        cacheControl: '3600', contentType: file.type || 'application/octet-stream', upsert: false,
+      });
+      if (!uploadMounted.current || currentRecording.current.leadId !== sourceLead) return;
+      if (uploadError) setError(uploadError.message);
+      else onChange(`${STORAGE_PREFIX}${path}`);
+    } catch (failure) {
+      if (uploadMounted.current && currentRecording.current.leadId === sourceLead) setError(failure instanceof Error ? failure.message : 'Unable to upload recording. Please retry.');
+    } finally {
+      uploadInFlight.current = false;
+      setUploading(false);
+      onUploadStateChange?.(false);
+    }
   }
 
   async function saveTranscript(nextTranscript = transcript, nextSummary = summary, method = 'manual') {
@@ -640,9 +653,8 @@ export function QCRecordingUpload({
           </div>
         </div>
         {reviewDraft?.verification.lead_id===leadId&&reviewDraft.verification.recording_url===value&&reviewDraft.verification.transcript_key===transcriptKey(transcript)&&onVerification&&<RecordingVerificationWorkspace
-          leadId={leadId} review={reviewDraft} values={{...leadForm,appointment_date:leadForm?.appointment_date||appointmentDate,appointment_time:leadForm?.appointment_time||appointmentTime}}
-          savedDraft={leadForm?._qc_summary_draft as AppointmentSummaryDraft|undefined}
-          onDraftChange={onSummaryDraftChange} onRegenerate={()=>void transcribeAndQualify(true,false)} busy={aiQualifying}/>}
+          review={reviewDraft} values={{...leadForm,appointment_date:leadForm?.appointment_date||appointmentDate,appointment_time:leadForm?.appointment_time||appointmentTime}}
+          />}
         {aiError && <p className="mt-2 text-xs font-semibold text-red-700">{aiError}</p>}
         {aiResult && (
           <div className="mt-2">

@@ -1,5 +1,7 @@
 export type CallLogRow = Record<string, string>;
 export type ImportDraft = {
+  // Browser-only source audio. Never include this in the JSON lead payload.
+  recordingFile?: File;
   values: Record<string, unknown>;
   warnings: string[];
   sources: Record<string, string>;

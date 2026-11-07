@@ -41,12 +41,9 @@ quotes retain the original language; generated Notes are in English. Provider or
 incomplete-output errors stay visible. Unanchored today/tomorrow references and
 routine negative roofing-contract clauses are excluded from inspector Notes.
 
-The Inspector Note is a separate direct handoff, rather than a duplicate of the
-general Short Summary. It starts with “Spoke with” and the supported actual
-contact/role and specific estimate scope, combines relevant condition/insurance
-and special requests, then ends with confirmed time/address or access details.
-The focused pass receives the newly generated current-call summary as a rewrite
-aid; every retained fact must still be supported by the current transcript.
-Shed/outbuilding damage stays attached to that structure, tarp help is a customer
-request rather than a promise, and unknown main-house ages are not added to the
-outbuilding estimate. Reviewer edits and original lead Notes remain preserved.
+The generated Inspector Note panel has been removed from QC, including its Notes,
+QC Note, copy, regenerate and reset controls. Recording verification fields,
+transcript actions, correction history and the regular Internal QC notes remain.
+The warning specific to the removed generated paragraph is hidden in this view.
+Existing lead notes, saved review drafts and recording analysis remain stored;
+this UI change does not delete or rewrite them.

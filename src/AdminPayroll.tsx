@@ -1,5 +1,5 @@
 import { formatDate } from './dateDisplay';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Filter,
@@ -84,6 +84,9 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
   const [agents, setAgents] = useState<Obj[]>([]);
   const [teams, setTeams] = useState<Obj[]>([]);
   const [periodId, setPeriodId] = useState("");
+  const selectedPeriod = useRef("");
+  const entryRequest = useRef(0);
+  const pageRequest = useRef(0);
   const [week, setWeek] = useState(currentSunday);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -96,6 +99,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
   const [saveDefaults, setSaveDefaults] = useState(true);
 
   async function load(preferred?: string) {
+    const request = ++pageRequest.current;
     setLoading(true);
     setError("");
     const [p, a, t, payFields] = await Promise.all([
@@ -113,6 +117,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
       supabase.rpc("readyops_agent_privileged_fields"),
     ]);
 
+    if (request !== pageRequest.current) return;
     if (p.error || a.error || t.error || payFields.error) {
       setError(
         (p.error || a.error || t.error || payFields.error)?.message || "Unable to load payroll",
@@ -148,39 +153,44 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
     setAgents([...agentsById.values()]);
     setTeams((t.data || []) as Obj[]);
 
-    const chosen = preferred || periodId || nextPeriods[0]?.id || "";
+    const chosen = preferred || selectedPeriod.current || nextPeriods[0]?.id || "";
+    selectedPeriod.current = chosen;
     setPeriodId(chosen);
-    if (chosen) {
-      const e = await supabase.rpc("get_readyops_payroll_presentation", { p_period_id: chosen });
-      if (e.error) setError(e.error.message);
-      setEntries((e.data?.entries || []) as Obj[]);
-      setPayrollLeads((e.data?.leads || []) as Obj[]);
-    } else {
-      setEntries([]);
-      setPayrollLeads([]);
-    }
-
-    setDrafts({});
-    setLoading(false);
+    await loadEntries(chosen);
   }
+
+  function invalidateRequests() { pageRequest.current++; entryRequest.current++; }
 
   useEffect(() => {
     void load();
+    return invalidateRequests;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial finance load only
 
-  useEffect(() => {
-    if (periodId) void loadEntries(periodId);
-  }, [periodId]);
-
   async function loadEntries(id: string) {
+    if (id !== selectedPeriod.current) return;
+    const request = ++entryRequest.current;
+    setLoading(true);
+    setEntries([]);
+    setPayrollLeads([]);
+    setDrafts({});
+    if (!id) { setLoading(false); return; }
     const e = await supabase.rpc("get_readyops_payroll_presentation", { p_period_id: id });
+    if (request !== entryRequest.current || id !== selectedPeriod.current) return;
     if (e.error) {
       setError(e.error.message);
     } else {
       setEntries((e.data?.entries || []) as Obj[]);
       setPayrollLeads((e.data?.leads || []) as Obj[]);
-      setDrafts({});
     }
+    setLoading(false);
+  }
+
+  function selectPeriod(id: string) {
+    pageRequest.current++;
+    selectedPeriod.current = id;
+    setPeriodId(id);
+    setError("");
+    void loadEntries(id);
   }
 
   async function generate() {
@@ -394,7 +404,7 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
             Payroll Period
             <select
               value={periodId}
-              onChange={(event) => setPeriodId(event.target.value)}
+              onChange={(event) => selectPeriod(event.target.value)}
               className="mt-1 min-w-64 rounded-lg border p-2"
             >
               <option value="">No period selected</option>
@@ -439,7 +449,8 @@ export function AdminPayroll({ managerMode = false }: { managerMode?: boolean })
         </div>
       </section>
 
-      <PayrollPresentation entries={entries} leads={payrollLeads} teams={teams} period={period} managerMode={managerMode} teamFilter={teamFilter} setTeamFilter={setTeamFilter} hasUnsavedChanges={Object.keys(drafts).length>0} reload={()=>load(periodId)} />
+      {loading && <p role="status" className="p-5 text-sm">Loading payroll…</p>}
+      <div hidden={loading} aria-busy={loading}><PayrollPresentation key={periodId} entries={entries} leads={payrollLeads} teams={teams} period={period} managerMode={managerMode} teamFilter={teamFilter} setTeamFilter={setTeamFilter} hasUnsavedChanges={Object.keys(drafts).length>0} reload={()=>load(periodId)} /></div>
       <MastersSection title="Pay Rates & Payroll Controls" subtitle="Edit and save weekly rates, hours, bonuses, and deductions" storageKey="masters-payroll-controls" defaultOpen={false}>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Kpi label="Agents" value={stats.agents} />

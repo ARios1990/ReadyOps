@@ -1,8 +1,8 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { shouldShowField, getPortalSessionId, normalizeStoriesInput, formatStories } from './portalUtils';
 import { UnitAnswerInput } from './UnitAnswerInput';
-import { supabase } from './supabase';
+import { uploadBookingRecording } from './recordingUpload';
 import { qualifierVisible } from './appointmentQualifiers';
 import { contractValue, savedServiceValue } from './bookingDefaults';
 
@@ -32,16 +32,23 @@ interface Props {
   submitDisabled?: boolean;
   submitLabel?: string;
   recordingUploadSlug?: string;
+  recordingReservationToken?: string;
   appointmentSummary?: string;
   automaticSummary?: string;
   onChange: (key: string, value: unknown) => void;
   onSubmit: () => void;
 }
 
-export function DynamicLeadForm({ schema, values, disabled = false, submitDisabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, appointmentSummary, automaticSummary, onChange, onSubmit }: Props) {
+export function DynamicLeadForm({ schema, values, disabled = false, submitDisabled = false, submitLabel = 'Confirm Appointment', recordingUploadSlug, recordingReservationToken, appointmentSummary, automaticSummary, onChange, onSubmit }: Props) {
+  const blockedUploads = useRef(new Set<string>());
+  const [uploadBlocked, setUploadBlocked] = useState(false);
+  const onUploadStateChange = useCallback((key: string, blocked: boolean) => {
+    if (blocked) blockedUploads.current.add(key); else blockedUploads.current.delete(key);
+    setUploadBlocked(blockedUploads.current.size > 0);
+  }, []);
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (disabled || submitDisabled) return;
+    if (disabled || submitDisabled || blockedUploads.current.size > 0) return;
     onSubmit();
   }
 
@@ -52,7 +59,7 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitDisabl
           <h3 className="text-sm font-bold text-slate-900 mb-4">{section.title}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             {section.fields.filter(field => field.type !== 'internal' && qualifierVisible(field, values) && shouldShowField(field.showWhen, values)).map(field => (
-              <Field key={field.key} field={{ ...field, required: field.mode ? field.mode === 'required' : field.required }} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />
+              <Field key={field.key} field={{ ...field, required: field.mode ? field.mode === 'required' : field.required }} value={values[field.key] ?? field.defaultValue ?? ''} disabled={disabled} recordingUploadSlug={recordingUploadSlug} recordingReservationToken={recordingReservationToken} onChange={onChange} onUploadStateChange={onUploadStateChange} />
             ))}
             {section.fields.filter(field => field.allowOther && qualifierVisible(field, values) && values[field.key] === 'Other').map(field => <div key={`${field.key}_other`}><label className="mb-1.5 block text-xs text-slate-600">Other {field.label}<input aria-label={`Other ${field.label}`} required={field.required || field.mode === 'required'} disabled={disabled} className="mt-2 w-full rounded-xl border px-3 py-2.5" value={String(values[`${field.key}_other`] || '')} onChange={event => onChange(`${field.key}_other`, event.target.value)} /></label></div>)}
           </div>
@@ -60,9 +67,10 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitDisabl
           {section.id === 'additional' && automaticSummary && <div className="mt-4"><h3 className="text-sm font-bold text-slate-900">Notes · Automatic summary</h3><p className="mt-2 text-sm text-slate-700" aria-live="polite">{automaticSummary}</p></div>}
         </section>
       ))}
+      {uploadBlocked && <p role="status" className="text-sm font-semibold text-blue-700">Finish the recording upload or resolve its error before confirming.</p>}
       <button
         type="submit"
-        disabled={disabled || submitDisabled}
+        disabled={disabled || submitDisabled || uploadBlocked}
         className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {submitLabel}
@@ -71,14 +79,14 @@ export function DynamicLeadForm({ schema, values, disabled = false, submitDisabl
   );
 }
 
-function Field({ field, value, disabled, recordingUploadSlug, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; onChange: (key: string, value: unknown) => void }) {
+function Field({ field, value, disabled, recordingUploadSlug, recordingReservationToken, onChange, onUploadStateChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; recordingReservationToken?: string; onChange: (key: string, value: unknown) => void; onUploadStateChange: (key: string, blocked: boolean) => void }) {
   const common = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50';
   const label = <label className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}{field.required ? ' *' : ''}</label>;
   const fieldType = field.key === 'roof_age' ? 'text' : field.type;
   const isWide = fieldType === 'textarea' || fieldType === 'address' || fieldType === 'multiselect' || fieldType === 'recording' || ['address', 'damage_type', 'access_instructions', 'web_url'].includes(field.key);
 
   if (fieldType === 'recording') {
-    return <RecordingField field={field} value={value} disabled={disabled} recordingUploadSlug={recordingUploadSlug} onChange={onChange} />;
+    return <RecordingField field={field} value={value} disabled={disabled} recordingUploadSlug={recordingUploadSlug} recordingReservationToken={recordingReservationToken} onChange={onChange} onUploadStateChange={onUploadStateChange} />;
   }
 
   if (fieldType === 'textarea') {
@@ -126,13 +134,19 @@ function Field({ field, value, disabled, recordingUploadSlug, onChange }: { fiel
   );
 }
 
-function RecordingField({ field, value, disabled, recordingUploadSlug, onChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; onChange: (key: string, value: unknown) => void }) {
+function RecordingField({ field, value, disabled, recordingUploadSlug, recordingReservationToken, onChange, onUploadStateChange }: { field: PortalFormField; value: unknown; disabled: boolean; recordingUploadSlug?: string; recordingReservationToken?: string; onChange: (key: string, value: unknown) => void; onUploadStateChange: (key: string, blocked: boolean) => void }) {
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const attached = typeof value === 'string' && value.trim().length > 0;
 
+  const inFlight = useRef(false);
+  useEffect(() => () => onUploadStateChange(field.key, false), [field.key, onUploadStateChange]);
+
   async function uploadRecording(file: File) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    onUploadStateChange(field.key, true);
     setUploading(true);
     setStatus('Authorizing upload...');
     setError('');
@@ -140,26 +154,15 @@ function RecordingField({ field, value, disabled, recordingUploadSlug, onChange 
       const sessionId = getPortalSessionId();
       const parts = window.location.pathname.split('/').filter(Boolean);
       const slug = recordingUploadSlug || (parts[0] === 'book' ? decodeURIComponent(parts[1] || '') : '');
-      if (!slug) throw new Error('Company form link is missing its company slug.');
-
-      const { data, error: tokenError } = await supabase.functions.invoke('agent-recording-upload-token', {
-        body: { session_id: sessionId, slug, filename: file.name || 'recording.mp3' },
-      });
-      if (tokenError || data?.error) throw new Error(data?.error || tokenError?.message || 'Unable to authorize upload.');
-      if (!data?.path || !data?.token || !data?.recording_url) throw new Error('Upload authorization was incomplete.');
-
-      setStatus('Uploading recording...');
-      const { error: uploadError } = await supabase.storage.from('qc-recordings').uploadToSignedUrl(data.path, data.token, file, {
-        contentType: file.type || 'application/octet-stream',
-      });
-      if (uploadError) throw uploadError;
-
-      onChange(field.key, data.recording_url);
+      const recordingUrl = await uploadBookingRecording(file, slug, sessionId, recordingReservationToken);
+      onChange(field.key, recordingUrl);
+      onUploadStateChange(field.key, false);
       setStatus('Recording attached. It will be sent to QC with this appointment.');
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Unable to upload recording.');
       setStatus('');
     } finally {
+      inFlight.current = false;
       setUploading(false);
     }
   }
@@ -186,7 +189,7 @@ function RecordingField({ field, value, disabled, recordingUploadSlug, onChange 
         </label>
         {attached && <span className="ml-2 text-xs font-bold text-emerald-700">Recording attached ✓</span>}
         {status && <p className="mt-2 text-xs font-semibold text-blue-700">{status}</p>}
-        {error && <p className="mt-2 text-xs font-semibold text-red-700">{error}</p>}
+        {error && <div role="alert" className="mt-2 text-xs font-semibold text-red-700"><p>{error}</p><button type="button" disabled={disabled} onClick={() => { setError(''); onUploadStateChange(field.key, false); }} className="mt-2 underline">{attached ? 'Keep the previously attached recording' : 'Cancel this upload'}</button></div>}
       </div>
     </div>
   );
