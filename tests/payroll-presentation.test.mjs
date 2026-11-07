@@ -90,4 +90,21 @@ assert.equal(calls[0].name,'shared-recording-url');assert.deepEqual(calls[0].arg
 assert.equal(renderer.root.findByType('audio').props.preload,'none');
 await settle(()=>renderer.root.findAllByType('button')[0].props.onClick());assert.equal(renderer.root.findAllByType('audio').length,0);
 act(()=>renderer.unmount());
+// Each lead follows its own agent's saved payment record, including after reopening.
+act(()=>renderer.unmount());
+const mixed=[{...entries[0],status:'paid',payment_date:'2026-10-12',payment_method:'Cash'},entries[1]];
+await settle(()=>renderer=TestRenderer.create(React.createElement(Harness,{rows:mixed})));
+const paidLabels=()=>renderer.root.findAllByType('span').filter(node=>node.children.join('')==='Agent paid');
+assert.equal(paidLabels().length,2,'Only leads belonging to paid agent A show the paid badge');
+assert.ok(JSON.stringify(renderer.toJSON()).includes('10/12/2026'));
+await settle(()=>renderer.root.findByProps({'aria-label':'Payroll lead payment status'}).props.onChange({target:{value:'paid'}}));
+assert.ok(JSON.stringify(renderer.toJSON()).includes('Test Homeowner'));
+assert.ok(!JSON.stringify(renderer.toJSON()).includes('Test Homeowner B'));
+await settle(()=>renderer.root.findByProps({'aria-label':'Payroll lead payment status'}).props.onChange({target:{value:'unpaid'}}));
+assert.equal(paidLabels().length,0);
+assert.ok(JSON.stringify(renderer.toJSON()).includes('Test Homeowner B'));
+await settle(()=>renderer.update(React.createElement(Harness,{rows:entries})));
+assert.ok(JSON.stringify(renderer.toJSON()).includes('Test Homeowner'));
+assert.equal(paidLabels().length,0,'Reopened payment immediately removes paid badges');
+act(()=>renderer.unmount());
 console.log('PASS team/individual payroll filters, payment confirmation, notes, persistent sections, paid stamps, and lazy company-only recording playback');

@@ -1938,7 +1938,6 @@ function ReviewDialog(props: DialogProps) {
                 onVerification={props.applyVerification}
                 onVerificationStale={()=>props.change('_qc_recording_review',undefined)}
                 onRecordingContextChange={context=>props.change('_qc_recording_context',context)}
-                onSummaryDraftChange={draft=>props.change('_qc_summary_draft',draft)}
                 language={String(props.values.language||'')}
                 onRecordingNotesChange={(value) => props.change('recording_notes', value)}
                 importedTranscript={props.importedTranscript}

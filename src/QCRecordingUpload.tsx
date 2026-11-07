@@ -6,7 +6,7 @@ import { transcribeWithLocalWhisper } from './localWhisperClient';
 import { getLane } from './leadTypes';
 import { recordingNotes } from './recordingImport';
 import {transcriptKey,type RecordingVerification,type VerifiedDraft} from '../supabase/functions/_shared/recordingVerification';
-import {RecordingVerificationWorkspace,type AppointmentSummaryDraft} from './RecordingVerificationWorkspace';
+import {RecordingVerificationWorkspace} from './RecordingVerificationWorkspace';
 
 const BUCKET = 'qc-recordings';
 const STORAGE_PREFIX = `storage://${BUCKET}/`;
@@ -219,7 +219,6 @@ export function QCRecordingUpload({
   onRecordingNotesChange,
   importedTranscript,
   onVerification,
-  onSummaryDraftChange,
   onVerificationStale,
   onRecordingContextChange,
   onUploadStateChange,
@@ -243,7 +242,6 @@ export function QCRecordingUpload({
   onRecordingNotesChange?: (value: string) => void;
   importedTranscript?: string;
   onVerification?: (verification:RecordingVerification)=>void;
-  onSummaryDraftChange?: (draft:AppointmentSummaryDraft)=>void;
   onUploadStateChange?: (uploading: boolean)=>void;
   onVerificationStale?: ()=>void;
   onRecordingContextChange?: (context:Record<string,unknown>)=>void;
@@ -655,9 +653,8 @@ export function QCRecordingUpload({
           </div>
         </div>
         {reviewDraft?.verification.lead_id===leadId&&reviewDraft.verification.recording_url===value&&reviewDraft.verification.transcript_key===transcriptKey(transcript)&&onVerification&&<RecordingVerificationWorkspace
-          leadId={leadId} review={reviewDraft} values={{...leadForm,appointment_date:leadForm?.appointment_date||appointmentDate,appointment_time:leadForm?.appointment_time||appointmentTime}}
-          savedDraft={leadForm?._qc_summary_draft as AppointmentSummaryDraft|undefined}
-          onDraftChange={onSummaryDraftChange} onRegenerate={()=>void transcribeAndQualify(true,false)} busy={aiQualifying}/>}
+          review={reviewDraft} values={{...leadForm,appointment_date:leadForm?.appointment_date||appointmentDate,appointment_time:leadForm?.appointment_time||appointmentTime}}
+          />}
         {aiError && <p className="mt-2 text-xs font-semibold text-red-700">{aiError}</p>}
         {aiResult && (
           <div className="mt-2">
