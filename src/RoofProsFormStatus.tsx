@@ -3,7 +3,7 @@ import {ExternalLink,FileCheck2} from 'lucide-react';
 import {supabase} from './supabase';
 import {roofProsHelper, type ManualTicket} from './roofProsHelper';
 export const ROOF_PROS_COMPANY_ID='d12e8b8c-fd25-45c0-8d43-9b4aecdcda0c';
-const REQUIRED_HELPER_VERSION='1.0.2';
+const REQUIRED_HELPER_VERSION='1.0.3';
 const excluded=new Set(['44f9d82b-2247-4185-bae6-44ca6a2aa013','c1fc6f84-4c9f-469e-a036-8d08e7c4b53d','52123081-6cc7-48d0-bad8-8fc96ebf0141','9f158006-8bce-4928-aa13-8c686d00d91a']);
 const labels:Record<string,string>={queued:'Waiting for Google Form preparation',preparing:'Preparing Google Form',submitting:'Submitting Google Form',submitted:'Google Form submitted',needs_info:'Details or recording needed',uncertain:'Submission needs review',manual_preparing:'Preparing your manual review form',manual_review:'Ready for you to review and Submit in Google',manual_submitting:'Your Submit was clicked — waiting for Google confirmation'};
 type Delivery={id:string;status:string;submitted_at?:string;error_message?:string};
