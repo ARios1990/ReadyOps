@@ -62,4 +62,3 @@ begin
  return p;
 end $$;
 revoke all on function private.roof_pros_manual_payload(uuid) from public,anon,authenticated;
-
