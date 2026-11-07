@@ -27,6 +27,8 @@ The four permanently excluded, manually completed leads remain blocked at the UI
 
 ## Recording handoff deployment
 
+Helper 1.0.3 commits Google's AM/PM menu using mouse activation and compares numeric time values, so Google's `01` hour formatting correctly matches `1`. Incorrect hours, minutes and meridiems still fail verification. Update the unpacked extension and reload ReadyOps after downloading the new package. A failed draft stays unsubmitted; review its status before preparing again.
+
 Apply `20261107050055_booking_recording_referral_ownership.sql`, deploy `roof-pros-form-recording` and `agent-recording-upload-token`, then deploy the frontend. The migration accepts a booking upload only when its reservation was converted into an appointment for the same lead and the storage object exists. The path resolver is service-role-only; approval, Send, manual exclusions and user Submit/receipt checks remain in place. Existing valid reservation uploads need no file copy or public bucket access.
 
 This change does not recover audio previously used only for local transcription; those files must be selected again. It does not automatically submit Google Forms or alter existing held/submitted deliveries. Google picker timeouts are a separate browser-helper problem and require checking the existing draft in the Chrome profile that runs the helper.

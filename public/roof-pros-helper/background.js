@@ -23,7 +23,7 @@ async function handle(m,sender) {
   const u=new URL(sender.url || 'https://invalid.local');
   if(['ping','prepare','resume'].includes(m.type)) {
     if(u.origin!==ORIGIN || sender.frameId!==0)throw Error('ReadyOps access required.');
-    if(m.type==='ping')return {success:true,version:'1.0.2'};
+    if(m.type==='ping')return {success:true,version:'1.0.3'};
     let existing=(await jobs()).find(j=>j.delivery_id===(m.deliveryId || m.ticket?.delivery_id)&&j.phase!=='failed');
     // A recovered server ticket supersedes any browser-local capability for the same delivery.
     if(existing&&m.type==='prepare'&&existing.id!==m.ticket?.id){await remove(existing.id);existing=null;}

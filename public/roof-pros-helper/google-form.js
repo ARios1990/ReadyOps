@@ -48,7 +48,7 @@
     list.click();
     // Google renders the open AM/PM menu in a page-level overlay, not reliably inside the listbox.
     const option=await wait(()=>dom.option(data.fields.ampm));
-    option.click();
+    dom.chooseOption(option);
     await wait(()=>dom.selectedOption(timeQuestion)===data.fields.ampm);
     const contract=dom.question('Roofing Contract');
     if(data.fields.contract)contract.querySelector(`[role="radio"][data-value="${data.fields.contract}"]`).click();

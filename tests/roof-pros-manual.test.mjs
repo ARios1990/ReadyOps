@@ -150,8 +150,27 @@ logic.set(w.document.querySelector('[aria-label="Hour"]'),fields.hour);logic.set
 const selectedMeridiem=w.document.querySelector('[role="listbox"] [role="option"]');selectedMeridiem.textContent='AM';
 const overlayOption=w.document.createElement('div');overlayOption.setAttribute('role','option');overlayOption.textContent='PM';w.document.body.append(overlayOption);
 assert.equal(logic.option('PM'),overlayOption,'AM / PM choices rendered in Google page overlays are found');
+overlayOption.addEventListener('mouseup',()=>{selectedMeridiem.textContent='PM';});
+overlayOption.click();
+assert.equal(logic.selectedOption(logic.question('Appointment Time')),'AM','A click-only Google menu does not commit its selection');
+logic.chooseOption(overlayOption);
+assert.equal(logic.selectedOption(logic.question('Appointment Time')),'PM','Mouse activation commits the requested PM option');
+assert.throws(()=>logic.chooseOption(w.document.querySelector('[aria-label="Submit"]')),'Time selection cannot activate Submit');
 selectedMeridiem.textContent='PM';overlayOption.remove();
 assert.equal(logic.verify(fields,`${id(1)}.mp3`),true);
+logic.set(w.document.querySelector('[aria-label="Hour"]'),'01');
+logic.set(w.document.querySelector('[aria-label="Minute"]'),'5');
+assert.equal(logic.verify(fields,`${id(1)}.mp3`),true,'Google zero-padding does not change 1:05 PM');
+for(const invalidHour of ['','00','13','2','1junk']) {
+ logic.set(w.document.querySelector('[aria-label="Hour"]'),invalidHour);
+ assert.throws(()=>logic.verify(fields,`${id(1)}.mp3`),'Invalid or changed hours remain rejected');
+}
+logic.set(w.document.querySelector('[aria-label="Hour"]'),fields.hour);
+for(const invalidMinute of ['','60','6','5junk']) {
+ logic.set(w.document.querySelector('[aria-label="Minute"]'),invalidMinute);
+ assert.throws(()=>logic.verify(fields,`${id(1)}.mp3`),'Invalid or changed minutes remain rejected');
+}
+logic.set(w.document.querySelector('[aria-label="Minute"]'),fields.minute);
 logic.set(logic.input('Telemarketer Name'),'Actual Agent');assert.throws(()=>logic.verify(fields,`${id(1)}.mp3`));logic.set(logic.input('Telemarketer Name'),'Horacio');
 assert.throws(()=>logic.verify(fields,`${id(2)}.mp3`));
 logic.set(logic.input('Customer Name'),'Another customer');assert.throws(()=>logic.verify(fields,`${id(1)}.mp3`));logic.set(logic.input('Customer Name'),fields.name);
@@ -166,7 +185,7 @@ dom.window.close();
 const receiptDOM=new JSDOM('<div>Your response has been recorded.</div>',{url:'https://docs.google.com/forms/u/0/d/e/test/formResponse',runScripts:'outside-only'});
 receiptDOM.window.eval(read('public/roof-pros-helper/form-dom.js'));assert.equal(receiptDOM.window.RoofProsFormDOM.hasReceipt(),true);receiptDOM.window.close();
 const manifest=JSON.parse(read('public/roof-pros-helper/manifest.json'));
-assert.equal(manifest.version,'1.0.2');
+assert.equal(manifest.version,'1.0.3');
 assert.ok(manifest.content_scripts[1].matches.some(s=>s.includes('/forms/u/')),'Google receipt redirects are covered');
 assert.ok(!manifest.permissions.some(p=>['cookies','debugger','tabs','scripting','unlimitedStorage'].includes(p)));
 const background=read('public/roof-pros-helper/background.js');
@@ -184,12 +203,12 @@ function bridgeFixture(){
  const code=ts.transpileModule(read('src/roofProsHelper.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  new Function('exports','window','crypto','clearTimeout',code)(bridgeModule.exports,browserWindow,{randomUUID},browserWindow.clearTimeout);
  return {request:bridgeModule.exports.roofProsHelper,window:browserWindow,listeners,
-  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.2'},...overrides};for(const fn of [...listeners])fn(event);},
+  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.3'},...overrides};for(const fn of [...listeners])fn(event);},
   posted:()=>posted,expire:()=>timer?.()};
 }
 for(const withSource of [false,true]){
  const fixture=bridgeFixture(),promise=fixture.request('ping');fixture.respond(withSource?{source:fixture.window}:{});
- assert.equal((await promise).version,'1.0.2');assert.equal(fixture.listeners.size,0);
+ assert.equal((await promise).version,'1.0.3');assert.equal(fixture.listeners.size,0);
 }
 for(const bad of ['origin','source','requestId','channel','payload']){
  const fixture=bridgeFixture(),promise=fixture.request('ping'),message=fixture.posted();
