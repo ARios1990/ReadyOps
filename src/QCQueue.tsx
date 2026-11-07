@@ -40,6 +40,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { uploadQCRecording } from "./recordingUpload";
 import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 import { HorizontalScrollFrame } from "./HorizontalScrollFrame";
 import { QCRecordingUpload } from "./QCRecordingUpload";
@@ -191,6 +192,13 @@ export function QCQueue() {
   const [importTranscript, setImportTranscript] = useState('');
   const [newImport, setNewImport] = useState<{ draft: ImportDraft; filename: string } | null>(null);
   const [submittedImportPhone, setSubmittedImportPhone] = useState('');
+  const importInFlight = useRef(false);
+  const recordingBusyRef = useRef(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const onRecordingUploadStateChange = useCallback((uploading: boolean) => {
+    recordingBusyRef.current = uploading;
+    setRecordingBusy(uploading);
+  }, []);
   const [importMatch, setImportMatch] = useState<{ draft: ImportDraft; filename: string; rows: Obj[] } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [values, setValues] = useState<Obj>({});
@@ -536,15 +544,30 @@ export function QCQueue() {
     finally { setBusy(false); }
   }
   async function applyToQC(row: Obj) {
-    if (!importMatch) return;
+    if (!importMatch || importInFlight.current) return;
+    importInFlight.current = true;
     const { draft, filename } = importMatch;
-    await openReview(row);
-    setValues(current => ({ ...current, ...Object.fromEntries(Object.entries(draft.values).filter(([, value]) => value !== '' && value != null)) }));
-    setImportTranscript(draft.transcript);
-    setMessage(`Filled from ${filename}. Review the imported fields and save lead information. Save the transcript separately in Appointment Recording. The existing appointment time is preserved.`);
-    setImportMatch(null);
+    setBusy(true); setError('');
+    try {
+      const recordingUrl = draft.recordingFile ? await uploadQCRecording(draft.recordingFile, row.lead.id) : '';
+      await openReview(row);
+      setValues(current => ({
+        ...current, ...Object.fromEntries(Object.entries(draft.values).filter(([, value]) => value !== '' && value != null)),
+        ...(recordingUrl ? { recording_url: recordingUrl, _qc_recording_history: current._qc_recording_review?.history || current._qc_recording_history, _qc_recording_review: undefined, _qc_recording_context: undefined } : {}),
+      }));
+      setImportTranscript(draft.transcript);
+      setMessage(`Filled from ${filename}.${recordingUrl ? ' Audio uploaded; Save Lead Information to retain the attachment.' : ' Review and save lead information.'} Save the transcript separately in Appointment Recording. The existing appointment time is preserved.`);
+      setImportMatch(null);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : rpcError(failure));
+    } finally {
+      importInFlight.current = false;
+      setBusy(false);
+    }
   }
+
   async function saveEdits() {
+    if (recordingBusyRef.current) return;
     if (!selected) return;
     setBusy(true);
     setError("");
@@ -826,6 +849,7 @@ export function QCQueue() {
   }
 
   async function review(decision: "approved" | "denied" | "needs_correction") {
+    if (recordingBusyRef.current) return;
     if (!selected) return;
     if (decision !== "approved" && !decisionReason.trim()) {
       setError("Choose or enter a reason for this decision.");
@@ -880,6 +904,7 @@ export function QCQueue() {
     setBusy(false);
   }
   async function sendLead(row: Obj) {
+    if (recordingBusyRef.current) return;
     if (!isAdmin || !row?.lead?.id) return;
     if (
       !window.confirm(
@@ -1162,7 +1187,7 @@ export function QCQueue() {
       </section>
       <div className="qc-import-placement"><RecordingCallLogImport mode="qc" disabled={busy} submittedPhone={submittedImportPhone} onCreate={(draft, filename) => { setImportMatch(null); setNewImport({ draft, filename }); }} onApply={(draft, filename) => void matchImportedLead(draft, filename)} /></div>
       </div>
-      {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {formatDate(row.appointment.appointment_date)} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
+      {importMatch && <section className="mb-4 rounded-xl border border-indigo-200 bg-white p-4"><h3 className="font-bold">Choose the QC lead to fill</h3><p className="mt-1 text-sm text-slate-600">{importMatch.filename} · Review before saving. Booking dates and status stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2">{importMatch.rows.map(row => <button key={row.lead.id} disabled={busy} onClick={() => void applyToQC(row)} className="rounded-lg border px-3 py-2 text-left text-sm"><strong>{row.lead.full_name}</strong><br />{row.company?.name} · {formatDate(row.appointment.appointment_date)} · {String(row.appointment.start_time).slice(0,5)}<br />{row.lead.address}</button>)}<button disabled={busy} onClick={() => setImportMatch(null)} className="rounded-lg border px-3 py-2 text-sm">Cancel import</button></div></section>}
       <section className="mb-4 rounded-2xl border bg-white/95 p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
           <Select
@@ -1436,8 +1461,9 @@ export function QCQueue() {
           }}
           decisionNotes={decisionNotes}
           setDecisionNotes={setDecisionNotes}
-          busy={busy}
-          close={() => setSelected(null)}
+          busy={busy || recordingBusy}
+          onRecordingUploadStateChange={onRecordingUploadStateChange}
+          close={() => { if (!recordingBusyRef.current) setSelected(null); }}
           save={saveEdits}
           move={() => void moveSelectedLead()}
           overrideSchedule={() => void overrideSchedule()}
@@ -1712,6 +1738,7 @@ type DialogProps = {
   decisionNotes: string;
   setDecisionNotes: (value: string) => void;
   busy: boolean;
+  onRecordingUploadStateChange: (uploading: boolean) => void;
   close: () => void;
   save: () => Promise<void>;
   move: () => void;
@@ -1906,6 +1933,7 @@ function ReviewDialog(props: DialogProps) {
             </div>
             <div className="order-1 min-w-0 md:col-span-2">
               <QCRecordingUpload
+                onUploadStateChange={props.onRecordingUploadStateChange}
                 leadId={props.row.lead.id}
                 onVerification={props.applyVerification}
                 onVerificationStale={()=>props.change('_qc_recording_review',undefined)}

@@ -222,6 +222,7 @@ export function QCRecordingUpload({
   onSummaryDraftChange,
   onVerificationStale,
   onRecordingContextChange,
+  onUploadStateChange,
 }: {
   leadId: string;
   value: string;
@@ -243,10 +244,14 @@ export function QCRecordingUpload({
   importedTranscript?: string;
   onVerification?: (verification:RecordingVerification)=>void;
   onSummaryDraftChange?: (draft:AppointmentSummaryDraft)=>void;
+  onUploadStateChange?: (uploading: boolean)=>void;
   onVerificationStale?: ()=>void;
   onRecordingContextChange?: (context:Record<string,unknown>)=>void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const uploadInFlight = useRef(false);
+  const uploadMounted = useRef(false);
+  useEffect(() => { uploadMounted.current = true; return () => { uploadMounted.current = false; onUploadStateChange?.(false); }; }, [onUploadStateChange]);
   const [playbackUrl, setPlaybackUrl] = useState('');
   const [error, setError] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -348,21 +353,31 @@ export function QCRecordingUpload({
   }, [leadId, importedTranscript]);
 
   async function upload(file: File) {
+    if (uploadInFlight.current) return;
     setError('');
-    if (file.size > MAX_BYTES) {
-      setError('Recording is too large. Maximum file size is 100 MB.');
+    if (file.size === 0 || file.size > MAX_BYTES) {
+      setError(file.size === 0 ? 'The recording is empty.' : 'Recording is too large. Maximum file size is 100 MB.');
       return;
     }
+    const sourceLead = leadId;
+    uploadInFlight.current = true;
+    onUploadStateChange?.(true);
     setUploading(true);
-    const path = `${leadId}/${Date.now()}-${safeName(file.name || 'recording')}`;
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: '3600',
-      contentType: file.type || 'application/octet-stream',
-      upsert: false,
-    });
-    if (uploadError) setError(uploadError.message);
-    else onChange(`${STORAGE_PREFIX}${path}`);
-    setUploading(false);
+    try {
+      const path = `${leadId}/${Date.now()}-${safeName(file.name || 'recording')}`;
+      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
+        cacheControl: '3600', contentType: file.type || 'application/octet-stream', upsert: false,
+      });
+      if (!uploadMounted.current || currentRecording.current.leadId !== sourceLead) return;
+      if (uploadError) setError(uploadError.message);
+      else onChange(`${STORAGE_PREFIX}${path}`);
+    } catch (failure) {
+      if (uploadMounted.current && currentRecording.current.leadId === sourceLead) setError(failure instanceof Error ? failure.message : 'Unable to upload recording. Please retry.');
+    } finally {
+      uploadInFlight.current = false;
+      setUploading(false);
+      onUploadStateChange?.(false);
+    }
   }
 
   async function saveTranscript(nextTranscript = transcript, nextSummary = summary, method = 'manual') {

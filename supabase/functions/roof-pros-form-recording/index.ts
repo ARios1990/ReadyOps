@@ -23,9 +23,8 @@ Deno.serve(async req=>{
    return transitionError?respond({error:transitionError.message},409):respond({success:data===true});
   }
   if(action!=='recording')return respond({error:'Invalid action'},400);
-  const prefix=`storage://qc-recordings/${job.lead_id}/`;
-  if(!lead.recording_url?.startsWith(prefix)||lead.recording_url.includes('..')||lead.recording_url.includes('\\'))return respond({error:'Upload a private recording for this lead first'},422);
-  const path=lead.recording_url.slice('storage://qc-recordings/'.length);
+  const {data:path,error:pathError}=await admin.rpc('roof_pros_recording_path',{p_lead_id:job.lead_id});
+  if(pathError||!path)return respond({error:'Upload a private recording belonging to this lead first'},422);
   const {data:signed,error:signError}=await admin.storage.from('qc-recordings').createSignedUrl(path,300);
   if(signError||!signed?.signedUrl)return respond({error:'Recording is unavailable'},422);
   return respond({url:signed.signedUrl,filename:path.split('/').pop(),max_bytes:10*1024*1024,expires_in:300});

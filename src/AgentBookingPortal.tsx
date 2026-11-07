@@ -32,6 +32,7 @@ import {
 import { READYOPS_LOGO_DATA_URI } from "./brand";
 import { AgentWeatherPreview, useWeeklyWeather } from "./AgentWeatherPreview";
 import { fullAddress, type ImportDraft } from './recordingImport';
+import { uploadBookingRecording } from './recordingUpload';
 import { cleanProfileValue, contractValue, savedServiceValue } from './bookingDefaults';
 
 interface Slot {
@@ -342,6 +343,8 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
   const [undoSeconds, setUndoSeconds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [recordingMessage, setRecordingMessage] = useState('');
   const [error, setError] = useState("");
   const [transcriptRetry, setTranscriptRetry] = useState(false);
   const [transcriptMessage, setTranscriptMessage] = useState('');
@@ -596,45 +599,61 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
   }
 
   async function submitAppointment() {
-    if (!reservation) return;
+    if (!reservation || submitting.current) return;
     if (!selectedTemplate || templatesError) { setError('Service configuration is unavailable. Refresh or contact an Admin.'); return; }
     if (importedDraft && (['address', 'city', 'state', 'zip_code'].some(key => !String(formValues[key] || '').trim()) || String(formValues.address || '').trim() === fullAddress('', String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')))) { setError('Complete the street address, city, state, and ZIP code before confirming this imported appointment.'); return; }
-    const requiredMissing = visibleTemplateFields(selectedTemplate.form_schema, formValues).find(f => (f.mode === 'required' || (!f.mode && f.required)) && (formValues[f.key] == null || !String(formValues[f.key]).trim() || (Array.isArray(formValues[f.key]) && !(formValues[f.key] as unknown[]).length)));
+    const requiredMissing = visibleTemplateFields(selectedTemplate.form_schema, formValues).find(f => !(f.key === 'recording_url' && importedDraft?.recordingFile) && (f.mode === 'required' || (!f.mode && f.required)) && (formValues[f.key] == null || !String(formValues[f.key]).trim() || (Array.isArray(formValues[f.key]) && !(formValues[f.key] as unknown[]).length)));
     if (requiredMissing) { setError(`${requiredMissing.label} is required.`); return; }
+    submitting.current = true;
     setBusy(true);
     setError("");
-    const basePayload = {
-      ...normalizePropertyUnits(formValues),
-      contract: contractValue(formValues.contract),
-      address: fullAddress(String(formValues.address || ''), String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')),
-      appointment_date: reservation.appointment_date,
-      appointment_time: reservation.start_time,
-      timezone: portal?.company.settings.timezone,
-    };
-    const payload = {
-      ...basePayload,
-      automatic_notes: automaticNotes(selectedTemplate.name, basePayload),
-      lead_template: buildUniversalLeadTemplate(selectedTemplate, basePayload),
-    };
-    const { data, error: rpcErr } = await supabase.rpc(
-      "submit_public_appointment",
-      {
-        p_reservation_token: reservation.reservation_token,
-        p_session_id: sessionId,
-        p_form_data: payload,
-        p_agent_name: agentName.trim(),
-      },
-    );
-    if (rpcErr) setError(rpcError(rpcErr));
-    else {
-      const result = data as Confirmation;
-      setConfirmation(result);
-      setReservation(null);
-      if (importedDraft?.transcript) await saveImportedTranscript(result);
-      onBooked?.();
-      await loadPortal();
+    try {
+      let recordingUrl = String(formValues.recording_url || '');
+      if (importedDraft?.recordingFile && !recordingUrl) {
+        setRecordingMessage('Uploading the imported recording before confirming the appointment…');
+        recordingUrl = await uploadBookingRecording(importedDraft.recordingFile, slug, sessionId, reservation.reservation_token);
+        setFormValues(current => ({ ...current, recording_url: recordingUrl }));
+        setRecordingMessage('Recording uploaded and attached for QC.');
+      }
+      const basePayload = {
+        ...normalizePropertyUnits(formValues),
+        recording_url: recordingUrl,
+        contract: contractValue(formValues.contract),
+        address: fullAddress(String(formValues.address || ''), String(formValues.city || ''), String(formValues.state || ''), String(formValues.zip_code || '')),
+        appointment_date: reservation.appointment_date,
+        appointment_time: reservation.start_time,
+        timezone: portal?.company.settings.timezone,
+      };
+      const payload = {
+        ...basePayload,
+        automatic_notes: automaticNotes(selectedTemplate.name, basePayload),
+        lead_template: buildUniversalLeadTemplate(selectedTemplate, basePayload),
+      };
+      const { data, error: rpcErr } = await supabase.rpc(
+        "submit_public_appointment",
+        {
+          p_reservation_token: reservation.reservation_token,
+          p_session_id: sessionId,
+          p_form_data: payload,
+          p_agent_name: agentName.trim(),
+        },
+      );
+      if (rpcErr) setError(rpcError(rpcErr));
+      else {
+        const result = data as Confirmation;
+        setConfirmation(result);
+        setReservation(null);
+        if (importedDraft?.transcript) await saveImportedTranscript(result);
+        onBooked?.();
+        await loadPortal();
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : rpcError(failure));
+      setRecordingMessage('Check the error above before retrying. Keep this form open.');
+    } finally {
+      submitting.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function saveImportedTranscript(result: Confirmation) {
@@ -701,6 +720,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
       </header>
 
       <main className="mx-auto max-w-5xl space-y-5 px-4 py-5 sm:px-6">
+        {importedDraft?.recordingFile && !confirmation && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{recordingMessage || `Recording selected: ${importedDraft.recordingFile.name}. It will upload privately when you confirm the appointment.`}</p>}
         {importedDraft && !confirmation && <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm"><p className="font-bold">New appointment from recording + call log</p><p>Requested: {importedDraft.requestedDate || 'Choose date'} · {importedDraft.requestedTime || importedDraft.timeRange || 'Choose time'}. Review the fields and select a live appointment slot.</p>{importedDraft.warnings.length > 0 && <ul className="mt-2 list-disc pl-5">{importedDraft.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}</section>}
         {transcriptMessage && <div role="status" className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">{transcriptMessage}{transcriptRetry && confirmation && <button disabled={busy} onClick={() => void saveImportedTranscript(confirmation)} className="ml-3 rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white">Retry saving transcript</button>}</div>}
         {(settings.requirementsShort || settings.requirementsDetail) && (
@@ -1003,6 +1023,7 @@ export function AgentBookingPortal({ slug, importedDraft, bookingAgentName, onBo
               schema={selectedTemplate?.form_schema || []}
               values={formValues}
               recordingUploadSlug={slug}
+              recordingReservationToken={reservation?.reservation_token}
               appointmentSummary={reservation ? appointmentLabel({ appointment_date: reservation.appointment_date, appointment_time: reservation.start_time }) : 'Choose an available appointment time above'}
               automaticSummary={automaticNotes(selectedTemplate.name, { ...formValues, appointment_date: reservation?.appointment_date, appointment_time: reservation?.start_time })}
               submitDisabled={!reservation}

@@ -16,14 +16,15 @@ await assert.rejects(()=>recordingBytes(new Response(new Uint8Array()),10));
 assert.equal((await recordingBytes(new Response(new Uint8Array(10)),10)).length,10);
 const db=new PGlite(),roof='d12e8b8c-fd25-45c0-8d43-9b4aecdcda0c';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-await db.exec(`create schema private;create schema auth;create role anon;create role authenticated;create role service_role bypassrls;
+await db.exec(`create schema storage;create table storage.objects(bucket_id text,name text);create schema private;create schema auth;create role anon;create role authenticated;create role service_role bypassrls;
  create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
  create function private.readyops_profile_role() returns text language sql as $$select current_setting('test.role',true)$$;
  grant usage on schema public,private,auth to authenticated,anon,service_role;
  create table public.portal_leads(id uuid primary key,company_id uuid,qc_status text,agent_id uuid,agent_name text,lead_code text,full_name text,phone_number text,email text,address text,city text,state text,zip_code text,form_data jsonb default '{}',notes text,recording_url text,updated_at timestamptz default now());
  create table public.agents(id uuid,name text);
  create table public.portal_appointments(id uuid primary key default gen_random_uuid(),lead_id uuid,company_visible_at timestamptz,appointment_date date,start_time time,inspector_notes text,created_at timestamptz default now(),updated_at timestamptz default now());`);
-for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql','20261030202552_roof_pros_manual_recovery.sql'])await db.exec(read('supabase/migrations/'+migration));
+await db.exec(`create table public.appointment_reservations(id uuid primary key,company_id uuid,status text,converted_appointment_id uuid);`);
+for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql','20261030202552_roof_pros_manual_recovery.sql','20261107050055_booking_recording_referral_ownership.sql'])await db.exec(read('supabase/migrations/'+migration));
 const scalar=async sql=>(await db.query(sql)).rows[0].value;
 const rejects=sql=>assert.rejects(()=>db.query(sql));
 await db.exec(`select set_config('test.uid','${id(99)}',false);select set_config('test.role','admin',false);`);
@@ -31,6 +32,7 @@ for(let n=1;n<=8;n++){
  await db.query(`insert into portal_leads(id,company_id,qc_status,full_name,address,city,state,zip_code,form_data,recording_url)values($1,$2,$3,'Test Homeowner','100 Example St','Example City','Florida','32500','{"roof_age":"15+","roof_type":"Shingle"}',$4)`,[id(n),n===3?id(98):roof,n===2?'pending':'approved',n===4?'':`storage://qc-recordings/${id(n)}/current.mp3`]);
  await db.query(`insert into portal_appointments(lead_id,appointment_date,start_time,company_visible_at)values($1,'2026-11-01','13:00',$2)`,[id(n),n===5?null:'2026-10-28T00:00:00Z']);
 }
+await db.exec(`insert into storage.objects select 'qc-recordings',id::text||'/current.mp3' from public.portal_leads;`);
 await rejects(`select roof_pros_manual_prepare('${id(2)}')`);
 await rejects(`select roof_pros_manual_prepare('${id(3)}')`);
 await rejects(`select roof_pros_manual_prepare('${id(4)}')`);
@@ -82,6 +84,34 @@ const recovered=await scalar(`select roof_pros_manual_recover('${id(8)}') value`
 await assert.rejects(()=>db.query('select roof_pros_manual_exchange($1,$2,$3)',[lost.id,lost.token,'context']),'Recovery invalidates the lost browser ticket');
 assert.equal((await db.query('select roof_pros_manual_exchange($1,$2,$3) value',[recovered.id,recovered.token,'context'])).rows[0].value.payload.lead_id,id(8));
 assert.equal(await scalar(`select status value from roof_pros_form_deliveries where lead_id='${id(8)}'`),'manual_preparing');
+// Booking uploads must belong to this exact converted reservation/lead.
+await db.exec(`reset role;
+ insert into portal_leads(id,company_id,qc_status,full_name,address,city,state,zip_code,form_data,recording_url)
+ select '${id(9)}',company_id,qc_status,full_name,address,city,state,zip_code,form_data,
+ 'storage://qc-recordings/${roof}/agent/${id(90)}/booking.mp3' from portal_leads where id='${id(1)}';
+ insert into portal_appointments(id,lead_id,appointment_date,start_time,company_visible_at)
+ values('${id(91)}','${id(9)}','2026-11-10','13:00',now());
+ insert into appointment_reservations values('${id(90)}','${roof}','active',null);
+ insert into storage.objects values('qc-recordings','${roof}/agent/${id(90)}/booking.mp3');`);
+assert.equal(await scalar(`select private.lead_recording_path('${id(9)}') value`),null,'An active unconverted reservation is not a lead attachment');
+await db.exec(`update appointment_reservations set status='converted',converted_appointment_id=(select id from portal_appointments where lead_id='${id(1)}') where id='${id(90)}';`);
+assert.equal(await scalar(`select private.lead_recording_path('${id(9)}') value`),null,'Another lead in the same company cannot lend its recording');
+await db.exec(`update appointment_reservations set converted_appointment_id='${id(91)}' where id='${id(90)}';`);
+assert.equal(await scalar(`select private.lead_recording_path('${id(9)}') value`),`${roof}/agent/${id(90)}/booking.mp3`);
+const bookingTicket=await scalar(`select roof_pros_manual_prepare('${id(9)}') value`);
+assert.equal((await db.query('select roof_pros_manual_exchange($1,$2,$3) value',[bookingTicket.id,bookingTicket.token,'context'])).rows[0].value.payload.recording_url,`storage://qc-recordings/${roof}/agent/${id(90)}/booking.mp3`);
+await db.exec(`delete from storage.objects where name='${roof}/agent/${id(90)}/booking.mp3';`);
+assert.equal(await scalar(`select private.lead_recording_path('${id(9)}') value`),null,'Missing storage objects cannot be signed');
+for(const invalid of [`storage://qc-recordings/${id(9)}/../other.mp3`, `https://example.test/recording.mp3`, `storage://qc-recordings/${id(2)}/current.mp3`]) {
+ await db.query('update portal_leads set recording_url=$1 where id=$2',[invalid,id(9)]);
+ assert.equal(await scalar(`select private.lead_recording_path('${id(9)}') value`),null);
+}
+await db.exec('set role anon');
+await rejects(`select public.roof_pros_recording_path('${id(1)}')`);
+await db.exec('reset role;set role authenticated');
+await rejects(`select public.roof_pros_recording_path('${id(1)}')`);
+await rejects(`select private.lead_recording_path('${id(1)}')`);
+await db.exec('reset role');
 await db.close();
 
 const mod={exports:{}};
