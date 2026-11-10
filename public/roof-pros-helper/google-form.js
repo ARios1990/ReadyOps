@@ -2,15 +2,33 @@
   const dom=globalThis.RoofProsFormDOM;
   const send=async message=>{const r=await chrome.runtime.sendMessage(message);if(r?.error)throw Error(r.error);return r;};
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const wait=async(test,ms=90000)=>{const end=Date.now()+ms;while(Date.now()<end){const result=test();if(result)return result;await sleep(250);}throw Error('Google did not finish loading or uploading. Keep this tab; do not create another submission.');};
+  const wait=async(test,ms=90000)=>{const end=Date.now()+ms;while(Date.now()<end){const result=await test();if(result)return result;await sleep(250);}throw Error('Google did not finish loading or uploading. Keep this tab; do not create another submission.');};
   if(location.pathname==='/picker') {
-    (async()=>{
-      const data=await send({type:'picker'});if(data?.inactive)return;
-      const el=await wait(()=>document.querySelector('input[type="file"]'),20000);
-      const bytes=Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0));
-      const transfer=new DataTransfer();transfer.items.add(new File([bytes],data.filename,{type:data.mime}));
-      el.files=transfer.files;el.dispatchEvent(new Event('change',{bubbles:true}));
-    })().catch(()=>{/* The main frame reports any unfinished upload. */});
+    // Google can preload or reuse this frame before the form begins uploading.
+    // Listen before the initial request, and coalesce overlapping wake-ups.
+    let running=false,again=false,attempted;
+    async function upload() {
+      if(running){again=true;return;}
+      running=true;
+      try {
+        do {
+          again=false;
+          const data=await send({type:'picker'});
+          if(data?.inactive || attempted===data.id)continue;
+          attempted=data.id;
+          const el=await wait(()=>document.querySelector('input[type="file"]'),20000);
+          const bytes=Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0));
+          const transfer=new DataTransfer();transfer.items.add(new File([bytes],data.filename,{type:data.mime}));
+          el.files=transfer.files;
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        } while(again);
+      } catch(error) {
+        if(attempted)await send({type:'picker_failed',id:attempted,message:'Google recording upload failed: '+error.message}).catch(()=>{});
+      } finally {running=false;}
+    }
+    chrome.runtime.onMessage.addListener(message=>{if(message?.type==='roof_picker_upload')void upload();});
+    void upload();
     return;
   }
   let current,ready=false,intent=false;
@@ -57,7 +75,11 @@
     const old=dom.button(recording,'Remove file');if(old){old.click();await wait(()=>!dom.button(recording,'Remove file'));}
     const add=dom.button(recording,'Add file');if(!add)throw Error('Google recording upload control changed.');
     await send({type:'uploading'});add.click();
-    await wait(()=>recording.textContent.includes(data.filename)&&dom.button(recording,'Remove file'));
+    await wait(async()=>{
+      const status=await send({type:'upload_status'});
+      if(status?.inactive)throw Error('The prepared recording is no longer available. Review this draft in ReadyOps.');
+      return recording.textContent.includes(data.filename)&&dom.button(recording,'Remove file');
+    });
     await wait(()=>![...document.querySelectorAll('[role="dialog"]')].some(e=>e.getAttribute('aria-hidden')!=='true'&&getComputedStyle(e).display!=='none'));
     dom.verify(data.fields,data.filename);
     await send({type:'ready'});ready=true;

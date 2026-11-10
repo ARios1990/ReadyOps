@@ -185,7 +185,7 @@ dom.window.close();
 const receiptDOM=new JSDOM('<div>Your response has been recorded.</div>',{url:'https://docs.google.com/forms/u/0/d/e/test/formResponse',runScripts:'outside-only'});
 receiptDOM.window.eval(read('public/roof-pros-helper/form-dom.js'));assert.equal(receiptDOM.window.RoofProsFormDOM.hasReceipt(),true);receiptDOM.window.close();
 const manifest=JSON.parse(read('public/roof-pros-helper/manifest.json'));
-assert.equal(manifest.version,'1.0.3');
+assert.equal(manifest.version,'1.0.4');
 assert.ok(manifest.content_scripts[1].matches.some(s=>s.includes('/forms/u/')),'Google receipt redirects are covered');
 assert.ok(!manifest.permissions.some(p=>['cookies','debugger','tabs','scripting','unlimitedStorage'].includes(p)));
 const background=read('public/roof-pros-helper/background.js');
@@ -203,12 +203,12 @@ function bridgeFixture(){
  const code=ts.transpileModule(read('src/roofProsHelper.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  new Function('exports','window','crypto','clearTimeout',code)(bridgeModule.exports,browserWindow,{randomUUID},browserWindow.clearTimeout);
  return {request:bridgeModule.exports.roofProsHelper,window:browserWindow,listeners,
-  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.3'},...overrides};for(const fn of [...listeners])fn(event);},
+  respond:(overrides={})=>{const event={source:null,origin:browserWindow.location.origin,data:{channel:'readyops-roof-manual-response',requestId:posted.requestId,success:true,version:'1.0.4'},...overrides};for(const fn of [...listeners])fn(event);},
   posted:()=>posted,expire:()=>timer?.()};
 }
 for(const withSource of [false,true]){
  const fixture=bridgeFixture(),promise=fixture.request('ping');fixture.respond(withSource?{source:fixture.window}:{});
- assert.equal((await promise).version,'1.0.3');assert.equal(fixture.listeners.size,0);
+ assert.equal((await promise).version,'1.0.4');assert.equal(fixture.listeners.size,0);
 }
 for(const bad of ['origin','source','requestId','channel','payload']){
  const fixture=bridgeFixture(),promise=fixture.request('ping'),message=fixture.posted();
