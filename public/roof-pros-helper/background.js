@@ -23,7 +23,7 @@ async function handle(m,sender) {
   const u=new URL(sender.url || 'https://invalid.local');
   if(['ping','prepare','resume'].includes(m.type)) {
     if(u.origin!==ORIGIN || sender.frameId!==0)throw Error('ReadyOps access required.');
-    if(m.type==='ping')return {success:true,version:'1.0.3'};
+    if(m.type==='ping')return {success:true,version:chrome.runtime.getManifest().version};
     let existing=(await jobs()).find(j=>j.delivery_id===(m.deliveryId || m.ticket?.delivery_id)&&j.phase!=='failed');
     // A recovered server ticket supersedes any browser-local capability for the same delivery.
     if(existing&&m.type==='prepare'&&existing.id!==m.ticket?.id){await remove(existing.id);existing=null;}
@@ -31,7 +31,7 @@ async function handle(m,sender) {
       try {if(existing.tabId){await chrome.tabs.update(existing.tabId,{active:true});return {success:true};}} catch {/* The original tab was closed. */}
       if(m.type==='resume'&&['prepared','uploading','ready'].includes(existing.phase)&&existing.fields&&existing.bytes?.length){
         // No Submit was observed. Rebuild the form and reattach the stored recording in a fresh tab.
-        existing.phase='prepared';existing.tabId=null;
+        existing.phase='prepared';existing.tabId=null;delete existing.uploadError;
         const tab=await chrome.tabs.create({url:FORM,active:true});existing.tabId=tab.id;await save(existing);
         return {success:true,recovered:true};
       }
@@ -57,15 +57,34 @@ async function handle(m,sender) {
   const job=(await jobs()).find(j=>j.tabId===sender.tab?.id);
   if(!job)return {inactive:true};
   if(job.expires<Date.now())throw Error('Manual review expired. Keep this tab and review its outcome before retrying.');
-  if(m.type==='picker') {
+  if(['picker','picker_failed'].includes(m.type)) {
     if(sender.frameId===0 || u.origin!=='https://docs.google.com'||u.pathname!=='/picker'||job.phase!=='uploading')return {inactive:true};
-    return {filename:job.filename,mime:job.mime,base64:encoded(job.bytes)};
+    if(m.type==='picker_failed') {
+      if(m.id!==job.id)return {inactive:true};
+      job.uploadError=String(m.message||'Google could not attach the recording.').slice(0,500);
+      await save(job);return {success:true};
+    }
+    if(job.uploadError)throw Error(job.uploadError);
+    return {id:job.id,filename:job.filename,mime:job.mime,base64:encoded(job.bytes)};
   }
   if(!isForm(sender.url)||sender.frameId!==0)throw Error('Original Roof Pros tab required.');
   if(m.type==='context')return {fields:job.fields,filename:job.filename,phase:job.phase,expires:job.expires};
-  if(m.type==='uploading') {if(job.phase!=='prepared')throw Error('This draft has already been prepared.');job.phase='uploading';await save(job);return {success:true};}
+  if(m.type==='uploading') {
+    if(job.phase!=='prepared')throw Error('This draft has already been prepared.');
+    job.phase='uploading';delete job.uploadError;await save(job);
+    // Existing frames wake now; a newly created frame requests the same job on startup.
+    // No receiver is normal when Google has not created its picker yet.
+    void chrome.tabs.sendMessage(job.tabId,{type:'roof_picker_upload'}).catch(()=>{});
+    return {success:true};
+  }
+  if(m.type==='upload_status') {
+    if(job.uploadError)throw Error(job.uploadError);
+    if(job.phase!=='uploading')throw Error('Recording preparation is no longer active. Review this draft in ReadyOps.');
+    return {success:true};
+  }
   if(m.type==='ready') {
     if(!['uploading','ready'].includes(job.phase))throw Error('Recording preparation is incomplete.');
+    if(job.uploadError)throw Error(job.uploadError);
     if(job.phase!=='ready')await exchange(job,'ready',{filename:job.filename,sha256:job.sha256,bytes:job.bytes.length});
     job.phase='ready';await save(job);return {success:true};
   }

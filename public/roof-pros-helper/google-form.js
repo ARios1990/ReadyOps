@@ -2,15 +2,41 @@
   const dom=globalThis.RoofProsFormDOM;
   const send=async message=>{const r=await chrome.runtime.sendMessage(message);if(r?.error)throw Error(r.error);return r;};
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const wait=async(test,ms=90000)=>{const end=Date.now()+ms;while(Date.now()<end){const result=test();if(result)return result;await sleep(250);}throw Error('Google did not finish loading or uploading. Keep this tab; do not create another submission.');};
+  const wait=async(test,ms=90000)=>{const end=Date.now()+ms;while(Date.now()<end){const result=await test();if(result)return result;await sleep(250);}throw Error('Google did not finish loading or uploading. Keep this tab; do not create another submission.');};
   if(location.pathname==='/picker') {
-    (async()=>{
-      const data=await send({type:'picker'});if(data?.inactive)return;
-      const el=await wait(()=>document.querySelector('input[type="file"]'),20000);
-      const bytes=Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0));
-      const transfer=new DataTransfer();transfer.items.add(new File([bytes],data.filename,{type:data.mime}));
-      el.files=transfer.files;el.dispatchEvent(new Event('change',{bubbles:true}));
-    })().catch(()=>{/* The main frame reports any unfinished upload. */});
+    // Google can preload or reuse this frame before the form begins uploading.
+    // Listen before the initial request, and coalesce overlapping wake-ups.
+    let running=false,again=false,attempted;
+    async function upload() {
+      if(running){again=true;return;}
+      running=true;
+      try {
+        do {
+          again=false;
+          const data=await send({type:'picker'});
+          if(data?.inactive || attempted===data.id)continue;
+          attempted=data.id;
+          // The input can appear before Google's uploader finishes mounting. An
+          // early selection is discarded when that input is replaced/reset.
+          let candidate,stableSince=0;
+          const el=await wait(()=>{
+            const input=document.querySelector('input[type="file"]');
+            if(document.readyState!=='complete'||!input||!input.isConnected){candidate=null;stableSince=0;return false;}
+            if(input!==candidate){candidate=input;stableSince=Date.now();}
+            return Date.now()-stableSince>=1500&&input;
+          },20000);
+          const bytes=Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0));
+          const transfer=new DataTransfer();transfer.items.add(new File([bytes],data.filename,{type:data.mime}));
+          el.files=transfer.files;
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        } while(again);
+      } catch(error) {
+        if(attempted)await send({type:'picker_failed',id:attempted,message:'Google recording upload failed: '+error.message}).catch(()=>{});
+      } finally {running=false;}
+    }
+    chrome.runtime.onMessage.addListener(message=>{if(message?.type==='roof_picker_upload')void upload();});
+    void upload();
     return;
   }
   let current,ready=false,intent=false;
@@ -45,19 +71,33 @@
     const timeQuestion=dom.question('Appointment Time');
     const list=timeQuestion.querySelector('[role="listbox"]');
     if(!list)throw Error('Google appointment time selector changed.');
-    list.click();
-    // Google renders the open AM/PM menu in a page-level overlay, not reliably inside the listbox.
-    const option=await wait(()=>dom.option(data.fields.ampm));
-    dom.chooseOption(option);
-    await wait(()=>dom.selectedOption(timeQuestion)===data.fields.ampm);
+    if(dom.selectedOption(timeQuestion)!==data.fields.ampm){
+      list.click();
+      // Google renders the open AM/PM menu in a page-level overlay, not reliably inside the listbox.
+      const option=await wait(()=>dom.option(data.fields.ampm));
+      dom.chooseOption(option);
+      await wait(()=>dom.selectedOption(timeQuestion)===data.fields.ampm&&list.getAttribute('aria-expanded')!=='true');
+    }
     const contract=dom.question('Roofing Contract');
-    if(data.fields.contract)contract.querySelector(`[role="radio"][data-value="${data.fields.contract}"]`).click();
+    if(data.fields.contract){
+      const radio=contract.querySelector(`[role="radio"][data-value="${data.fields.contract}"]`);
+      if(!radio)throw Error('Google roofing contract selector changed.');
+      if(radio.getAttribute('aria-checked')!=='true'){
+        for(const type of ['mousedown','mouseup','click'])radio.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,view:window,button:0}));
+        await wait(()=>radio.getAttribute('aria-checked')==='true');
+      }
+    }
     else {const clear=dom.button(contract,'Clear selection');if(clear)clear.click();}
+    await wait(()=>(contract.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute('data-value')||'')===data.fields.contract);
     const recording=dom.question('Customer Recording');
     const old=dom.button(recording,'Remove file');if(old){old.click();await wait(()=>!dom.button(recording,'Remove file'));}
     const add=dom.button(recording,'Add file');if(!add)throw Error('Google recording upload control changed.');
     await send({type:'uploading'});add.click();
-    await wait(()=>recording.textContent.includes(data.filename)&&dom.button(recording,'Remove file'));
+    await wait(async()=>{
+      const status=await send({type:'upload_status'});
+      if(status?.inactive)throw Error('The prepared recording is no longer available. Review this draft in ReadyOps.');
+      return recording.textContent.includes(data.filename)&&dom.button(recording,'Remove file');
+    });
     await wait(()=>![...document.querySelectorAll('[role="dialog"]')].some(e=>e.getAttribute('aria-hidden')!=='true'&&getComputedStyle(e).display!=='none'));
     dom.verify(data.fields,data.filename);
     await send({type:'ready'});ready=true;
