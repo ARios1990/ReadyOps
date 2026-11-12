@@ -58,7 +58,7 @@
   async function receipt() {
     if(!dom.hasReceipt())return false;
     await send({type:'receipt'});
-    banner('Roof Pros received your submission. ReadyOps recorded the Google confirmation and matching audio.');
+    banner('Roof Pros received your submission. ReadyOps recorded the Google confirmation.');
     return true;
   }
   async function fill(data) {
@@ -91,6 +91,7 @@
     await wait(()=>(contract.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute('data-value')||'')===data.fields.contract);
     const recording=dom.question('Customer Recording');
     const old=dom.button(recording,'Remove file');if(old){old.click();await wait(()=>!dom.button(recording,'Remove file'));}
+    if(data.filename) {
     const add=dom.button(recording,'Add file');if(!add)throw Error('Google recording upload control changed.');
     await send({type:'uploading'});add.click();
     await wait(async()=>{
@@ -99,9 +100,10 @@
       return recording.textContent.includes(data.filename)&&dom.button(recording,'Remove file');
     });
     await wait(()=>![...document.querySelectorAll('[role="dialog"]')].some(e=>e.getAttribute('aria-hidden')!=='true'&&getComputedStyle(e).display!=='none'));
+    }
     dom.verify(data.fields,data.filename);
     await send({type:'ready'});ready=true;
-    banner('Ready for your review — '+data.fields.name+'. Matching recording attached: '+data.filename+'. Telemarketer: Horacio. Verify the information, then click Google’s Submit yourself.');
+    banner('Ready for your review — '+data.fields.name+'. '+(data.filename?'Matching recording attached: '+data.filename:'No recording available � this lead will be submitted without a recording')+'. Telemarketer: Horacio. Verify the information, then click Google’s Submit yourself.');
   }
   (async()=>{
     current=await send({type:'context'});
@@ -110,7 +112,7 @@
     if(current.phase==='submit_requested'){banner('Your Submit was already observed. Wait for the Google receipt; do not submit again.',true);return;}
     if(current.phase==='ready'){
       dom.verify(current.fields,current.filename);ready=true;
-      banner('Prepared form recovered. Review the details and matching recording, then click Submit yourself.');
+      banner('Prepared form recovered. Review the details and any attached recording, then click Submit yourself.');
     }else if(current.phase==='prepared')await fill(current);
     else throw Error('Keep this existing draft open. Preparation was interrupted; check its status in ReadyOps before retrying.');
     const observer=new MutationObserver(()=>{if(dom.hasReceipt()){observer.disconnect();void receipt().catch(e=>banner('Google receipt is visible; ReadyOps confirmation needs review: '+e.message,true));}});

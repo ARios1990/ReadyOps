@@ -38,7 +38,7 @@ export function manualFields(p: Record<string, unknown>) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text('date'))) throw Error('Correct the appointment date and time first.');
   const appointmentTime = appointmentTimeFields(text('time'));
   let notes = text('notes');
-  if (match[1]) notes += `\n\nRoof age approximately ${match[2]} years, as stated in the recording.`;
+  if (match[1]) notes += `\n\nRoof age approximately ${match[2]} years, as reported in the lead details.`;
   else if (match[3] || match[4]) notes += `\n\nRoof age reported: ${age}; numeric age field contains the stated minimum ${match[2]}.`;
   let address = text('address');
   for (const key of ['city', 'state', 'zip']) {

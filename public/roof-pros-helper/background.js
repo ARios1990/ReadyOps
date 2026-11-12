@@ -29,7 +29,7 @@ async function handle(m,sender) {
     if(existing&&m.type==='prepare'&&existing.id!==m.ticket?.id){await remove(existing.id);existing=null;}
     if(existing) {
       try {if(existing.tabId){await chrome.tabs.update(existing.tabId,{active:true});return {success:true};}} catch {/* The original tab was closed. */}
-      if(m.type==='resume'&&['prepared','uploading','ready'].includes(existing.phase)&&existing.fields&&existing.bytes?.length){
+      if(m.type==='resume'&&['prepared','uploading','ready'].includes(existing.phase)&&existing.fields&&(existing.bytes?.length||existing.recordingStatus==='unavailable')){
         // No Submit was observed. Rebuild the form and reattach the stored recording in a fresh tab.
         existing.phase='prepared';existing.tabId=null;delete existing.uploadError;
         const tab=await chrome.tabs.create({url:FORM,active:true});existing.tabId=tab.id;await save(existing);
@@ -43,13 +43,19 @@ async function handle(m,sender) {
     try {
       const data=await exchange(job,'context');
       if(data.lead_id!==ticket.lead_id || data.fields.telemarketer!=='Horacio' || data.form_url!==FORM)throw Error('Lead mismatch.');
-      const audioURL=new URL(data.recording_url);
-      if(audioURL.origin!=='https://vzaraqexdsimmasxsano.supabase.co'||!audioURL.pathname.includes('/qc-recordings/'+ticket.lead_id+'/'))throw Error('Recording belongs to a different lead.');
-      const response=await fetch(audioURL,{credentials:'omit',cache:'no-store'});
-      const bytes=await recordingBytes(response,Math.min(data.max_bytes,10*1024*1024));
-      const kind=audioType(bytes,response.headers.get('Content-Type'));
-      const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
-      Object.assign(job,{fields:data.fields,bytes,mime:kind.mime,filename:ticket.lead_id+'.'+kind.ext,sha256:hash,phase:'prepared'});
+      Object.assign(job,{fields:data.fields,recordingStatus:'unavailable',phase:'prepared'});
+      if(data.recording_url) {
+        const audioURL=new URL(data.recording_url);
+        const expectedPath=data.recording_path || ticket.lead_id+'/';
+        if(audioURL.origin!=='https://vzaraqexdsimmasxsano.supabase.co'||!decodeURIComponent(audioURL.pathname).includes('/qc-recordings/'+expectedPath))throw Error('Recording belongs to a different lead.');
+        try {
+          const response=await fetch(audioURL,{credentials:'omit',cache:'no-store'});
+          const bytes=await recordingBytes(response,Math.min(data.max_bytes,10*1024*1024));
+          const kind=audioType(bytes,response.headers.get('Content-Type'));
+          const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
+          Object.assign(job,{bytes,mime:kind.mime,filename:ticket.lead_id+'.'+kind.ext,sha256:hash,recordingStatus:'attached'});
+        } catch { /* An unavailable audio file must not prevent preparing the lead. */ }
+      }
       const tab=await chrome.tabs.create({url:FORM,active:true});job.tabId=tab.id;await save(job);
       return {success:true};
     } catch(error) {await exchange(job,'failed',{message:error.message}).catch(()=>{});throw error;}
@@ -83,9 +89,9 @@ async function handle(m,sender) {
     return {success:true};
   }
   if(m.type==='ready') {
-    if(!['uploading','ready'].includes(job.phase))throw Error('Recording preparation is incomplete.');
+    if(!['uploading','ready'].includes(job.phase)&&!(job.phase==='prepared'&&job.recordingStatus==='unavailable'))throw Error('Recording preparation is incomplete.');
     if(job.uploadError)throw Error(job.uploadError);
-    if(job.phase!=='ready')await exchange(job,'ready',{filename:job.filename,sha256:job.sha256,bytes:job.bytes.length});
+    if(job.phase!=='ready')await exchange(job,'ready',job.recordingStatus==='unavailable'?{recording_status:'unavailable'}:{filename:job.filename,sha256:job.sha256,bytes:job.bytes.length});
     job.phase='ready';await save(job);return {success:true};
   }
   if(m.type==='user_submit') {
