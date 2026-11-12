@@ -3,7 +3,7 @@ import {ExternalLink,FileCheck2} from 'lucide-react';
 import {supabase} from './supabase';
 import {roofProsHelper, type ManualTicket} from './roofProsHelper';
 export const ROOF_PROS_COMPANY_ID='d12e8b8c-fd25-45c0-8d43-9b4aecdcda0c';
-const REQUIRED_HELPER_VERSION='1.0.4';
+const REQUIRED_HELPER_VERSION='1.0.5';
 const excluded=new Set(['44f9d82b-2247-4185-bae6-44ca6a2aa013','c1fc6f84-4c9f-469e-a036-8d08e7c4b53d','52123081-6cc7-48d0-bad8-8fc96ebf0141','9f158006-8bce-4928-aa13-8c686d00d91a']);
 const labels:Record<string,string>={queued:'Waiting for Google Form preparation',preparing:'Preparing Google Form',submitting:'Submitting Google Form',submitted:'Google Form submitted',needs_info:'Details or recording needed',uncertain:'Submission needs review',manual_preparing:'Preparing your manual review form',manual_review:'Ready for you to review and Submit in Google',manual_submitting:'Your Submit was clicked — waiting for Google confirmation'};
 type Delivery={id:string;status:string;submitted_at?:string;error_message?:string};
@@ -30,7 +30,7 @@ export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:stri
    const {data,error:failure}=await supabase.rpc('roof_pros_manual_prepare',{p_lead_id:leadId});
    if(failure)throw failure;
    await roofProsHelper('prepare',data as ManualTicket);
-   setMessage('Google Form opened. The helper will fill the fields and attach the recording. Review everything there and click Submit yourself.');
+   setMessage('Google Form opened. The helper will fill the fields and attach the recording when available. Review everything there and click Submit yourself.');
   }catch(failure){setError(failure instanceof Error?failure.message:String((failure as {message?:string})?.message||failure));}
   finally{setBusy(false);await refresh();}
  }
@@ -60,12 +60,12 @@ export function RoofProsFormStatus({leadId,companyId,sent,approved}:{leadId:stri
  return <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2" aria-label="Roof Pros Google Form">
   <h3 className="text-sm font-black text-blue-950">Roof Pros Google Form</h3>
   <p className="mt-1 text-xs font-semibold text-slate-700">{job?labels[job.status]:'Approve and Send this lead, then prepare its form here.'}</p>
-  <p className="mt-1 text-xs text-slate-600">Prepare the customer details and matching recording with Telemarketer Name set to Horacio. You review the Google Form and click Submit yourself.</p>
+  <p className="mt-1 text-xs text-slate-600">Prepare the customer details with Telemarketer Name set to Horacio. A recording is attached when available; otherwise you can submit without one. You review the Google Form and click Submit yourself.</p>
   {job?.submitted_at&&<p className="mt-1 text-xs font-bold text-emerald-800">Submitted {new Date(job.submitted_at).toLocaleString('en-US')}</p>}
   {(error||job?.error_message)&&<p role="alert" className="mt-2 text-xs text-amber-900">{error||job?.error_message}</p>}
   {message&&<p role="status" className="mt-2 text-xs text-blue-900">{message}</p>}
   <div className="mt-3 flex flex-wrap gap-2">
-   {showPrepare&&<button type="button" disabled={busy||loading||!canPrepare} onClick={()=>void prepare()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><FileCheck2 size={16}/>{busy?'Preparing…':'Prepare Form + Recording'}</button>}
+   {showPrepare&&<button type="button" disabled={busy||loading||!canPrepare} onClick={()=>void prepare()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><FileCheck2 size={16}/>{busy?'Preparing…':'Prepare Google Form'}</button>}
    {held&&<button type="button" disabled={busy} onClick={()=>void resume()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"><ExternalLink size={16}/>Open / Recover Prepared Form</button>}
    <button type="button" disabled={busy||loading} onClick={()=>void refresh()} className="rounded border bg-white px-3 py-1 text-xs font-bold">Refresh status</button>
   </div>

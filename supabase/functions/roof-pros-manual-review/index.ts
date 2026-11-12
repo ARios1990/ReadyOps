@@ -20,10 +20,15 @@ Deno.serve(async req => {
     if (error) return respond({error:error.message}, 409);
     if (action !== 'context') return respond(data);
     const fields = manualFields(data.payload);
-    const path = String(data.payload.recording_url).slice('storage://qc-recordings/'.length);
-    const {data:signed, error:signError} = await admin.storage.from('qc-recordings').createSignedUrl(path, 300);
-    if (signError || !signed?.signedUrl) return respond({error:'The current recording is unavailable.'}, 422);
-    return respond({lead_id:data.payload.lead_id, fields, form_url:ROOF_PROS_FORM, recording_url:signed.signedUrl, max_bytes:10*1024*1024, source_updated_at:data.payload.source_updated_at});
+    // Resolve ownership before signing; never sign an arbitrary payload URL.
+    const {data:path, error:pathError} = await admin.rpc('roof_pros_recording_path', {p_lead_id:data.payload.lead_id});
+    if (pathError) throw Error('Unable to check the lead recording.');
+    let recordingUrl: string | null = null;
+    if (path) {
+      const {data:signed, error:signError} = await admin.storage.from('qc-recordings').createSignedUrl(path, 300);
+      if (!signError && signed?.signedUrl) recordingUrl = signed.signedUrl;
+    }
+    return respond({lead_id:data.payload.lead_id, fields, form_url:ROOF_PROS_FORM, recording_url:recordingUrl, recording_path:path || null, max_bytes:10*1024*1024, source_updated_at:data.payload.source_updated_at});
   } catch (error) {
     return respond({error:error instanceof Error ? error.message : 'Unable to prepare the manual form.'}, 422);
   }

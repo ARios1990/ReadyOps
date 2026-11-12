@@ -64,8 +64,8 @@ function pickerFixture(respond,{input=true,broken=false}={}) {
   await new Promise(resolve=>setTimeout(resolve,1000));assert.equal(f.files.length,0,'The replacement needs its own stable window');
   await until(()=>f.files.length);assert.equal(f.files.length,1);f.close();
 }
-// Default AM needs no menu activation; wait for asynchronous contract selection before Add file.
-{
+// With no recording, verify details and become ready without opening the picker.
+for (const hasRecording of [true,false]) {
   const dom=new JSDOM('<div>mastersreadyservices2025@gmail.com<a href="https://accounts.google.com/AccountChooser">Account</a></div><input aria-label="Hour"><input aria-label="Minute"><div id="time"><div role="listbox"><div role="option" aria-selected="true">AM</div></div></div><div id="contract"><div role="radio" data-value="No" aria-checked="false"></div></div><div id="recording"><button>Add file</button></div>',{url:'https://docs.google.com/forms/d/e/test/viewform',runScripts:'outside-only'});
   const w=dom.window,calls=[],fields={name:'Test lead',telemarketer:'Horacio',hour:'10',minute:'00',ampm:'AM',contract:'No'};
   const radio=w.document.querySelector('[role="radio"]'),recording=w.document.getElementById('recording');
@@ -74,9 +74,9 @@ function pickerFixture(respond,{input=true,broken=false}={}) {
   radio.addEventListener('mouseup',()=>w.setTimeout(()=>radio.setAttribute('aria-checked','true'),30));
   recording.querySelector('button').addEventListener('click',()=>{contractBeforeUpload=radio.getAttribute('aria-checked')==='true';recording.innerHTML='lead.mp3<button>Remove file</button>';});
   w.RoofProsFormDOM={textFields:()=>[],set:(el,value)=>{el.value=value;},question:name=>w.document.getElementById({'Appointment Time':'time','Roofing Contract':'contract','Customer Recording':'recording'}[name]),selectedOption:()=> 'AM',button:(root,name)=>[...root.querySelectorAll('button')].find(el=>el.textContent===name),hasReceipt:()=>false,verify:()=>true};
-  w.chrome={runtime:{sendMessage:async m=>{calls.push(m.type);return m.type==='context'?{fields,filename:'lead.mp3',phase:'prepared'}:{success:true};}}};
+  w.chrome={runtime:{sendMessage:async m=>{calls.push(m.type);return m.type==='context'?{fields,filename:hasRecording?'lead.mp3':undefined,phase:'prepared'}:{success:true};}}};
   w.eval(script);await until(()=>calls.includes('ready'));
-  assert.equal(menuOpened,false);assert.equal(contractBeforeUpload,true);assert.equal(calls.includes('user_submit'),false);dom.window.close();
+  assert.equal(menuOpened,false);assert.equal(contractBeforeUpload,hasRecording);assert.equal(calls.includes('uploading'),hasRecording);if(!hasRecording)assert.match(w.document.getElementById('readyops-manual-review').textContent,/without a recording/);assert.equal(calls.includes('user_submit'),false);dom.window.close();
 }
 
 // Exercise the actual background handler with an in-memory IndexedDB boundary.
@@ -88,7 +88,7 @@ const db={transaction(){const tx={objectStore(){return {
 };}};return tx;}};
 const context=vm.createContext({URL,Uint8Array,Date,Map,Set,Promise,btoa,structuredClone,
   indexedDB:{open(){const request={};queueMicrotask(()=>{request.result=db;request.onsuccess();});return request;}},
-  chrome:{runtime:{getManifest:()=>({version:'1.0.4'}),onMessage:{addListener(){}}},alarms:{create(){},onAlarm:{addListener(){}}},tabs:{sendMessage:async(tabId,message)=>{assert.equal(records[0].phase,'uploading');notices.push({tabId,message});}}}
+  chrome:{runtime:{getManifest:()=>({version:'1.0.5'}),onMessage:{addListener(){}}},alarms:{create(){},onAlarm:{addListener(){}}},tabs:{sendMessage:async(tabId,message)=>{assert.equal(records[0].phase,'uploading');notices.push({tabId,message});}}}
 });
 vm.runInContext(background.replace(/^import .*?;\r?\n/,''),context);
 const form={tab:{id:42},frameId:0,url:'https://docs.google.com/forms/d/e/1FAIpQLSeE-iKeKo_4zWEO3MOnKIBDSitr4eBMc-FC7f0eGSzXujCP1A/viewform'};
@@ -109,4 +109,14 @@ await assert.rejects(context.handle({type:'upload_status'},picker),/Original Roo
 await assert.rejects(context.handle({type:'uploading'},form),/already been prepared/);
 records[0].phase='ready';assert.equal((await context.handle({type:'picker'},picker)).inactive,true);
 records[0].expires=0;await assert.rejects(context.handle({type:'picker'},picker),/expired/);
+// A missing recording reaches ready and recovers a closed tab without audio bytes.
+records=[{id:payload.id,delivery_id:'delivery',tabId:42,phase:'prepared',recordingStatus:'unavailable',fields:{name:'Test'},expires:Date.now()+60000}];
+const exchanges=[];
+context.fetch=async(url,options)=>{exchanges.push(JSON.parse(options.body));return {ok:true,json:async()=>({success:true})};};
+await context.handle({type:'ready'},form);
+assert.equal(records[0].phase,'ready');assert.deepEqual(exchanges[0].evidence,{recording_status:'unavailable'});
+context.chrome.tabs.update=async()=>{throw Error('Tab closed');};
+context.chrome.tabs.create=async()=>({id:43});
+await context.handle({type:'resume',deliveryId:'delivery'},{url:'https://readyops.bolt.host',frameId:0});
+assert.equal(records[0].tabId,43);assert.equal(records[0].phase,'prepared');
 console.log('Roof Pros picker: fresh, preloaded, reused, overlapping wake-up, delayed input, exact file, error reporting and sender guards passed.');

@@ -35,7 +35,7 @@
     const selected = question('Roofing Contract').querySelector('[role="radio"][aria-checked="true"]');
     if ((selected?.getAttribute('data-value') || '') !== fields.contract) throw Error('Verify roofing contract selection.');
     const recording = question('Customer Recording');
-    if (!recording.textContent.includes(filename) || !button(recording, 'Remove file')) throw Error('The matching recording has not finished uploading.');
+    if (filename ? (!recording.textContent.includes(filename) || !button(recording, 'Remove file')) : Boolean(button(recording, 'Remove file'))) throw Error('The matching recording has not finished uploading.');
     if (document.querySelector('[role="dialog"] iframe') && [...document.querySelectorAll('[role="dialog"]')].some(visible)) throw Error('Close the Google picker or draft conflict before submitting.');
     if (document.querySelector('[aria-invalid="true"]')) throw Error('Correct the Google Form validation error first.');
     return true;
