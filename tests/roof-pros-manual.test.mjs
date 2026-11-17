@@ -26,7 +26,7 @@ await db.exec(`create schema storage;create table storage.objects(bucket_id text
  create table public.portal_appointments(id uuid primary key default gen_random_uuid(),lead_id uuid,company_visible_at timestamptz,appointment_date date,start_time time,inspector_notes text,created_at timestamptz default now(),updated_at timestamptz default now());`);
 await db.exec(`create table public.appointment_reservations(id uuid primary key,company_id uuid,status text,converted_appointment_id uuid);`);
 for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql','20261030202552_roof_pros_manual_recovery.sql','20261107050055_booking_recording_referral_ownership.sql','20261112195832_roof_pros_optional_recording.sql'])await db.exec(read('supabase/migrations/'+migration));
-await db.exec(read('supabase/migrations/20261117011901_roof_pros_recording_lookup_schema_access.sql'));
+await db.exec(read('supabase/migrations/20261117012143_roof_pros_recording_lookup_schema_access.sql'));
 const scalar=async sql=>(await db.query(sql)).rows[0].value;
 const rejects=sql=>assert.rejects(()=>db.query(sql));
 await db.exec(`select set_config('test.uid','${id(99)}',false);select set_config('test.role','admin',false);`);
