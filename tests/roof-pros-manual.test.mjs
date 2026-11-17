@@ -19,12 +19,14 @@ const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 await db.exec(`create schema storage;create table storage.objects(bucket_id text,name text);create schema private;create schema auth;create role anon;create role authenticated;create role service_role bypassrls;
  create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
  create function private.readyops_profile_role() returns text language sql as $$select current_setting('test.role',true)$$;
- grant usage on schema public,private,auth to authenticated,anon,service_role;
+ grant usage on schema public,private,auth to authenticated,anon;
+ grant usage on schema public,auth,storage to service_role;
  create table public.portal_leads(id uuid primary key,company_id uuid,qc_status text,agent_id uuid,agent_name text,lead_code text,full_name text,phone_number text,email text,address text,city text,state text,zip_code text,form_data jsonb default '{}',notes text,recording_url text,updated_at timestamptz default now());
  create table public.agents(id uuid,name text);
  create table public.portal_appointments(id uuid primary key default gen_random_uuid(),lead_id uuid,company_visible_at timestamptz,appointment_date date,start_time time,inspector_notes text,created_at timestamptz default now(),updated_at timestamptz default now());`);
 await db.exec(`create table public.appointment_reservations(id uuid primary key,company_id uuid,status text,converted_appointment_id uuid);`);
 for(const migration of ['20261018002757_roof_pros_form_delivery_queue.sql','20261018003317_roof_pros_form_worker_transitions.sql','20261018003633_roof_pros_worker_private_bridge.sql','20261018005905_roof_pros_form_insurance_carrier.sql','20261028053607_roof_pros_manual_review.sql','20261028054749_roof_pros_manual_uncertain_guard.sql','20261030202552_roof_pros_manual_recovery.sql','20261107050055_booking_recording_referral_ownership.sql','20261112195832_roof_pros_optional_recording.sql'])await db.exec(read('supabase/migrations/'+migration));
+await db.exec(read('supabase/migrations/20261117012143_roof_pros_recording_lookup_schema_access.sql'));
 const scalar=async sql=>(await db.query(sql)).rows[0].value;
 const rejects=sql=>assert.rejects(()=>db.query(sql));
 await db.exec(`select set_config('test.uid','${id(99)}',false);select set_config('test.role','admin',false);`);
@@ -33,6 +35,14 @@ for(let n=1;n<=8;n++){
  await db.query(`insert into portal_appointments(lead_id,appointment_date,start_time,company_visible_at)values($1,'2026-11-01','13:00',$2)`,[id(n),n===5?null:'2026-10-28T00:00:00Z']);
 }
 await db.exec(`insert into storage.objects select 'qc-recordings',id::text||'/current.mp3' from public.portal_leads;`);
+// Model the Edge Function's actual role, including the private schema boundary.
+// A superuser call (or fixture-wide USAGE grant) hides the production failure.
+await db.exec(`grant select on public.portal_leads,public.portal_appointments,public.appointment_reservations,storage.objects to service_role;
+ set role service_role;`);
+assert.equal(await scalar(`select public.roof_pros_recording_path('${id(4)}') value`),null,'No recording must return null for the server role');
+assert.equal(await scalar(`select public.roof_pros_recording_path('${id(1)}') value`),`${id(1)}/current.mp3`,'The server can resolve this lead\'s existing recording');
+for(const n of [2,3,5])assert.equal(await scalar(`select public.roof_pros_recording_path('${id(n)}') value`),null,'Approval, company and Send gates remain enforced');
+await db.exec('reset role');
 await rejects(`select roof_pros_manual_prepare('${id(2)}')`);
 await rejects(`select roof_pros_manual_prepare('${id(3)}')`);
 const missingTicket=await scalar(`select roof_pros_manual_prepare('${id(4)}') value`);
